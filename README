@@ -1,6 +1,18 @@
 Copyright 2016 Xuhao Chen, National University of Defense Technology
 Gardinia: Graph Analytics Repository for Irregular Parallelism on GPUs
+Link: https://github.com/chenxuhao/gardinia
+
+INSTALLATION
+You will need to download and install CUB from here:
+http://nvlabs.github.io/cub/
+Place a symlink to the top-level CUB directory in $HOME. 
+Assuming the top-level CUB directory is $CUBDIR:
+$ cd $HOME
+$ ln -s $CUBDIR
+Go to each sub-directory, foe example, bfs, and
+$ make
+$ ./run
+
 Author: Xuhao Chen <cxh@illinois.edu>
 Homepage: http://chenxuhao.weebly.com
-Link: https://github.com/chenxuhao/gardinia
 Citation: Pingfan Li, Xuhao Chen et al., High Performance Parallel Graph Coloring on GPGPUs, IPDPSW, 2016
