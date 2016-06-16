@@ -1,0 +1,6 @@
+Copyright 2016 Xuhao Chen, National University of Defense Technology
+Gardinia: Graph Analytics Repository for Irregular Parallelism on GPUs
+Author: Xuhao Chen <cxh@illinois.edu>
+Homepage: http://chenxuhao.weebly.com
+Link: https://github.com/chenxuhao/gardinia
+Citation: Pingfan Li, Xuhao Chen et al., High Performance Parallel Graph Coloring on GPGPUs, IPDPSW, 2016
