@@ -11,12 +11,14 @@ all: $(EXE)_wlw $(EXE)_wlc
 
 $(EXE)_wlw:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
-
-$(EXE)_ldb: $(B40_DIR)
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) $(B40C_INC) -DVARIANT=4 -o $@ $(LIBS)
+	mv $@ $(BIN)
 
 $(EXE)_wlc:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=2 -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+$(EXE)_ldb: $(B40_DIR)
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) $(B40C_INC) -DVARIANT=4 -o $@ $(LIBS)
 
 $(EXE)_fusion:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=3 -o $@ $(LIBS)

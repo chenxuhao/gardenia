@@ -6,6 +6,7 @@ SRC=main.cu
 
 all:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o pr $(LIBS)
+	mv pr $(BIN)
 
 clean:
 	rm pr

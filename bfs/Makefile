@@ -10,12 +10,14 @@ all: bfs_wlw bfs_wlc
 
 bfs_wlw:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
-
-bfs_ldb: $(B40_DIR)
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) $(B40C_INC) -DVARIANT=4 -o $@ $(LIBS)
+	mv $@ $(BIN)
 
 bfs_wlc:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=2 -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+bfs_ldb: $(B40_DIR)
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) $(B40C_INC) -DVARIANT=4 -o $@ $(LIBS)
 
 bfs_fusion:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=3 -o $@ $(LIBS)

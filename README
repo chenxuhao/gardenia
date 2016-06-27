@@ -2,6 +2,13 @@ Copyright 2016 Xuhao Chen, National University of Defense Technology
 Gardinia: Graph Analytics Repository for Irregular Parallelism on GPUs
 Link: https://github.com/chenxuhao/gardinia
 
+DESCRIPTION
+bfs: breadth first search
+sssp: single source shortest path
+mst: minimum spanning tree
+pr: page rank
+color: graph coloring
+
 INSTALLATION
 You will need to download and install CUB from here:
 http://nvlabs.github.io/cub/

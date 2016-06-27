@@ -6,6 +6,7 @@ SRC=main.cu
 
 all:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -o vecAdd $(LIBS)
+	mv vecAdd $(BIN)
 
 clean:
 	rm vecAdd

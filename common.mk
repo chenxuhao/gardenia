@@ -6,4 +6,4 @@ COMPUTECAPABILITY=sm_20
 #NVFLAGS=-g -arch=$(COMPUTECAPABILITY) #-Xptxas -v
 NVFLAGS=-w -O3 -arch=$(COMPUTECAPABILITY) #-Xptxas -v
 INCLUDES=-I$(CUDA_HOME)/include -I../include
-BIN=../../bin/
+BIN=../bin/
