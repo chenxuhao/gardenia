@@ -1,6 +1,10 @@
 Copyright 2016 Xuhao Chen, National University of Defense Technology
 Gardinia: Graph Analytics Repository for Irregular Parallelism on GPUs
 Link: https://github.com/chenxuhao/gardinia
+The code infrastructure is ported from Lonstargpu by the ISS group at the University of Texas.
+To run the benchmarks on a simulator, please find the revised GPGPU-Sim version here:
+https://github.com/chenxuhao/gpgpu-sim-ndp
+and we highly recommend you to use CUDA-5.5 for the compatibility issue.
 
 DESCRIPTION
 bfs: breadth first search
@@ -16,7 +20,7 @@ Place a symlink to the top-level CUB directory in $HOME.
 Assuming the top-level CUB directory is $CUBDIR:
 $ cd $HOME
 $ ln -s $CUBDIR
-Go to each sub-directory, foe example, bfs, and
+Go to each sub-directory, e.g. bfs, and then
 $ make
 $ ./run
 

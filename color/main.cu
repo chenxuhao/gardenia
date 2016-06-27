@@ -49,7 +49,7 @@ void verify(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring, int *
 
 int main(int argc, char *argv[]) {
 	if (argc < 2) {
-		printf("Usage: %s <graph> <num_SMs>\n", argv[0]);
+		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
 		exit(1);
 	}
 	int m, nnz, *csrRowPtr = NULL, *csrColInd = NULL;
@@ -64,6 +64,8 @@ int main(int argc, char *argv[]) {
 	else { printf("Unrecognizable input file format\n"); exit(0); }
 
 	int device = 0;
+	if (argc > 2) device = atoi(argv[2]);
+	assert(device == 0 || device == 1);
 	int deviceCount = 0;
 	CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
 	cudaDeviceProp deviceProp;

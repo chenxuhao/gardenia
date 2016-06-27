@@ -15,8 +15,8 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 	printf("PageRank with CUDA by Xuhao Chen\n");
-	if (argc < 3) {
-		printf("Usage: %s <graph> <device(0/1)>\n", argv[0]);
+	if (argc < 2) {
+		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
 		exit(1);
 	}
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL;
@@ -29,7 +29,8 @@ int main(int argc, char *argv[]) {
 		gr2csr(argv[1], m, nnz, h_row_offsets, h_column_indices, h_weight);
 	else { printf("Unrecognizable input file format\n"); exit(0); }
 
-	int device = atoi(argv[2]);
+	int device = 0;
+	if (argc > 2) device = atoi(argv[2]);
 	assert(device == 0 || device == 1);
 	int deviceCount = 0;
 	CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
