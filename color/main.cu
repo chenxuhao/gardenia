@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
 
 	int *coloring = (int *)calloc(m, sizeof(int));
 	color(m, nnz, csrRowPtr, csrColInd, coloring);
-	write_solution("color.txt", coloring, m);
+	write_solution("color-out.txt", coloring, m);
 	int correct = 1;
 	verify(m, nnz, csrRowPtr, csrColInd, coloring, &correct);
 	if (correct)

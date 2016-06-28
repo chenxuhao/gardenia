@@ -16,7 +16,7 @@ using namespace std;
 int main(int argc, char *argv[]) {
 	printf("Breadth-first Search with CUDA by Xuhao Chen\n");
 	if (argc < 2) {
-		printf("Usage: %s <graph> [device(0/1)]>\n", argv[0]);
+		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
 		exit(1);
 	}
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL;
@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
 	else { printf("Unrecognizable input file format\n"); exit(0); }
 
 	int device = 0;
-	if(argc > 2) device = atoi(argv[2]);
+	if (argc > 2) device = atoi(argv[2]);
 	assert(device == 0 || device == 1);
 	int deviceCount = 0;
 	CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
@@ -53,30 +53,11 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-
-#if VARIANT==BFS_LDB
-	bfs_merrill(m, nnz, d_row_offsets, d_column_indices, d_dist);
-#else
 	bfs(m, nnz, d_row_offsets, d_column_indices, d_dist, nSM);
-#endif
 	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(foru), cudaMemcpyDeviceToHost));
 	printf("Verifying...\n");
 	unsigned h_nerr = 0;
-
-#ifdef DVERIFY
-	unsigned intzero = 0;
-	unsigned *d_nerr;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_nerr, sizeof(unsigned)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_nerr, &intzero, sizeof(intzero), cudaMemcpyHostToDevice));
-	int nthreads = 256;
-	int nblocks = (m - 1) / nthreads + 1;
-	dverify<<<nblocks, nthreads>>>(m, d_dist, d_row_offsets, d_column_indices, d_nerr);
-	CudaTest("dverifysolution failed");
-	CUDA_SAFE_CALL(cudaMemcpy(&h_nerr, d_nerr, sizeof(h_nerr), cudaMemcpyDeviceToHost));
-#else
 	verify(m, h_dist, h_row_offsets, h_column_indices, h_weight, &h_nerr);
-#endif
-
 	printf("\tNumber of errors = %d.\n", h_nerr);
 	write_solution("bfs-out.txt", m, h_dist);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));

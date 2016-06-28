@@ -78,7 +78,6 @@ void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_csrRowPtr, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_csrColInd, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_coloring, m * sizeof(int)));
-	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	CUDA_SAFE_CALL(cudaMemcpy(d_csrRowPtr, csrRowPtr, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_csrColInd, csrColInd, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
@@ -89,14 +88,17 @@ void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
 	for (int i = 0; i < ITERATIONS; i++) {
 		Worklist2 inwl(m), outwl(m);
 		Worklist2 *inwlptr = &inwl, *outwlptr = &outwl;
+		for(int i = 0; i < m; i ++) {
+			inwl.wl[i] = i;
+		}
 		CUDA_SAFE_CALL(cudaMemcpy(inwl.dindex, &m, sizeof(int), cudaMemcpyHostToDevice));
-		//initialize <<<((m - 1) / BLKSIZE + 1), BLKSIZE>>> (d_coloring, m);
 		CUDA_SAFE_CALL(cudaMemcpy(d_coloring, coloring, m * sizeof(int), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpy(inwl.dwl, inwl.wl, m * sizeof(int), cudaMemcpyHostToDevice));
 		iterations[i] = 0;
 
 		starttime = rtclock();
 		int nitems = m;
-		thrust::sequence(thrust::device, inwl.dwl, inwl.dwl + m);
+		//thrust::sequence(thrust::device, inwl.dwl, inwl.dwl + m);
 		while (nitems > 0) {
 			iterations[i] ++;
 			int nblocks = (nitems - 1) / BLKSIZE + 1;
@@ -111,9 +113,10 @@ void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
 		CUDA_SAFE_CALL(cudaDeviceSynchronize());
 		endtime = rtclock();
 		runtime[i] = 1000.0f * (endtime - starttime);
+		CUDA_SAFE_CALL(cudaMemcpy(coloring, d_coloring, m * sizeof(int), cudaMemcpyDeviceToHost));
 		//colors[i] = thrust::reduce(thrust::device, d_coloring, d_coloring + m, 0, thrust::maximum<int>()) + 1;
+		colors[i] = thrust::reduce(coloring, coloring + m, 0, thrust::maximum<int>()) + 1;
 	}
-	CUDA_SAFE_CALL(cudaMemcpy(coloring, d_coloring, m * sizeof(int), cudaMemcpyDeviceToHost));
 	double total_time = 0.0;
 	int total_colors = 0;
 	int total_iterations = 0;

@@ -1,5 +1,9 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
+struct Edge {
+	int dst;
+	foru wt;
+};
 
 // transfer R-MAT generated gr graph to CSR format
 void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices, foru *&weight) {
@@ -120,20 +124,17 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 	}
 	printf("mindeg %d maxdeg %d avgdeg %.2f variance %.2f\n", mindeg, maxdeg, avgdeg, variance);
 	column_indices = (int *)malloc(count * sizeof(int));
+	weight = (foru *)malloc(count * sizeof(foru));
 	vector<int>::iterator neighbor_list;
 	for (int i = 0, index = 0; i < m; i++) {
 		neighbor_list = vertices[i].begin();
 		while (neighbor_list != vertices[i].end()) {
 			column_indices[index++] = *neighbor_list;
+			weight[index] = 1;
 			neighbor_list++;
 		}
 	}
 }
-
-struct Edge {
-	int dst;
-	foru wt;
-};
 
 // transfer mtx graph to CSR format
 void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, foru *&weight) {
@@ -218,7 +219,7 @@ void verify(int m , foru *dist, int *row_offsets, int *column_indices, foru *wei
 		int row_end = row_offsets[u + 1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int v = column_indices[offset];
-			foru wt = weight[offset];
+			foru wt = weight? weight[offset]:1;
 			if (wt > 0 && dist[u] + wt < dist[v]) {
 				//printf("%d %d %d %d\n", nn, v, dist[nn], dist[v]);
 				++*nerr;

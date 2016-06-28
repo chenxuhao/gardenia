@@ -1,0 +1,9 @@
+%Example from http://www1.cs.columbia.edu/~coms6998/Notes/lecture5.pdf
+%In its calculations, this example counts shortest paths through the node that BC is being calculated for, which
+%is incorrect.
+5 5
+2
+1 3 5
+2 4
+3 5
+2 4

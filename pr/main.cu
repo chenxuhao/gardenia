@@ -50,14 +50,11 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(foru), cudaMemcpyHostToDevice));
 	pr(m, nnz, d_row_offsets, d_column_indices, d_weight, nSM);
-	//printf("Verifying...\n");
-	//unsigned h_nerr = 0;
-	//verify(m, h_dist, h_row_offsets, h_column_indices, h_weight, &h_nerr);
-	//printf("\tNumber of errors = %d.\n", h_nerr);
-	//write_solution("pr-out.txt", m, h_dist);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_weight));
 	free(h_row_offsets);
 	free(h_column_indices);
+	free(h_weight);
 	return 0;
 }
