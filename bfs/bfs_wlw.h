@@ -62,21 +62,18 @@ void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_
 	CUDA_SAFE_CALL(cudaBindTexture(0, row_offsets, d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaBindTexture(0, column_indices, d_column_indices, (nnz + 1) * sizeof(int)));
 #endif
-	initialize <<<nblocks, nthreads>>> (d_dist, m);
+	//initialize <<<nblocks, nthreads>>> (d_dist, m);
 	CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	unsigned nitems = 1;
-	//const size_t max_blocks = maximum_residency(bfs_kernel, nthreads, 0);
-	//printf("Solving, nSM=%d, max_blocks=%d\n", nSM, max_blocks);
 	starttime = rtclock();
 	insert<<<1, nthreads>>>(*inwl);
 	nitems = inwl->nitems();
 	do {
 		++iteration;
 		nblocks = (nitems - 1) / nthreads + 1;
-		//if(nblocks > nSM*max_blocks) nblocks = nSM * max_blocks;
 		printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iteration, nblocks, nthreads, nitems);
 #ifdef TEXTURE
 		bfs_kernel <<<nblocks, nthreads>>> (m, d_dist, *inwl, *outwl);

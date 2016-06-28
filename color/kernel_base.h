@@ -60,7 +60,8 @@ __global__ void conflictResolve(int m, int *csrRowPtr, int *csrColInd, Worklist2
 			}
 		}
 	}
-	outwl.push_1item<BlockScan>(conflicted, vertex, BLKSIZE);
+	//outwl.push_1item<BlockScan>(conflicted, vertex, BLKSIZE);
+	if(conflicted) outwl.push(vertex);
 }
 
 void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
@@ -70,6 +71,9 @@ void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
 	int iterations[ITERATIONS];
 	int *d_csrRowPtr, *d_csrColInd, *d_coloring;
 	printf("Graph coloring data-driven Base version\n");
+	for(int i = 0; i < m; i ++) {
+		coloring[i] = MAXCOLOR;
+	}
 	
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_csrRowPtr, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_csrColInd, nnz * sizeof(int)));
@@ -86,7 +90,8 @@ void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
 		Worklist2 inwl(m), outwl(m);
 		Worklist2 *inwlptr = &inwl, *outwlptr = &outwl;
 		CUDA_SAFE_CALL(cudaMemcpy(inwl.dindex, &m, sizeof(int), cudaMemcpyHostToDevice));
-		initialize <<<((m - 1) / BLKSIZE + 1), BLKSIZE>>> (d_coloring, m);
+		//initialize <<<((m - 1) / BLKSIZE + 1), BLKSIZE>>> (d_coloring, m);
+		CUDA_SAFE_CALL(cudaMemcpy(d_coloring, coloring, m * sizeof(int), cudaMemcpyHostToDevice));
 		iterations[i] = 0;
 
 		starttime = rtclock();
@@ -106,7 +111,7 @@ void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
 		CUDA_SAFE_CALL(cudaDeviceSynchronize());
 		endtime = rtclock();
 		runtime[i] = 1000.0f * (endtime - starttime);
-		colors[i] = thrust::reduce(thrust::device, d_coloring, d_coloring + m, 0, thrust::maximum<int>()) + 1;
+		//colors[i] = thrust::reduce(thrust::device, d_coloring, d_coloring + m, 0, thrust::maximum<int>()) + 1;
 	}
 	CUDA_SAFE_CALL(cudaMemcpy(coloring, d_coloring, m * sizeof(int), cudaMemcpyDeviceToHost));
 	double total_time = 0.0;

@@ -41,9 +41,13 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, "Found %d devices, using device %d (%s), compute capability %d.%d, cores %d*%d.\n", 
 			deviceCount, device, deviceProp.name, deviceProp.major, deviceProp.minor, nSM, ConvertSMVer2Cores(deviceProp.major, deviceProp.minor));
 
+	foru *h_dist = (foru *) malloc(m * sizeof(foru));
+	for(int i = 0; i < m; i ++) {
+		h_dist[i] = MYINFINITY;
+	}
 	foru * d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(foru)));
-	cudaMemset(d_dist, 0, m * sizeof(foru));
+	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(foru), cudaMemcpyHostToDevice));
 	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
@@ -55,7 +59,6 @@ int main(int argc, char *argv[]) {
 #else
 	bfs(m, nnz, d_row_offsets, d_column_indices, d_dist, nSM);
 #endif
-	foru *h_dist = (foru *) malloc(m * sizeof(foru));
 	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(foru), cudaMemcpyDeviceToHost));
 	printf("Verifying...\n");
 	unsigned h_nerr = 0;

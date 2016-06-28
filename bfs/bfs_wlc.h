@@ -178,7 +178,7 @@ void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_dist
 	double starttime, endtime, runtime;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	initialize <<<nblocks, nthreads>>> (d_dist, m);
+	//initialize <<<nblocks, nthreads>>> (d_dist, m);
 	CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
