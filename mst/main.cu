@@ -140,6 +140,42 @@ __global__ void dfindcompmin(int m, int *row_offsets, int *column_indices, foru 
 }
 */
 
+__device__ volatile int g_mutex;
+__device__ void __gpu_sync_atomic(int goalVal) {
+	int tid = threadIdx.x;
+	//__threadfence();
+	__syncthreads();
+	if (tid == 0) {
+		atomicAdd((int *)&g_mutex, 1);
+		while(g_mutex % goalVal != 0) {} // Note: this causes GPGPU-Sim not terminating, need to implement 'volatile' in GPGPU-Sim
+	}
+	__syncthreads();
+}
+
+/*
+__device__ void __gpu_sync_lockfree(int goalVal, volatile int *Arrayin, volatile int *Arrayout) {
+	int tid_in_blk = threadIdx.x * blockDim.y + threadIdx.y;
+	int nBlockNum = gridDim.x * gridDim.y;
+	int bid = blockIdx.x * gridDim.y + blockIdx.y;
+	if (tid_in_blk == 0) {
+		Arrayin[bid] = goalVal;
+	}
+	if (bid == 1) {
+		if (tid_in_blk < nBlockNum) {
+			while (Arrayin[tid_in_blk] != goalVal) { }
+		}
+		__syncthreads();
+		if (tid_in_blk < nBlockNum) {
+			Arrayout[tid_in_blk] = goalVal;
+		}
+	}
+	if (tid_in_blk == 0) {
+		while (Arrayout[bid] != goalVal) { }
+	}
+	__syncthreads();
+}
+//*/
+
 __global__ void dfindcompmintwo(int m, int *row_offsets, int *column_indices, foru *weight, unsigned *mstwt, ComponentSpace csw, foru *eleminwts, foru *minwtcomponent, unsigned *partners, bool *processinnextiteration, GlobalBarrier gb, bool *repeat, unsigned *count) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned id, nthreads = blockDim.x * gridDim.x;
@@ -150,8 +186,8 @@ __global__ void dfindcompmintwo(int m, int *row_offsets, int *column_indices, fo
 			srcboss = csw.find(id);
 			dstboss = csw.find(partners[id]);
 		}
-		gb.Sync();
-		/*
+		//gb.Sync();
+		__gpu_sync_atomic(gridDim.x);
 		if (id < m && processinnextiteration[id] && srcboss != dstboss) {
 			//printf("trying unify id=%d (%d -> %d)\n", id, srcboss, dstboss);
 			if (csw.unify(srcboss, dstboss)) {
@@ -166,8 +202,8 @@ __global__ void dfindcompmintwo(int m, int *row_offsets, int *column_indices, fo
 			}
 			//printf("\tcomp[%d] = %d.\n", srcboss, csw.find(srcboss));
 		}
-		gb.Sync();
-		*/
+		//gb.Sync();
+		__gpu_sync_atomic(gridDim.x);
 	}
 }
 
@@ -206,6 +242,8 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(foru), cudaMemcpyHostToDevice));
+	int mutex = 0;
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(g_mutex, &mutex, sizeof(int)));
 	
 	unsigned *mstwt, hmstwt = 0;
 	int iteration = 0;
