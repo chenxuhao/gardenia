@@ -6,7 +6,7 @@ LIBS=-L$(CUDA_HOME)/lib64
 EXTRA=-cudart shared
 SRC=main.cu
 
-all: bfs_wlw bfs_wlc
+all: bfs_wlw bfs_wlc bfs_topo
 
 bfs_wlw:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
@@ -16,15 +16,12 @@ bfs_wlc:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=2 -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-bfs_ldb: $(B40_DIR)
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) $(B40C_INC) -DVARIANT=4 -o $@ $(LIBS)
-
 bfs_fusion:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=3 -o $@ $(LIBS)
 
 bfs_topo:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=5 -o $@ $(LIBS)
+	mv $@ $(BIN)
 
 clean:
-	rm bfs_wlw bfs_wlc
-
+	rm bfs_wlw bfs_wlc bfs_topo

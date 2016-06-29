@@ -1,0 +1,8 @@
+#!/bin/bash
+HOME=/home/cxh/benchmarks
+DATA=$(HOME)/datasets/Hamrle3.mtx
+./bfs_wlw $(DATA)
+./sssp_wlw $(DATA)
+./pr $(DATA)
+./color_base $(DATA)
+./bc -i ../datasets/test6.graph

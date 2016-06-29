@@ -1,6 +1,6 @@
 #define BFS_VARIANT "worklistc"
 #include "worklistc.h"
-#include "gbar.cuh"
+#include "gbar.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include <cub/cub.cuh>

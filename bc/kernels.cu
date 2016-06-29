@@ -67,12 +67,12 @@ std::vector<float> bc_gpu(graph g, int max_threads_per_block, int number_of_SMs,
 	{
 
 		bc_gpu_opt<<<dimGrid,dimBlock>>>(bc_d,R_d,C_d,F_d,g.n,g.m,d_d,sigma_d,delta_d,Q_d,Q2_d,S_d,endpoints_d,next_source_d,pitch_d,pitch_sigma,pitch_delta,pitch_Q,pitch_Q2,pitch_S,pitch_endpoints,0,op.k,jia_d,diameters_d,thrust::raw_pointer_cast(source_vertices_d.data()),true);
-		checkCudaErrors(cudaPeekAtLastError());
+		//checkCudaErrors(cudaPeekAtLastError());
 	}
 	else
 	{
 		bc_gpu_opt<<<dimGrid,dimBlock>>>(bc_d,R_d,C_d,F_d,g.n,g.m,d_d,sigma_d,delta_d,Q_d,Q2_d,S_d,endpoints_d,next_source_d,pitch_d,pitch_sigma,pitch_delta,pitch_Q,pitch_Q2,pitch_S,pitch_endpoints,0,g.n,jia_d,diameters_d,thrust::raw_pointer_cast(source_vertices_d.data()),false);
-		checkCudaErrors(cudaPeekAtLastError());
+		//checkCudaErrors(cudaPeekAtLastError());
 	}
 
 	//Transfer result to CPU

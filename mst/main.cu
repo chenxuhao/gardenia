@@ -11,7 +11,7 @@
 using namespace std;
 #include "common.h"
 #include "graph_io.h"
-#include "gbar.cuh"
+#include "gbar.h"
 #include "component.h"
 #include "cuda_launch_config.hpp"
 
@@ -151,6 +151,7 @@ __global__ void dfindcompmintwo(int m, int *row_offsets, int *column_indices, fo
 			dstboss = csw.find(partners[id]);
 		}
 		gb.Sync();
+		/*
 		if (id < m && processinnextiteration[id] && srcboss != dstboss) {
 			//printf("trying unify id=%d (%d -> %d)\n", id, srcboss, dstboss);
 			if (csw.unify(srcboss, dstboss)) {
@@ -165,13 +166,14 @@ __global__ void dfindcompmintwo(int m, int *row_offsets, int *column_indices, fo
 			}
 			//printf("\tcomp[%d] = %d.\n", srcboss, csw.find(srcboss));
 		}
-		gb.Sync(); 
+		gb.Sync();
+		*/
 	}
 }
 
 int main(int argc, char *argv[]) {
 	printf("Minimum Spanning Tree (MST) with CUDA by Xuhao Chen\n");
-	if (argc < 3) {
+	if (argc < 2) {
 		printf("Usage: %s <graph> <device(0/1)>\n", argv[0]);
 		exit(1);
 	}
@@ -185,7 +187,8 @@ int main(int argc, char *argv[]) {
 		gr2csr(argv[1], m, nnz, h_row_offsets, h_column_indices, h_weight);
 	else { printf("Unrecognizable input file format\n"); exit(0); }
 
-	int device = atoi(argv[2]);
+	int device = 0;
+	if (argc > 2) device = atoi(argv[2]);
 	assert(device == 0 || device == 1); 
 	int deviceCount = 0;
 	CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));

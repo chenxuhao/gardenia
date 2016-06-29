@@ -7,11 +7,12 @@ https://github.com/chenxuhao/gpgpu-sim-ndp
 and we highly recommend you to use CUDA-5.5 for the compatibility issue.
 
 DESCRIPTION
+bc: betweenness centrality
 bfs: breadth first search
-sssp: single source shortest path
-mst: minimum spanning tree
-pr: page rank
 color: graph coloring
+mst: minimum spanning tree (TODO: simulation does not terminate)
+pr: page rank
+sssp: single source shortest path
 
 INSTALLATION
 You will need to download and install CUB from here:
@@ -22,7 +23,6 @@ $ cd $HOME
 $ ln -s $CUBDIR
 Go to each sub-directory, e.g. bfs, and then
 $ make
-$ ./run
 
 Author: Xuhao Chen <cxh@illinois.edu>
 Homepage: http://chenxuhao.weebly.com

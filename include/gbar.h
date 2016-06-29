@@ -11,14 +11,6 @@ class GlobalBarrier {
 		// Counters in global device memory
 		SyncFlag* d_sync;
 
-		// Simple wrapper for returning a CG-loaded SyncFlag at the specified pointer
-		__device__ __forceinline__ SyncFlag LoadCG(SyncFlag* d_ptr) const {
-			SyncFlag retval;
-			//retval = cub::ThreadLoad<cub::LOAD_CG>(d_ptr);
-			retval = d_ptr[0];
-			return retval;
-		}
-
 	public:
 		GlobalBarrier() : d_sync(NULL) {}
 
@@ -40,7 +32,7 @@ class GlobalBarrier {
 
 				// Wait for everyone else to report in
 				for (int peer_block = threadIdx.x; peer_block < gridDim.x; peer_block += blockDim.x) {
-					while (LoadCG(d_sync + peer_block) == 0) {
+					while (d_sync[peer_block] == 0) {
 						__threadfence_block();
 					}
 				}
@@ -56,7 +48,7 @@ class GlobalBarrier {
 					d_vol_sync[blockIdx.x] = 1;
 
 					// Wait for acknowledgement
-					while (LoadCG(d_sync + blockIdx.x) == 1) {
+					while (d_sync[blockIdx.x] == 1) {
 						__threadfence_block();
 					}
 				}
@@ -65,12 +57,11 @@ class GlobalBarrier {
 		}
 };
 
-
 /**
  * Version of global barrier with storage lifetime management.
  * We can use this in host enactors, and pass the base GlobalBarrier
  * as parameters to kernels.
- */
+*/
 class GlobalBarrierLifetime : public GlobalBarrier {
 	protected:
 		// Number of bytes backed by d_sync
