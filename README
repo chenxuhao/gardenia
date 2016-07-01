@@ -1,5 +1,5 @@
 Copyright 2016 Xuhao Chen, National University of Defense Technology
-Gardinia: Graph Analytics Repository for Irregular Parallelism on GPUs
+Gardinia: Graph Analytics Repository for DIrecting eNergy-efficient Irregular Algorithms
 Link: https://github.com/chenxuhao/gardinia
 The code infrastructure is ported from Lonstargpu by the ISS group at the University of Texas.
 To run the benchmarks on a simulator, please find the revised GPGPU-Sim version here:
