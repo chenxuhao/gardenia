@@ -142,8 +142,8 @@ __global__ void dfindcompmin(int m, int *row_offsets, int *column_indices, foru 
 
 __device__ volatile int g_mutex;
 __device__ void __gpu_sync_atomic(int goalVal) {
-	int tid = threadIdx.x;
-	//__threadfence();
+	int tid = threadIdx.x * blockDim.y + threadIdx.y;
+	__threadfence();
 	__syncthreads();
 	if (tid == 0) {
 		atomicAdd((int *)&g_mutex, 1);
@@ -272,7 +272,7 @@ int main(int argc, char *argv[]) {
 	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
 	//const size_t max_blocks = maximum_residency(dfindcompmintwo, nthreads, 0);
-	const size_t max_blocks = 4;
+	const size_t max_blocks = 1;
 	printf("Setup global barrier, nSM=%d, max_blocks=%d\n", nSM, max_blocks);
 	GlobalBarrierLifetime gb;
 	gb.Setup(nSM * max_blocks);

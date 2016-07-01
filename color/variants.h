@@ -1,7 +1,7 @@
 #pragma once
 
-#define DATA_BASE 0 // the baseline data-driven version
-#define DATA_LDG 1 // using __ldg() intrinsic
+#define TOPO 0
+#define DATA_BASE 1 // the baseline data-driven version
 #define DATA_BITSET 2 // bitset for forbiddenColors
 #define DATA_COARSE 3 // thread coarsening
 #define DATA_FUSION 4 // kernel fusion
@@ -15,10 +15,10 @@
 #error "VARIANT not defined."
 #endif
 
-#if VARIANT==DATA_BASE
+#if VARIANT==TOPO
+#include "kernel_topo.h"
+#elif VARIANT==DATA_BASE
 #include "kernel_base.h"
-#elif VARIANT==DATA_LDG
-#include "kernel_ldg.h"
 #elif VARIANT==DATA_BITSET
 #include "kernel_bitset.h"
 #elif VARIANT==DATA_COARSE

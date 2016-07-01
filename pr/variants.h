@@ -1,13 +1,16 @@
 #pragma once
 
-#define PR 1
+#define PR_WLW 1
+#define PR_WLC 2
 
 #ifndef VARIANT
 #error "VARIANT not defined."
 #endif
 
-#if VARIANT==PR
-#include "pr.h"
+#if VARIANT==PR_WLW
+#include "pr_wlw.h"
+#elif VARIANT==PR_WLC
+#include "pr_wlc.h"
 #else 
 #error "Unknown variant"
 #endif
