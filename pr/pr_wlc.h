@@ -27,8 +27,9 @@ __global__ void update_neighbors(int m, int *row_offsets, int *column_indices, f
 		unsigned row_begin = 0, row_end = 0, degree = 0;
 		int scratch_offset = 0;
 		int total_edges = 0;
-		int src;
-		if(inwl.pop_id(id, src)) {
+		int src = id;
+		if (src < m) {
+		//if (inwl.pop_id(id, src)) {
 			row_begin = row_offsets[src];
 			row_end = row_offsets[src + 1];
 			degree = row_end - row_begin;
@@ -36,7 +37,7 @@ __global__ void update_neighbors(int m, int *row_offsets, int *column_indices, f
 		BlockScan(temp_storage).ExclusiveSum(degree, scratch_offset, total_edges);
 		int done = 0;
 		int neighborsdone = 0;
-		while(total_edges > 0) {
+		while (total_edges > 0) {
 			__syncthreads();
 			int i;
 			for(i = 0; neighborsdone + i < degree && (scratch_offset + i - done) < SCRATCHSIZE; i++) {
@@ -69,7 +70,7 @@ __global__ void self_update(int m, int *row_offsets, int *column_indices, float 
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if(src < m) {
 			float delta = abs(next_pagerank[src] - cur_pagerank[src]);
-			if (delta > DELTA) outwl.push(src); // push this vertex into the frontier
+			//if (delta > DELTA) outwl.push(src); // push this vertex into the frontier
 			local_diff += delta;
 			cur_pagerank[src] = next_pagerank[src];
 			next_pagerank[src] = 0.15 / (float)m;
@@ -101,7 +102,6 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weigh
 	}
 	CUDA_SAFE_CALL(cudaMemcpy(inwl->dindex, &m, sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(inwl->dwl, inwl->wl, m * sizeof(int), cudaMemcpyHostToDevice));
-
 	const size_t max_blocks = maximum_residency(update_neighbors, nthreads, 0);
 	//const size_t max_blocks = 5;
 	starttime = rtclock();
@@ -114,11 +114,11 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weigh
 		update_neighbors <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_cur_pagerank, d_next_pagerank, *inwl);
 		self_update <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_cur_pagerank, d_next_pagerank, d_diff, *outwl);
 		CudaTest("solving failed");
-		nitems = outwl->nitems();
-		Worklist2 *tmp = inwl;
-		inwl = outwl;
-		outwl = tmp;
-		outwl->reset();
+		//nitems = outwl->nitems();
+		//Worklist2 *tmp = inwl;
+		//inwl = outwl;
+		//outwl = tmp;
+		//outwl->reset();
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(h_diff), cudaMemcpyDeviceToHost));
 		printf("iteration=%d, diff=%f, nitems=%d\n", iteration, h_diff, nitems);
 	} while (h_diff > EPSILON && iteration < ITER && nitems > 0);
