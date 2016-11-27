@@ -1,4 +1,4 @@
-CUDA_HOME=/usr/local/cuda-5.5
+CUDA_HOME=/usr/local/cuda
 GCC=gcc
 GXX=g++
 NVCC=$(CUDA_HOME)/bin/nvcc
