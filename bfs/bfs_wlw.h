@@ -63,7 +63,7 @@ void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_
 	CUDA_SAFE_CALL(cudaBindTexture(0, column_indices, d_column_indices, (nnz + 1) * sizeof(int)));
 #endif
 	//initialize <<<nblocks, nthreads>>> (d_dist, m);
-	CudaTest("initializing failed");
+	//CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;

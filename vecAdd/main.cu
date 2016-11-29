@@ -10,7 +10,9 @@ __global__ void vector_add(int n, int *a, int *b, int *c) {
 
 int main(int argc, char *argv[]) {
 	int device = 0;
-	if(argc>1) atoi(argv[1]);
+	int num = 1024 * 1024;
+	if(argc == 2) num = atoi(argv[1]);
+	if(argc == 3) device = atoi(argv[2]);
 	assert(device == 0 || device == 1); 
 	int deviceCount = 0;
 	CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
@@ -21,7 +23,6 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, "Found %d devices, using device %d (%s), compute capability %d.%d, cores %d*%d.\n", 
 			deviceCount, device, deviceProp.name, deviceProp.major, deviceProp.minor, nSM, ConvertSMVer2Cores(deviceProp.major, deviceProp.minor));
 	
-	int num = 1024;
 	int *h_a = (int *)malloc(num * sizeof(int));
 	int *h_b = (int *)malloc(num * sizeof(int));
 	int *h_c = (int *)malloc(num * sizeof(int));
@@ -37,8 +38,8 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_b, h_b, num * sizeof(int), cudaMemcpyHostToDevice));
 	int nthreads = 256;
 	int nblocks = 1;
-	//int nblocks = num / nthreads;
-	vector_add<<<nblocks,nthreads>>>(num, d_a, d_b, d_c);
+	//int nblocks = (num - 1) / nthreads + 1;
+	vector_add<<<nblocks, nthreads>>>(num, d_a, d_b, d_c);
 	CUDA_SAFE_CALL(cudaMemcpy(h_c, d_c, num * sizeof(int), cudaMemcpyDeviceToHost));
 	for(int i = 0; i < 16; i ++) {
 		printf("c[%d]=%d\n", i, h_c[i]);

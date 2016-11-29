@@ -72,7 +72,7 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weigh
 
 	Worklist2 wl1(m), wl2(m); 
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
-	//unsigned nitems = m;
+	unsigned nitems = m;
 	for(int i = 0; i < m; i ++) {
 		inwl->wl[i] = i;
 	}
