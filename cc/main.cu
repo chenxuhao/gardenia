@@ -14,7 +14,7 @@ using namespace std;
 #include "variants.h"
 
 int main(int argc, char *argv[]) {
-	printf("Triangle Count with CUDA by Xuhao Chen\n");
+	printf("Connected Component with CUDA by Xuhao Chen\n");
 	if (argc < 2) {
 		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
 		exit(1);
@@ -53,9 +53,9 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
 
-	Hybrid(m, nnz, d_row_offsets, d_column_indices, d_degree);
+	ConnectedComponents(m, nnz, d_row_offsets, d_column_indices, d_degree);
 	printf("Verifying...\n");
-	//TCVerifier(m, h_row_offsets, h_column_indices);
+	//CCVerifier(m, h_row_offsets, h_column_indices);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_degree));

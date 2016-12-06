@@ -83,9 +83,10 @@ void PrintTriangleStats(size_t total_triangles) {
 }
 
 // uses heuristic to see if worth relabeling
-size_t Hybrid(int m, int nnz, int *row_offsets, int *column_indices, int *degree) {
+void Hybrid(int m, int nnz, int *row_offsets, int *column_indices, int *degree) {
 	unsigned h_total = 0;
 	unsigned *d_total;
+	double starttime, endtime, runtime;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(unsigned)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_total, &h_total, sizeof(unsigned), cudaMemcpyHostToDevice));
 	const int nthreads = 256;
@@ -93,10 +94,16 @@ size_t Hybrid(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 	const size_t max_blocks = maximum_residency(tc_kernel, nthreads, 0);
 	//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
+	starttime = rtclock();
 	//if (WorthRelabelling(m, row_offsets, column_indices, degree))
 	//	OrderedCount<<<nblocks, nthreads>>>(m, row_offsets, column_indices, d_total);
 	//else
 	tc_kernel<<<nblocks, nthreads>>>(m, row_offsets, column_indices, d_total);
+	CudaTest("solving failed");
+	CUDA_SAFE_CALL(cudaDeviceSynchronize());
+	endtime = rtclock();
+	runtime = (1000.0f * (endtime - starttime));
+	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, runtime);
 	CUDA_SAFE_CALL(cudaMemcpy(&h_total, d_total, sizeof(unsigned), cudaMemcpyDeviceToHost));
 	PrintTriangleStats(h_total);
 }
