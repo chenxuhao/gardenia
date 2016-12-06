@@ -10,8 +10,8 @@ program_LIBRARIES :=
 CPPFLAGS += $(foreach includedir,$(program_INCLUDE_DIRS),-I$(includedir))
 CXXFLAGS += -g -O3 -std=c++0x -Wall -pedantic #-Werror
 LDADD += $(foreach library,$(program_LIBRARIES),-l$(library))
-#GEN_SM35 := -gencode=arch=compute_35,code=\"sm_35,compute_35\"
-GEN_SM20 := -gencode=arch=compute_20,code=\"sm_20,compute_20\"
+GEN_SM35 := -gencode=arch=compute_35,code=\"sm_35,compute_35\"
+#GEN_SM20 := -gencode=arch=compute_20,code=\"sm_20,compute_20\"
 NVFLAGS := -O3 
 NVFLAGS += $(GEN_SM35) $(GEN_SM20)
 CXXFLAGS += $(EXTRA_FLAGS)
