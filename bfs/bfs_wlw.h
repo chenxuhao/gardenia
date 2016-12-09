@@ -52,7 +52,7 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_dist, int nSM) {
+void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_dist) {
 	foru zero = 0;
 	int iteration = 0;
 	double starttime, endtime, runtime;

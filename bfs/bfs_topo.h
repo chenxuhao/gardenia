@@ -33,7 +33,7 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, foru *d
 
 #define SWAP(a, b)	{ tmp = a; a = b; b = tmp; }
 
-void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_dist, int nSM) {
+void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_dist) {
 	unsigned zero = 0;
 	bool *d_changed, h_changed;
 	bool *d_expanded;
@@ -50,8 +50,8 @@ void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_
 
 	const size_t max_blocks = maximum_residency(bfs_kernel, nthreads, 0);
 	//const size_t max_blocks = 6;
-	if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
-	printf("Solving, nSM=%d, max_blocks=%d, nblocks=%d, nthreads=%d\n", nSM, max_blocks, nblocks, nthreads);
+	//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
+	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
 	starttime = rtclock();
 	do {
 		++iteration;

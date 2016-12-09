@@ -1,6 +1,6 @@
 #include <sys/time.h>
 #include <cassert>
-
+#include "cutil_subset.h"
 typedef unsigned foru;
 #define MYINFINITY	1000000000
 #define MAXNBLOCKS  (4*NBLOCKS)
@@ -64,3 +64,18 @@ inline int ConvertSMVer2Cores(int major, int minor)
         printf("MapSMtoCores SM %d.%d is undefined (please update to the latest SDK)!\n", major, minor);
         return -1;
 }
+
+void print_device_info(int argc, char *argv[]) {
+	int device = 0;
+	if (argc > 2) device = atoi(argv[2]);
+	assert(device == 0 || device == 1);
+	int deviceCount = 0;
+	CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
+	CUDA_SAFE_CALL(cudaSetDevice(device));
+	cudaDeviceProp deviceProp;
+	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, device));
+	int nSM = deviceProp.multiProcessorCount;
+	fprintf(stdout, "Found %d devices, using device %d (%s), compute capability %d.%d, cores %d*%d.\n", 
+			deviceCount, device, deviceProp.name, deviceProp.major, deviceProp.minor, nSM, ConvertSMVer2Cores(deviceProp.major, deviceProp.minor));
+}
+

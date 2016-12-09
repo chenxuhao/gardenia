@@ -11,7 +11,7 @@ __global__ void initialize(unsigned *dist, unsigned m) {
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, foru *weight, foru *dist, Worklist2 inwl, Worklist2 outwl) {
+__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 inwl, Worklist2 outwl) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	//int nitems = inwl.nitems();
 	//int total_inputs = (nitems - 1) / (gridDim.x * blockDim.x) + 1;
@@ -22,10 +22,10 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, foru *
 			unsigned row_end = row_offsets[src + 1];
 			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
-				foru wt = weight[offset];
-				foru altdist = dist[src] + wt;
+				unsigned wt = (unsigned)weight[offset];
+				unsigned altdist = dist[src] + wt;
 				if (altdist < dist[dst]) {
-					foru olddist = atomicMin(&dist[dst], altdist);
+					unsigned olddist = atomicMin(&dist[dst], altdist);
 					if (altdist < olddist) { // update successfully
 						assert(outwl.push(dst));
 					}
@@ -43,7 +43,7 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_weight, unsigned *d_dist, int nSM) {
+void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, unsigned *d_dist) {
 	unsigned zero = 0;
 	int iteration = 0;
 	double starttime, endtime, runtime;
@@ -56,14 +56,12 @@ void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_wei
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	unsigned nitems = 1;
 	//const size_t max_blocks = maximum_residency(sssp_kernel, nthreads, 0);
-	//printf("Solving, nSM=%d, max_blocks=%d\n", nSM, max_blocks);
 	starttime = rtclock();
 	insert<<<1, nthreads>>>(*inwl);
 	nitems = inwl->nitems();
 	do {
 		++iteration;
 		nblocks = (nitems - 1) / nthreads + 1;
-		//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
 		//printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iteration, nblocks, nthreads, nitems);
 		sssp_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_weight, d_dist, *inwl, *outwl);
 		CudaTest("solving failed");

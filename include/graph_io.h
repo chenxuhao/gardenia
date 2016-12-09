@@ -1,12 +1,19 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
+
+#include <vector>
+#include <set>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#define W_TYPE double
 struct Edge {
 	int dst;
-	foru wt;
+	W_TYPE wt;
 };
 
 // transfer R-MAT generated gr graph to CSR format
-void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices, foru *&weight) {
+void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight) {
 	printf("Reading RMAT (.gr) input file %s\n", gr);
 	std::ifstream cfile;
 	cfile.open(gr);
@@ -73,7 +80,7 @@ void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices,
 }
 
 // transfer *.graph file to CSR format
-void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_indices, foru *&weight) {
+void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight) {
 	printf("Reading .graph input file %s\n", graph);
 	std::ifstream cfile;
 	cfile.open(graph);
@@ -124,7 +131,7 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 	}
 	printf("mindeg %d maxdeg %d avgdeg %.2f variance %.2f\n", mindeg, maxdeg, avgdeg, variance);
 	column_indices = (int *)malloc(count * sizeof(int));
-	weight = (foru *)malloc(count * sizeof(foru));
+	weight = (W_TYPE *)malloc(count * sizeof(W_TYPE));
 	vector<int>::iterator neighbor_list;
 	for (int i = 0, index = 0; i < m; i++) {
 		neighbor_list = vertices[i].begin();
@@ -137,7 +144,7 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 }
 
 // transfer mtx graph to CSR format
-void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, foru *&weight) {
+void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight) {
 	printf("Reading (.mtx) input file %s\n", mtx);
 	std::ifstream cfile;
 	cfile.open(mtx);
@@ -168,8 +175,8 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 		dst--;
 		src--;
 		Edge e1, e2;
-		e1.dst = dst; e1.wt = (foru)wt;
-		e2.dst = src; e2.wt = (foru)wt;
+		e1.dst = dst; e1.wt = (W_TYPE)wt;
+		e2.dst = src; e2.wt = (W_TYPE)wt;
 		vertices[src].push_back(e1);
 		vertices[dst].push_back(e2);
 	}
@@ -200,7 +207,7 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	}
 	printf("mindeg %d maxdeg %d avgdeg %.2f variance %.2f\n", mindeg, maxdeg, avgdeg, variance);
 	column_indices = (int *)malloc(count * sizeof(int));
-	weight = (foru *)malloc(count * sizeof(foru));
+	weight = (W_TYPE *)malloc(count * sizeof(W_TYPE));
 	vector<Edge>::iterator neighbor_list;
 	for (int i = 0, index = 0; i < m; i++) {
 		neighbor_list = vertices[i].begin();
@@ -213,13 +220,14 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	}
 }
 
-void verify(int m , foru *dist, int *row_offsets, int *column_indices, foru *weight, unsigned *nerr) {
+void verify(int m , unsigned *dist, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *nerr) {
+	printf("Verifying...\n");
 	for (int u = 0; u < m; u ++) {
 		int row_begin = row_offsets[u];
 		int row_end = row_offsets[u + 1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int v = column_indices[offset];
-			foru wt = weight? weight[offset]:1;
+			W_TYPE wt = weight? weight[offset]:1;
 			if (wt > 0 && dist[u] + wt < dist[v]) {
 				//printf("%d %d %d %d\n", nn, v, dist[nn], dist[v]);
 				++*nerr;
@@ -228,14 +236,28 @@ void verify(int m , foru *dist, int *row_offsets, int *column_indices, foru *wei
 	}   
 }
 
-__global__ void dverify(int m, foru *dist, int *row_offsets, int *column_indices, foru *weight, unsigned *nerr) {
+void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight) {
+	if (strstr(argv[1], ".mtx"))
+		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight);
+	else if (strstr(argv[1], ".graph"))
+		graph2csr(argv[1], m, nnz, row_offsets, column_indices, weight);
+	else if (strstr(argv[1], ".gr"))
+		gr2csr(argv[1], m, nnz, row_offsets, column_indices, weight);
+	else { printf("Unrecognizable input file format\n"); exit(0); }
+	degree = (int *)malloc(m * sizeof(int));
+	for (int i = 0; i < m; i++) {
+		degree[i] = row_offsets[i + 1] - row_offsets[i];
+	}
+}
+
+__global__ void dverify(int m, unsigned *dist, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *nerr) {
 	int u = blockIdx.x * blockDim.x + threadIdx.x;
 	if (u < m) {
 		int row_begin = row_offsets[u];
 		int row_end = row_offsets[u + 1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int v = column_indices[offset];
-			foru wt = weight[offset];
+			W_TYPE wt = weight[offset];
 			if (wt > 0 && dist[u] + wt < dist[v]) {
 				//printf("%d %d %d %d\n", u, v, dist[u], dist[v]);
 				++*nerr;
@@ -244,11 +266,11 @@ __global__ void dverify(int m, foru *dist, int *row_offsets, int *column_indices
 	}
 }
 
-void write_solution(const char *fname, int m, foru *h_dist) {
+void write_solution(const char *fname, int m, unsigned *h_dist) {
 	//unsigned *h_dist;
 	//h_dist = (unsigned *) malloc(m * sizeof(unsigned));
 	assert(h_dist != NULL);
-	//CUDA_SAFE_CALL(cudaMemcpy(h_dist, dist, m * sizeof(foru), cudaMemcpyDeviceToHost));
+	//CUDA_SAFE_CALL(cudaMemcpy(h_dist, dist, m * sizeof(unsigned), cudaMemcpyDeviceToHost));
 	printf("Writing solution to %s\n", fname);
 	FILE *f = fopen(fname, "w");
 	fprintf(f, "Computed solution (source dist): [");

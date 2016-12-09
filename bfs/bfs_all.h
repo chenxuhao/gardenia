@@ -250,7 +250,7 @@ __global__ void print_texture(int n) {
 	int id = threadIdx.x + blockDim.x * blockIdx.x;
 }
 */
-void bfs(int m, int nnz, int *d_csrRowPtr, int *d_csrColInd, foru *d_dist, int nSM) {
+void bfs(int m, int nnz, int *d_csrRowPtr, int *d_csrColInd, foru *d_dist) {
 	foru foruzero = 0;
 	int iteration = 0;
 	unsigned *nerr;
@@ -268,7 +268,8 @@ void bfs(int m, int nnz, int *d_csrRowPtr, int *d_csrColInd, foru *d_dist, int n
 	//CUDA_SAFE_CALL(cudaBindTexture(0, columns, csrColInd, (nnz + 1) * sizeof(int)));
 	//CUDA_SAFE_CALL(cudaBindTexture(0, row_offsets, csrRowPtr, (m + 1) * sizeof(int)));
 	const size_t max_blocks = maximum_residency(drelax2, BLKSIZE, 0);
-	printf("Solving, nSM=%d, max_blocks=%d, nthreads=%d\n", nSM, max_blocks, nthreads);
+	int nSM = 13;
+	printf("Solving, max_blocks=%d, nthreads=%d\n", max_blocks, nthreads);
 	starttime = rtclock();
 	if(IN_CORE) {
 		GlobalBarrierLifetime gb;

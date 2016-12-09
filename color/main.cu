@@ -1,13 +1,6 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
 #include <stdio.h>
-#include <stdlib.h>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <set>
 using namespace std;
 #include "common.h"
 #include "graph_io.h"
@@ -52,33 +45,17 @@ int main(int argc, char *argv[]) {
 		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
 		exit(1);
 	}
-	int m, nnz, *csrRowPtr = NULL, *csrColInd = NULL;
-	foru *h_weight = NULL;
 	// read graph
-	if (strstr(argv[1], ".mtx"))
-		mtx2csr(argv[1], m, nnz, csrRowPtr, csrColInd, h_weight);
-	else if (strstr(argv[1], ".graph"))
-		graph2csr(argv[1], m, nnz, csrRowPtr, csrColInd, h_weight);
-	else if (strstr(argv[1], ".gr"))
-		gr2csr(argv[1], m, nnz, csrRowPtr, csrColInd, h_weight);
-	else { printf("Unrecognizable input file format\n"); exit(0); }
-
-	int device = 0;
-	if (argc > 2) device = atoi(argv[2]);
-	assert(device == 0 || device == 1);
-	int deviceCount = 0;
-	CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
-	cudaDeviceProp deviceProp;
-	cudaGetDeviceProperties(&deviceProp, device);
-	int nSM = deviceProp.multiProcessorCount;
-	fprintf(stdout, "Found %d devices, using device %d (%s), compute capability %d.%d, cores %d*%d.\n", 
-			deviceCount, device, deviceProp.name, deviceProp.major, deviceProp.minor, nSM, ConvertSMVer2Cores(deviceProp.major, deviceProp.minor));
+	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
+	W_TYPE *h_weight = NULL;
+	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight);
+	print_device_info(argc, argv);
 
 	int *coloring = (int *)calloc(m, sizeof(int));
-	color(m, nnz, csrRowPtr, csrColInd, coloring);
+	color(m, nnz, h_row_offsets, h_column_indices, coloring);
 	write_solution("color-out.txt", coloring, m);
 	int correct = 1;
-	verify(m, nnz, csrRowPtr, csrColInd, coloring, &correct);
+	verify(m, nnz, h_row_offsets, h_column_indices, coloring, &correct);
 	if (correct)
 		printf("correct.\n");
 	else

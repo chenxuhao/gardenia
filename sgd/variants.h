@@ -1,19 +1,16 @@
 #pragma once
 
-#define SGD_TOPO 0
-#define SGD_WLW 1
-#define SGD_WLC 2
+#define SGD 0
+#define SGD_LB 1
 
 #ifndef VARIANT
 #error "VARIANT not defined."
 #endif
 
-#if VARIANT==SGD_TOPO
+#if VARIANT==SGD
 #include "sgd.h"
-#elif VARIANT==SGD_WLW
-#include "sgd_wlw.h"
-#elif VARIANT==SGD_WLC
-#include "sgd_wlc.h"
+#elif VARIANT==SGD_LB
+#include "sgd_lb.h"
 #else 
 #error "Unknown variant"
 #endif

@@ -6,17 +6,17 @@
 #include <cub/cub.cuh>
 #define BLKSIZE 128
 
-__global__ void initialize(foru *dist, unsigned int m) {
-	unsigned int id = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void initialize(unsigned *dist, int m) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		dist[id] = MYINFINITY;
 	}
 }
 
-__device__ __forceinline__ unsigned process_edge(int src, int edge, int *column_indices, foru *weight, foru *dist, Worklist2 &outwl) {
+__device__ __forceinline__ unsigned process_edge(int src, int edge, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 &outwl) {
 	int dst = column_indices[edge];
-	foru wt = weight[edge];
-	foru altdist = dist[src] + wt;
+	unsigned wt = (unsigned)weight[edge];
+	unsigned altdist = dist[src] + wt;
 	if (altdist < dist[dst]) {
 		//atomicMin((unsigned *)&dist[dst], altdist);
 		atomicMin(&dist[dst], altdist);
@@ -24,7 +24,7 @@ __device__ __forceinline__ unsigned process_edge(int src, int edge, int *column_
 	}
 }
 typedef cub::BlockScan<int, BLKSIZE> BlockScan;
-__device__ void expandByCta(int m, int *row_offsets, int *column_indices, foru *weight, foru *dist, Worklist2 &inwl, Worklist2 &outwl) {
+__device__ void expandByCta(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 &inwl, Worklist2 &outwl) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
 	__shared__ int owner;
@@ -70,7 +70,7 @@ __device__ __forceinline__ unsigned LaneId() {
 #define WARP_SIZE 32
 #define LOG_WARP_SIZE 5
 #define NUM_WARPS (BLKSIZE / WARP_SIZE)
-__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, foru *weight, foru *dist, Worklist2 &inwl, Worklist2 &outwl) {
+__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 &inwl, Worklist2 &outwl) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
 	unsigned lane_id = LaneId();
@@ -106,7 +106,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, foru *weight, foru *dist, Worklist2 inwl, Worklist2 outwl) {
+__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 inwl, Worklist2 outwl) {
 	//expandByCta(m, row_offsets, column_indices, weight, dist, inwl, outwl);
 	//expandByWarp(m, row_offsets, column_indices, weight, dist, inwl, outwl);
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -157,8 +157,8 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_weight, foru *d_dist, int nSM) {
-	foru foruzero = 0;
+void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, unsigned *d_dist) {
+	unsigned zero = 0;
 	int iteration = 0;
 	unsigned *nerr;
 	double starttime, endtime, runtime;
@@ -166,14 +166,14 @@ void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_wei
 	int nblocks = (m - 1) / nthreads + 1;
 	initialize <<<nblocks, nthreads>>> (d_dist, m);
 	CudaTest("initializing failed");
-	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &foruzero, sizeof(foruzero), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 
 	CUDA_SAFE_CALL(cudaMalloc((void **)&nerr, sizeof(unsigned)));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	int nitems = 1;
 	const size_t max_blocks = maximum_residency(sssp_kernel, BLKSIZE, 0);
-	printf("Solving, nSM=%d, max_blocks=%d, nthreads=%d\n", nSM, max_blocks, nthreads);
+	printf("Solving, max_blocks=%d, nthreads=%d\n", max_blocks, nthreads);
 	starttime = rtclock();
 	insert<<<1, BLKSIZE>>>(*inwl);
 	nitems = inwl->nitems();

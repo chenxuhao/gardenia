@@ -189,7 +189,7 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, foru *d
 	}
 }
 
-void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_dist, int nSM) {
+void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_dist) {
 	foru foruzero = 0;
 	int iteration = 0;
 	unsigned *nerr;
@@ -204,8 +204,9 @@ void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_dist
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	int nitems = 1;
 	//const size_t max_blocks = maximum_residency(bfs_kernel, BLKSIZE, 0);
+	int nSM = 13;
 	const size_t max_blocks = 5;
-	printf("Solving, nSM=%d, max_blocks=%d, nthreads=%d\n", nSM, max_blocks, nthreads);
+	printf("Solving, max_blocks=%d, nthreads=%d\n", max_blocks, nthreads);
 
 	starttime = rtclock();
 	GlobalBarrierLifetime gb;

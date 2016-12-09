@@ -1,11 +1,11 @@
-#define BFS_VARIANT "worklistc"
+#define BFS_VARIANT "lb"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
-#include "worklistc.h"
 #define DELTA 0.00000001
 #define EPSILON 0.01
-#define ITER 10
+#define MAX_ITER 19
+#define BLKSIZE 128
 
 __global__ void initialize(float *cur_pagerank, float *next_pagerank, unsigned m) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -15,7 +15,8 @@ __global__ void initialize(float *cur_pagerank, float *next_pagerank, unsigned m
 	}
 }
 
-__global__ void update_neighbors(int m, int *row_offsets, int *column_indices, float *cur_pagerank, float *next_pagerank, Worklist2 inwl) {
+typedef cub::BlockScan<int, BLKSIZE> BlockScan;
+__global__ void update_neighbors(int m, int *row_offsets, int *column_indices, float *cur_pagerank, float *next_pagerank) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	__shared__ BlockScan::TempStorage temp_storage;
 	__shared__ int gather_offsets[BLKSIZE];
@@ -29,7 +30,6 @@ __global__ void update_neighbors(int m, int *row_offsets, int *column_indices, f
 		int total_edges = 0;
 		int src = id;
 		if (src < m) {
-		//if (inwl.pop_id(id, src)) {
 			row_begin = row_offsets[src];
 			row_end = row_offsets[src + 1];
 			degree = row_end - row_begin;
@@ -37,12 +37,13 @@ __global__ void update_neighbors(int m, int *row_offsets, int *column_indices, f
 		BlockScan(temp_storage).ExclusiveSum(degree, scratch_offset, total_edges);
 		int done = 0;
 		int neighborsdone = 0;
+		int neighboroffset = 0;
 		while (total_edges > 0) {
 			__syncthreads();
 			int i;
-			for(i = 0; neighborsdone + i < degree && (scratch_offset + i - done) < SCRATCHSIZE; i++) {
+			for(i = 0; neighborsdone + i < degree && (scratch_offset + i - done) < BLKSIZE; i++) {
 				gather_offsets[scratch_offset + i - done] = neighboroffset + neighborsdone + i;
-				src_id[i] = vertex;
+				src_id[i] = src;
 			}
 			neighborsdone += i;
 			scratch_offset += i;
@@ -61,7 +62,7 @@ __global__ void update_neighbors(int m, int *row_offsets, int *column_indices, f
 	}
 }
 
-__global__ void self_update(int m, int *row_offsets, int *column_indices, float *cur_pagerank, float *next_pagerank, float *diff, Worklist2 outwl) {
+__global__ void self_update(int m, int *row_offsets, int *column_indices, float *cur_pagerank, float *next_pagerank, float *diff) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	typedef cub::BlockReduce<float, 256> BlockReduce;
 	__shared__ typename BlockReduce::TempStorage temp_storage;
@@ -70,7 +71,6 @@ __global__ void self_update(int m, int *row_offsets, int *column_indices, float 
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if(src < m) {
 			float delta = abs(next_pagerank[src] - cur_pagerank[src]);
-			//if (delta > DELTA) outwl.push(src); // push this vertex into the frontier
 			local_diff += delta;
 			cur_pagerank[src] = next_pagerank[src];
 			next_pagerank[src] = 0.15 / (float)m;
@@ -80,7 +80,7 @@ __global__ void self_update(int m, int *row_offsets, int *column_indices, float 
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
-void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weight, int nSM) {
+void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree) {
 	unsigned zero = 0;
 	float *d_diff, h_diff, e = 0.1;
 	float *d_cur_pagerank, *d_next_pagerank;
@@ -88,20 +88,11 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weigh
 	int iteration = 0;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_cur_pagerank, m * sizeof(foru)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_next_pagerank, m * sizeof(foru)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_cur_pagerank, m * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_next_pagerank, m * sizeof(float)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
 	initialize <<<nblocks, nthreads>>> (d_cur_pagerank, d_next_pagerank, m);
 	CudaTest("initializing failed");
-
-	Worklist2 wl1(m), wl2(m);
-	Worklist2 *inwl = &wl1, *outwl = &wl2;
-	unsigned nitems = m;
-	for(int i = 0; i < m; i ++) {
-		inwl->wl[i] = i;
-	}
-	CUDA_SAFE_CALL(cudaMemcpy(inwl->dindex, &m, sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(inwl->dwl, inwl->wl, m * sizeof(int), cudaMemcpyHostToDevice));
 	const size_t max_blocks = maximum_residency(update_neighbors, nthreads, 0);
 	//const size_t max_blocks = 5;
 	starttime = rtclock();
@@ -109,19 +100,13 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weigh
 		++iteration;
 		h_diff = 0.0f;
 		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(h_diff), cudaMemcpyHostToDevice));
-		nblocks = (nitems - 1) / nthreads + 1;
-		if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
-		update_neighbors <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_cur_pagerank, d_next_pagerank, *inwl);
-		self_update <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_cur_pagerank, d_next_pagerank, d_diff, *outwl);
+		nblocks = (m - 1) / nthreads + 1;
+		update_neighbors <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_cur_pagerank, d_next_pagerank);
+		self_update <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_cur_pagerank, d_next_pagerank, d_diff);
 		CudaTest("solving failed");
-		//nitems = outwl->nitems();
-		//Worklist2 *tmp = inwl;
-		//inwl = outwl;
-		//outwl = tmp;
-		//outwl->reset();
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(h_diff), cudaMemcpyDeviceToHost));
-		printf("iteration=%d, diff=%f, nitems=%d\n", iteration, h_diff, nitems);
-	} while (h_diff > EPSILON && iteration < ITER && nitems > 0);
+		printf("iteration=%d, diff=%f\n", iteration, h_diff);
+	} while (h_diff > EPSILON && iteration < MAX_ITER);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	endtime = rtclock();
 	printf("\titerations = %d.\n", iteration);

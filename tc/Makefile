@@ -4,19 +4,15 @@ LIBS=-L$(CUDA_HOME)/lib64
 #EXTRA=-cudart shared
 SRC=main.cu
 
-all: tc_topo
+all: tc
 
-tc_topo:
+tc:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=0 -o $@ $(LIBS)
-	mv tc_topo $(BIN)
+	mv tc $(BIN)
 
-tc_wlw:
+tc_lb:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
-	mv tc_wlw $(BIN)
-
-tc_wlc:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=2 -o $@ $(LIBS)
-	mv tc_wlc $(BIN)
+	mv tc_lb $(BIN)
 
 clean:
-	rm tc_wlw tc_wlc tc_topo
+	rm tc

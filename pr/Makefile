@@ -4,19 +4,19 @@ LIBS=-L$(CUDA_HOME)/lib64
 EXTRA=-cudart shared
 SRC=main.cu
 
-all: pr_wlw pr_wlc pr_topo
+all: pr_scatter pr_gather pr_lb
 
-pr_topo:
+pr_scatter:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=0 -o $@ $(LIBS)
-	mv pr_topo $(BIN)
+	mv pr_scatter $(BIN)
 
-pr_wlw:
+pr_gather:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
-	mv pr_wlw $(BIN)
+	mv pr_gather $(BIN)
 
-pr_wlc:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
-	mv pr_wlc $(BIN)
+pr_lb:
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=2 -o $@ $(LIBS)
+	mv pr_lb $(BIN)
 
 clean:
-	rm pr_wlw pr_wlc pr_topo
+	rm pr_scatter pr_gather pr_lb

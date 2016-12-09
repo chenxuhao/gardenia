@@ -9,7 +9,7 @@ __global__ void initialize(unsigned *dist, unsigned m) {
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, foru *weight, foru *dist, bool *changed) {
+__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, bool *changed) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
@@ -18,9 +18,9 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, foru *
 			unsigned row_end = row_offsets[src + 1];
 			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
-				foru altdist = dist[src] + weight[offset];
+				unsigned altdist = dist[src] + (unsigned)weight[offset];
 				if (altdist < dist[dst]) {
-					foru olddist = atomicMin(&dist[dst], altdist);
+					unsigned olddist = atomicMin(&dist[dst], altdist);
 					if (altdist < olddist) {
 						*changed = true;
 					}
@@ -32,14 +32,14 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, foru *
 
 #define SWAP(a, b)	{ tmp = a; a = b; b = tmp; }
 
-void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_weight, unsigned *d_dist, int nSM) {
+void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, unsigned *d_dist) {
 	unsigned zero = 0;
 	bool *d_changed, h_changed;
 	double starttime, endtime, runtime;
 	int iteration = 0;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(foru)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(unsigned)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
 	initialize <<<nblocks, nthreads>>> (d_dist, m);
 	CudaTest("initializing failed");
@@ -47,8 +47,7 @@ void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_wei
 
 	const size_t max_blocks = maximum_residency(sssp_kernel, nthreads, 0);
 	//const size_t max_blocks = 6;
-	if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
-	printf("Solving, nSM=%d, max_blocks=%d, nblocks=%d, nthreads=%d\n", nSM, max_blocks, nblocks, nthreads);
+	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
 	starttime = rtclock();
 	do {
 		++iteration;

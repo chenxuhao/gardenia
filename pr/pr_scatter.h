@@ -1,8 +1,8 @@
-#define BFS_VARIANT "topology"
+#define BFS_VARIANT "scatter"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-#define EPSILON 0.1
-#define ITER 10
+#define EPSILON 0.03
+#define MAX_ITER 19
 
 __global__ void initialize(float *cur_pagerank, float *next_pagerank, unsigned m) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -60,7 +60,7 @@ __global__ void self_update(int m, int *row_offsets, int *column_indices, float 
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
-void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weight, int nSM) {
+void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree) {
 	unsigned zero = 0;
 	float *d_diff, h_diff, e = 0.1;
 	float *d_cur_pagerank, *d_next_pagerank;
@@ -68,18 +68,16 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weigh
 	int iteration = 0;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_cur_pagerank, m * sizeof(foru)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_next_pagerank, m * sizeof(foru)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_cur_pagerank, m * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_next_pagerank, m * sizeof(float)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
 	initialize <<<nblocks, nthreads>>> (d_cur_pagerank, d_next_pagerank, m);
 	CudaTest("initializing failed");
 
 	//const size_t max_blocks_1 = maximum_residency(update_neighbors, nthreads, 0);
 	const size_t max_blocks = maximum_residency(self_update, nthreads, 0);
-	//printf("max_blocks_1=%d, max_blocks=%d\n", max_blocks_1, max_blocks);
 	//const size_t max_blocks = 5;
-	if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
-	printf("Solving, nSM=%d, max_blocks=%d, nblocks=%d, nthreads=%d\n", nSM, max_blocks, nblocks, nthreads);
+	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
 	starttime = rtclock();
 	do {
 		++iteration;
@@ -90,7 +88,7 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru* d_weigh
 		CudaTest("solving failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(h_diff), cudaMemcpyDeviceToHost));
 		printf("iteration=%d, diff=%f\n", iteration, h_diff);
-	} while (h_diff > EPSILON && iteration < ITER);
+	} while (h_diff > EPSILON && iteration < MAX_ITER);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	endtime = rtclock();
 	printf("\titerations = %d.\n", iteration);

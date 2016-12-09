@@ -7,7 +7,7 @@ using namespace std;
 #define step 0.00000035
 unsigned int rseed[16*MAX_THREADS];
 
-void SGD(int num_users, int *row_offsets, int *column_indices, int *rating, double *lv[K], int max_iters, double epsilon = 0) {
+void SGD_solver(int num_users, int *row_offsets, int *column_indices, int *rating, double *lv[K], int max_iters, double epsilon = 0) {
 	double *res_lv[K];
 	for (int iter=0; iter < max_iters; iter++) {
 		double error = 0;
