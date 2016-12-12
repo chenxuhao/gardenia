@@ -4,7 +4,7 @@ LIBS=-L$(CUDA_HOME)/lib64
 EXTRA=-cudart shared
 SRC=main.cu
 
-all: pr_scatter pr_gather pr_lb
+all: pr_scatter pr_gather
 
 pr_scatter:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=0 -o $@ $(LIBS)
