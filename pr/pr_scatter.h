@@ -1,10 +1,10 @@
 #define BFS_VARIANT "scatter"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-#define EPSILON 0.03
+#define EPSILON 0.001
 #define MAX_ITER 19
 const float kDamp = 0.85;
-#define BLKSIZE 128
+#define BLKSIZE 256
 
 __global__ void initialize(int m, float *cur_pagerank, float *next_pagerank) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
