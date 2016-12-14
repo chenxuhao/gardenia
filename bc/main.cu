@@ -1,74 +1,38 @@
-#include <iostream>
-#include <iomanip>
-#include <cstdlib>
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
+#include <stdio.h>
+using namespace std;
+#include "common.h"
+#include "graph_io.h"
+#include "variants.h"
 
-#include "parse.h"
-#include "sequential.h"
-#include "util.cuh"
-#include "kernels.cuh"
-
-int main(int argc, char *argv[])
-{
-	program_options op = parse_arguments(argc,argv);
-	int max_threads_per_block, number_of_SMs;
-	choose_device(max_threads_per_block,number_of_SMs,op);
-	
-	graph g = parse(op.infile);
-
-	std::cout << "Number of nodes: " << g.n << std::endl;
-	std::cout << "Number of edges: " << g.m << std::endl;
-
-	//If we're approximating, choose source vertices at random
-	std::set<int> source_vertices;
-	if(op.approx)
-	{
-		if(op.k > g.n || op.k < 1)
-		{
-			op.k = g.n;
-		}
-
-		while(source_vertices.size() < op.k)
-		{
-			int temp_source = rand() % g.n;
-			source_vertices.insert(temp_source);
-		}
+int main(int argc, char *argv[]) {
+	printf("Betweenness Centrality with CUDA by Xuhao Chen\n");
+	if (argc < 2) {
+		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
+		exit(1);
 	}
+	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
+	W_TYPE *h_weight = NULL;
+	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight);
+	print_device_info(argc, argv);
 
-	cudaEvent_t start,end;
-	float CPU_time;
-	std::vector<float> bc;
-	if(op.verify) //Only run CPU code if verifying
-	{
-		start_clock(start,end);
-		bc = bc_cpu(g,source_vertices);
-		CPU_time = end_clock(start,end);
-	}
+	int *d_row_offsets, *d_column_indices, *d_degree;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
 
-	float GPU_time;
-	std::vector<float> bc_g;
-	start_clock(start,end);
-	bc_g = bc_gpu(g,max_threads_per_block,number_of_SMs,op,source_vertices);
-	GPU_time = end_clock(start,end);
-
-	if(op.verify)
-	{
-		verify(g,bc,bc_g);
-	}
-	if(op.printBCscores)
-	{
-		g.print_BC_scores(bc_g,op.scorefile);
-	}
-
-	std::cout << std::setprecision(9);
-	if(op.verify)
-	{
-		std::cout << "Time for CPU Algorithm: " << CPU_time << " s" << std::endl;
-	}
-	std::cout << "Time for GPU Algorithm: " << GPU_time << " s" << std::endl;
-	
-	delete[] g.R;
-	delete[] g.C;
-	delete[] g.F;
-
+	Brandes(m, nnz, d_row_offsets, d_column_indices, d_degree);
+	printf("Verifying...\n");
+	//BCVerifier(m, h_row_offsets, h_column_indices);
+	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_degree));
+	free(h_row_offsets);
+	free(h_column_indices);
+	free(h_degree);
 	return 0;
 }
