@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
 
 	ConnectedComponents(m, nnz, d_row_offsets, d_column_indices, d_degree);
 	printf("Verifying...\n");
-	//CCVerifier(m, h_row_offsets, h_column_indices);
+	CCVerifier(m, h_row_offsets, h_column_indices);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_degree));
