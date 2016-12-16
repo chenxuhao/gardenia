@@ -26,8 +26,8 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
 
 	Brandes(m, nnz, d_row_offsets, d_column_indices, d_degree);
-	printf("Verifying...\n");
-	BCVerifier(m, h_row_offsets, h_column_indices);
+	//printf("Verifying...\n");
+	//BCVerifier(m, h_row_offsets, h_column_indices);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_degree));

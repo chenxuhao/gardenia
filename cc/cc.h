@@ -91,7 +91,3 @@ void ConnectedComponents(int m, int nnz, int *row_offsets, int *column_indices, 
 	CUDA_SAFE_CALL(cudaFree(d_changed));
 }
 
-bool CCVerifier(int m, int *row_offsets, int *column_indices) {
-	return true;
-}
-

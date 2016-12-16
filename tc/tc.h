@@ -108,27 +108,3 @@ void Hybrid(int m, int nnz, int *row_offsets, int *column_indices, int *degree) 
 	PrintTriangleStats(h_total);
 }
 
-// Compares with simple serial implementation that uses std::set_intersection
-bool TCVerifier(int m, int *row_offsets, int *column_indices, size_t test_total) {
-	size_t total = 0;
-	/*
-	vector<NodeID> intersection;
-	intersection.reserve(m);
-	for (NodeID u : g.vertices()) {
-		for (NodeID v : g.out_neigh(u)) {
-			auto new_end = set_intersection(g.out_neigh(u).begin(),
-					g.out_neigh(u).end(),
-					g.out_neigh(v).begin(),
-					g.out_neigh(v).end(),
-					intersection.begin());
-			intersection.resize(new_end - intersection.begin());
-			total += intersection.size();
-		}
-	}
-	*/
-	total = total / 6;  // each triangle was counted 6 times
-	if (total != test_total)
-		cout << total << " != " << test_total << endl;
-	return total == test_total;
-}
-
