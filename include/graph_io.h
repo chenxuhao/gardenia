@@ -220,22 +220,6 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	}
 }
 
-void verify(int m , unsigned *dist, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *nerr) {
-	printf("Verifying...\n");
-	for (int u = 0; u < m; u ++) {
-		int row_begin = row_offsets[u];
-		int row_end = row_offsets[u + 1];
-		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int v = column_indices[offset];
-			W_TYPE wt = weight? weight[offset]:1;
-			if (wt > 0 && dist[u] + wt < dist[v]) {
-				//printf("%d %d %d %d\n", nn, v, dist[nn], dist[v]);
-				++*nerr;
-			}
-		}
-	}   
-}
-
 void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight) {
 	if (strstr(argv[1], ".mtx"))
 		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight);
@@ -248,35 +232,5 @@ void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int
 	for (int i = 0; i < m; i++) {
 		degree[i] = row_offsets[i + 1] - row_offsets[i];
 	}
-}
-
-__global__ void dverify(int m, unsigned *dist, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *nerr) {
-	int u = blockIdx.x * blockDim.x + threadIdx.x;
-	if (u < m) {
-		int row_begin = row_offsets[u];
-		int row_end = row_offsets[u + 1];
-		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int v = column_indices[offset];
-			W_TYPE wt = weight[offset];
-			if (wt > 0 && dist[u] + wt < dist[v]) {
-				//printf("%d %d %d %d\n", u, v, dist[u], dist[v]);
-				++*nerr;
-			}
-		}
-	}
-}
-
-void write_solution(const char *fname, int m, unsigned *h_dist) {
-	//unsigned *h_dist;
-	//h_dist = (unsigned *) malloc(m * sizeof(unsigned));
-	assert(h_dist != NULL);
-	//CUDA_SAFE_CALL(cudaMemcpy(h_dist, dist, m * sizeof(unsigned), cudaMemcpyDeviceToHost));
-	printf("Writing solution to %s\n", fname);
-	FILE *f = fopen(fname, "w");
-	fprintf(f, "Computed solution (source dist): [");
-	for(int node = 0; node < m; node++) {
-		fprintf(f, "%d:%d\n ", node, h_dist[node]);
-	}   
-	fprintf(f, "]");
 }
 

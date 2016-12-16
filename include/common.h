@@ -2,6 +2,7 @@
 #include <cassert>
 #include "cutil_subset.h"
 typedef unsigned foru;
+typedef int NodeID;
 #define MYINFINITY	1000000000
 #define MAXNBLOCKS  (4*NBLOCKS)
 #define BLOCKSIZE   256

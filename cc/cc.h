@@ -14,15 +14,16 @@ This CC implementation makes use of the Shiloach-Vishkin algorithm
 */
 
 using namespace std;
+typedef int CompT;
 
-__global__ void initialize(int m, unsigned *comp) {
+__global__ void initialize(int m, CompT *comp) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		comp[id] = id;
 	}
 }
 
-__global__ void cc_kernel1(int m, int *row_offsets, int *column_indices, unsigned *comp, bool *changed) {
+__global__ void cc_kernel1(int m, int *row_offsets, int *column_indices, CompT *comp, bool *changed) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
@@ -42,7 +43,7 @@ __global__ void cc_kernel1(int m, int *row_offsets, int *column_indices, unsigne
 	}
 }
 
-__global__ void cc_kernel2(int m, int *row_offsets, int *column_indices, unsigned *comp) {
+__global__ void cc_kernel2(int m, int *row_offsets, int *column_indices, CompT *comp) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
@@ -54,38 +55,32 @@ __global__ void cc_kernel2(int m, int *row_offsets, int *column_indices, unsigne
 	}
 }
 
-void ConnectedComponents(int m, int nnz, int *row_offsets, int *column_indices, int *degree) {
-	bool h_changed;
-	bool *d_changed;
-	unsigned *h_comp, *d_comp;
+void ConnectedComponents(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp) {
+	bool h_changed, *d_changed;
 	double starttime, endtime, runtime;
-	int iteration = 0;
-	h_comp = (unsigned *)malloc(m * sizeof(unsigned));
+	int iter = 0;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_comp, sizeof(unsigned) * m));
-	//CUDA_SAFE_CALL(cudaMemcpy(d_comp, h_comp, sizeof(unsigned) * m, cudaMemcpyHostToDevice));
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
 	const size_t max_blocks = maximum_residency(cc_kernel1, nthreads, 0);
-	initialize <<<nblocks, nthreads>>> (m, d_comp);
+	initialize <<<nblocks, nthreads>>> (m, comp);
 	//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
 	starttime = rtclock();
 	do {
-		++iteration;
+		++ iter;
 		h_changed = false;
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(h_changed), cudaMemcpyHostToDevice));
-		printf("iteration=%d\n", iteration);
-		cc_kernel1<<<nblocks, nthreads>>>(m, row_offsets, column_indices, d_comp, d_changed);
+		printf("iteration=%d\n", iter);
+		cc_kernel1<<<nblocks, nthreads>>>(m, row_offsets, column_indices, comp, d_changed);
 		CudaTest("solving kernel1 failed");
-		cc_kernel2<<<nblocks, nthreads>>>(m, row_offsets, column_indices, d_comp);
+		cc_kernel2<<<nblocks, nthreads>>>(m, row_offsets, column_indices, comp);
 		CudaTest("solving kernel2 failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_changed, d_changed, sizeof(h_changed), cudaMemcpyDeviceToHost));
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	CUDA_SAFE_CALL(cudaMemcpy(h_comp, d_comp, sizeof(unsigned) * m, cudaMemcpyDeviceToHost));
 	endtime = rtclock();
-	printf("\titerations = %d.\n", iteration);
+	printf("\titerations = %d.\n", iter);
 	runtime = (1000.0f * (endtime - starttime));
 	printf("\truntime [%s] = %f ms.\n", CC_VARIANT, runtime);
 	CUDA_SAFE_CALL(cudaFree(d_changed));

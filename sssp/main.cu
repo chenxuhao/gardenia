@@ -5,6 +5,7 @@ using namespace std;
 #include "common.h"
 #include "graph_io.h"
 #include "variants.h"
+#include "verifier.h"
 
 int main(int argc, char *argv[]) {
 	printf("Single Source Shortest Path (SSSP) with CUDA by Xuhao Chen\n");
@@ -33,10 +34,7 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(W_TYPE), cudaMemcpyHostToDevice));
 	sssp(m, nnz, d_row_offsets, d_column_indices, d_weight, d_dist);
 	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(unsigned), cudaMemcpyDeviceToHost));
-	printf("Verifying...\n");
-	unsigned h_nerr = 0;
-	verify(m, h_dist, h_row_offsets, h_column_indices, h_weight, &h_nerr);
-	printf("\tNumber of errors = %d.\n", h_nerr);
+	SSSPVerifier(m, h_dist, h_row_offsets, h_column_indices, h_weight);
 	write_solution("sssp-out.txt", m, h_dist);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));

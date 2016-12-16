@@ -5,6 +5,7 @@ using namespace std;
 #include "common.h"
 #include "graph_io.h"
 #include "variants.h"
+#include "verifier.h"
 
 int main(int argc, char *argv[]) {
 	printf("Connected Component with CUDA by Xuhao Chen\n");
@@ -24,10 +25,13 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
+	CompT *h_comp = (CompT *)malloc(m * sizeof(CompT));
+	CompT *d_comp;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_comp, sizeof(CompT) * m));
 
-	ConnectedComponents(m, nnz, d_row_offsets, d_column_indices, d_degree);
-	//printf("Verifying...\n");
-	//CCVerifier(m, h_row_offsets, h_column_indices);
+	ConnectedComponents(m, nnz, d_row_offsets, d_column_indices, d_comp);
+	CUDA_SAFE_CALL(cudaMemcpy(h_comp, d_comp, sizeof(CompT) * m, cudaMemcpyDeviceToHost));
+	CCVerifier(m, h_row_offsets, h_column_indices, h_comp);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_degree));

@@ -5,6 +5,7 @@ using namespace std;
 #include "common.h"
 #include "graph_io.h"
 #include "variants.h"
+#include "verifier.h"
 
 int main(int argc, char *argv[]) {
 	printf("Breadth-first Search with CUDA by Xuhao Chen\n");
@@ -31,9 +32,7 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	bfs(m, nnz, d_row_offsets, d_column_indices, d_dist);
 	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(foru), cudaMemcpyDeviceToHost));
-	unsigned h_nerr = 0;
-	verify(m, h_dist, h_row_offsets, h_column_indices, h_weight, &h_nerr);
-	printf("\tNumber of errors = %d.\n", h_nerr);
+	BFSVerifier(m, h_dist, h_row_offsets, h_column_indices, h_weight);
 	write_solution("bfs-out.txt", m, h_dist);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
