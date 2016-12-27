@@ -3,6 +3,8 @@
 #include "worklistc.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+typedef unsigned DistT;
+
 #ifdef TEXTURE
 texture <int, 1, cudaReadModeElementType> row_offsets;
 texture <int, 1, cudaReadModeElementType> column_indices;
@@ -15,9 +17,9 @@ __global__ void initialize(unsigned *dist, unsigned m) {
 }
 
 #ifdef TEXTURE
-__global__ void bfs_kernel(int m, foru *dist, Worklist2 inwl, Worklist2 outwl) {
+__global__ void bfs_kernel(int m, DistT *dist, Worklist2 inwl, Worklist2 outwl) {
 #else
-__global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, foru *dist, Worklist2 inwl, Worklist2 outwl) {
+__global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 inwl, Worklist2 outwl) {
 #endif
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
@@ -35,7 +37,7 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, foru *d
 #else
 			int dst = column_indices[offset];
 #endif
-			foru altdist = dist[src] + 1;
+			DistT altdist = dist[src] + 1;
 			if (dist[dst] == MYINFINITY) {//Not visited
 				dist[dst] = altdist;
 				assert(outwl.push(dst));
@@ -52,8 +54,8 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_dist) {
-	foru zero = 0;
+void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_dist) {
+	DistT zero = 0;
 	int iteration = 0;
 	double starttime, endtime, runtime;
 	const int nthreads = 256;

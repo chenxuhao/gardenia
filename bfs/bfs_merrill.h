@@ -1,7 +1,7 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
 #include <cub/cub.cuh>
-#include "gbar.cuh"
+#include "gbar.h"
 #include "cuda_launch_config.hpp"
 #define BFS_VARIANT "merrill"
 #include "cutil_subset.h"
@@ -11,10 +11,11 @@
 #include <b40c/graph/csr_graph.cuh>
 #include <b40c/graph/bfs/enactor_hybrid.cuh>
 #include <b40c/graph/bfs/enactor_two_phase.cuh>
+typedef unsigned DistT;
 using namespace b40c;
 using namespace graph;
 
-void bfs_merrill(int m, int nnz, int *csrRowPtr, int *csrColInd, foru *dist) {
+void BFSSolver(int m, int nnz, int *csrRowPtr, int *csrColInd, DistT *dist) {
 	printf("BFS data-driven load-balance version\n");
 	typedef int VertexId;
 	typedef unsigned Value;
@@ -52,14 +53,14 @@ void bfs_merrill(int m, int nnz, int *csrRowPtr, int *csrColInd, foru *dist) {
 	endtime = rtclock();
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, 1000 * (endtime - starttime));
 
-	foru *h_dist;
-	h_dist = (foru *) calloc(m, sizeof(foru));
+	DistT *h_dist;
+	h_dist = (DistT *) calloc(m, sizeof(DistT));
 	assert(h_dist != NULL);
 	if (csr_problem.ExtractResults((int *) h_dist)) exit(1);
 	for(int i = 0; i < m; i++)
 		if((signed) h_dist[i] == -1)
 			h_dist[i] = MYINFINITY;
-	CUDA_SAFE_CALL(cudaMemcpy(dist, h_dist, m * sizeof(foru), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
 	free(h_dist);
 	CUDA_SAFE_CALL(cudaFree(d_csrRowPtr));
 	CUDA_SAFE_CALL(cudaFree(d_csrColInd));

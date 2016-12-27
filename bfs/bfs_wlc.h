@@ -5,8 +5,9 @@
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
 #define BLKSIZE 128
+typedef unsigned DistT;
 
-__global__ void initialize(foru *dist, unsigned int m) {
+__global__ void initialize(DistT *dist, unsigned int m) {
 	unsigned int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		dist[id] = MYINFINITY;
@@ -14,7 +15,7 @@ __global__ void initialize(foru *dist, unsigned int m) {
 }
 
 typedef cub::BlockScan<int, BLKSIZE> BlockScan;
-__device__ void expandByCta(int m, int *row_offsets, int *column_indices, foru *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
+__device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
 	__shared__ int owner;
@@ -69,7 +70,7 @@ __device__ __forceinline__ unsigned LaneId() {
 #define WARP_SIZE 32
 #define LOG_WARP_SIZE 5
 #define NUM_WARPS (BLKSIZE / WARP_SIZE)
-__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, foru *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
+__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
 	unsigned lane_id = LaneId();
@@ -114,7 +115,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	}
 }
 
-__global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, foru *dist, Worklist2 inwl, Worklist2 outwl, unsigned iteration) {
+__global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 inwl, Worklist2 outwl, unsigned iteration) {
 	//expandByCta(m, row_offsets, column_indices, dist, inwl, outwl, iteration);
 	//expandByWarp(m, row_offsets, column_indices, dist, inwl, outwl, iteration);
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -172,8 +173,8 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_dist) {
-	foru zero = 0;
+void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT *d_dist) {
+	DistT zero = 0;
 	int iteration = 0;
 	double starttime, endtime, runtime;
 	const int nthreads = 256;
