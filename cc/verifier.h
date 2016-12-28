@@ -1,8 +1,9 @@
+#include <unordered_map>
 // Verifies CC result by performing a BFS from a vertex in each component
 // - Asserts search does not reach a vertex with a different component label
 // - If the graph is directed, it performs the search as if it was undirected
 // - Asserts every vertex is visited (degree-0 vertex should have own label)
-bool CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
+void CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
 	printf("Verifying...\n");
 	unordered_map<NodeID, NodeID> label_to_source;
 	vector<bool> visited(m);
@@ -24,8 +25,10 @@ bool CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
 			unsigned row_end = row_offsets[src + 1]; 
 			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
-				if (comp[dst] != curr_label)
-					return false;
+				if (comp[dst] != curr_label) {
+					printf("Wrong\n");
+					return;
+				}
 				if (!visited[dst]) {
 					visited[dst] = true;
 					frontier.push_back(dst);
@@ -46,8 +49,12 @@ bool CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
 			*/
 		}   
 	}
-	for (NodeID n = 0; n < m; n ++)
-		if (!visited[n])
-			return false;
-	return true;
+	for (NodeID n = 0; n < m; n ++) {
+		if (!visited[n]) {
+			printf("Wrong\n");
+			return;
+		}
+	}
+	printf("Correct\n");
+	return;
 }
