@@ -175,11 +175,11 @@ __global__ void insert(Worklist2 inwl) {
 
 void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT *d_dist) {
 	DistT zero = 0;
-	int iteration = 0;
+	int iter = 0;
 	double starttime, endtime, runtime;
-	const int nthreads = 256;
+	int nthreads = BLKSIZE;
 	int nblocks = (m - 1) / nthreads + 1;
-	//initialize <<<nblocks, nthreads>>> (d_dist, m);
+	//initialize <<<nblocks, nthreads>>> (m, d_dist);
 	//CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
@@ -189,10 +189,10 @@ void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT 
 	insert<<<1, BLKSIZE>>>(*inwl);
 	nitems = inwl->nitems();
 	do {
-		++ iteration;
+		++ iter;
 		nblocks = (nitems + BLKSIZE - 1) / BLKSIZE; 
-		printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iteration, nblocks, BLKSIZE, nitems);
-		bfs_kernel<<<nblocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_dist, *inwl, *outwl, iteration);
+		printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iter, nblocks, BLKSIZE, nitems);
+		bfs_kernel<<<nblocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_dist, *inwl, *outwl, iter);
 		CudaTest("solving failed");
 		nitems = outwl->nitems();
 		Worklist2 *tmp = inwl;
@@ -202,7 +202,7 @@ void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT 
 	} while(nitems > 0);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	endtime = rtclock();
-	printf("\titerations = %d.\n", iteration);
+	printf("\titerations = %d.\n", iter);
 	runtime = (1000.0f * (endtime - starttime));
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
 	return;

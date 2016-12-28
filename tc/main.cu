@@ -5,6 +5,7 @@ using namespace std;
 #include "common.h"
 #include "graph_io.h"
 #include "variants.h"
+#include "verifier.h"
 
 int main(int argc, char *argv[]) {
 	printf("Triangle Count with CUDA by Xuhao Chen\n");
@@ -24,9 +25,12 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
 
-	Hybrid(m, nnz, d_row_offsets, d_column_indices, d_degree);
-	//printf("Verifying...\n");
-	//TCVerifier(m, h_row_offsets, h_column_indices);
+	size_t h_total = 0, *d_total;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(size_t)));
+	TCSolver(m, nnz, d_row_offsets, d_column_indices, d_degree, d_total);
+	CUDA_SAFE_CALL(cudaMemcpy(&h_total, d_total, sizeof(size_t), cudaMemcpyDeviceToHost));
+	cout << h_total << " triangles" << endl;
+	TCVerifier(m, h_row_offsets, h_column_indices, h_total);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_degree));

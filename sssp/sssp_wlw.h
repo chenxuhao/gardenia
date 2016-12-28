@@ -1,31 +1,31 @@
-#define BFS_VARIANT "worklistw"
-#define MAXBLOCKSIZE 1024
+#define SSSP_VARIANT "data-driven"
 #include "worklistc.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+typedef unsigned DistT;
 
-__global__ void initialize(unsigned *dist, unsigned m) {
+__global__ void initialize(int m, DistT *dist) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		dist[id] = MYINFINITY;
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 inwl, Worklist2 outwl) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE *weight, DistT *dist, Worklist2 inwl, Worklist2 outwl) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	//int nitems = inwl.nitems();
 	//int total_inputs = (nitems - 1) / (gridDim.x * blockDim.x) + 1;
 	//for (int id = tid; total_inputs > 0; id += blockDim.x * gridDim.x, total_inputs--) {
 		int src;
 		if(inwl.pop_id(tid, src)) {
-			unsigned row_begin = row_offsets[src];
-			unsigned row_end = row_offsets[src + 1];
-			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
+			int row_begin = row_offsets[src];
+			int row_end = row_offsets[src + 1];
+			for (int offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
-				unsigned wt = (unsigned)weight[offset];
-				unsigned altdist = dist[src] + wt;
+				DistT wt = (DistT)weight[offset];
+				DistT altdist = dist[src] + wt;
 				if (altdist < dist[dst]) {
-					unsigned olddist = atomicMin(&dist[dst], altdist);
+					DistT olddist = atomicMin(&dist[dst], altdist);
 					if (altdist < olddist) { // update successfully
 						assert(outwl.push(dst));
 					}
@@ -43,14 +43,14 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, unsigned *d_dist) {
-	unsigned zero = 0;
+void SSSPSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, DistT *d_dist) {
+	DistT zero = 0;
 	int iteration = 0;
 	double starttime, endtime, runtime;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	initialize <<<nblocks, nthreads>>> (d_dist, m);
-	CudaTest("initializing failed");
+	//initialize <<<nblocks, nthreads>>> (m, d_dist);
+	//CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
@@ -75,6 +75,6 @@ void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_w
 	endtime = rtclock();
 	printf("\titerations = %d.\n", iteration);
 	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
+	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, runtime);
 	return;
 }

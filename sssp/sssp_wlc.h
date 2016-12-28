@@ -1,22 +1,23 @@
-#define BFS_VARIANT "worklistc"
+#define SSSP_VARIANT "load-balance"
 #include "worklistc.h"
 #include "gbar.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
 #define BLKSIZE 128
+typedef unsigned DistT;
 
-__global__ void initialize(unsigned *dist, int m) {
+__global__ void initialize(int m, DistT *dist) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		dist[id] = MYINFINITY;
 	}
 }
 
-__device__ __forceinline__ unsigned process_edge(int src, int edge, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 &outwl) {
+__device__ __forceinline__ unsigned process_edge(int src, int edge, int *column_indices, W_TYPE *weight, DistT *dist, Worklist2 &outwl) {
 	int dst = column_indices[edge];
-	unsigned wt = (unsigned)weight[edge];
-	unsigned altdist = dist[src] + wt;
+	DistT wt = (DistT)weight[edge];
+	DistT altdist = dist[src] + wt;
 	if (altdist < dist[dst]) {
 		//atomicMin((unsigned *)&dist[dst], altdist);
 		atomicMin(&dist[dst], altdist);
@@ -24,8 +25,8 @@ __device__ __forceinline__ unsigned process_edge(int src, int edge, int *column_
 	}
 }
 typedef cub::BlockScan<int, BLKSIZE> BlockScan;
-__device__ void expandByCta(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 &inwl, Worklist2 &outwl) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+__device__ void expandByCta(int m, int *row_offsets, int *column_indices, W_TYPE *weight, DistT *dist, Worklist2 &inwl, Worklist2 &outwl) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
 	__shared__ int owner;
 	__shared__ int sh_vertex;
@@ -70,9 +71,9 @@ __device__ __forceinline__ unsigned LaneId() {
 #define WARP_SIZE 32
 #define LOG_WARP_SIZE 5
 #define NUM_WARPS (BLKSIZE / WARP_SIZE)
-__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 &inwl, Worklist2 &outwl) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
-	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
+__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, W_TYPE *weight, DistT *dist, Worklist2 &inwl, Worklist2 &outwl) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	int warp_id = threadIdx.x >> LOG_WARP_SIZE;
 	unsigned lane_id = LaneId();
 	__shared__ int owner[NUM_WARPS];
 	__shared__ int sh_vertex[NUM_WARPS];
@@ -106,10 +107,10 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *dist, Worklist2 inwl, Worklist2 outwl) {
+__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE *weight, DistT *dist, Worklist2 inwl, Worklist2 outwl) {
 	//expandByCta(m, row_offsets, column_indices, weight, dist, inwl, outwl);
 	//expandByWarp(m, row_offsets, column_indices, weight, dist, inwl, outwl);
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
 	const int SCRATCHSIZE = BLKSIZE;
 	__shared__ BlockScan::TempStorage temp_storage;
@@ -157,18 +158,16 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, unsigned *d_dist) {
-	unsigned zero = 0;
-	int iteration = 0;
-	unsigned *nerr;
+void SSSPSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, DistT *d_dist) {
+	DistT zero = 0;
+	int iter = 0;
 	double starttime, endtime, runtime;
-	const int nthreads = 256;
+	int nthreads = BLKSIZE;
 	int nblocks = (m - 1) / nthreads + 1;
-	initialize <<<nblocks, nthreads>>> (d_dist, m);
-	CudaTest("initializing failed");
+	//initialize <<<nblocks, nthreads>>> (d_dist, m);
+	//CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 
-	CUDA_SAFE_CALL(cudaMalloc((void **)&nerr, sizeof(unsigned)));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	int nitems = 1;
@@ -178,9 +177,9 @@ void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_w
 	insert<<<1, BLKSIZE>>>(*inwl);
 	nitems = inwl->nitems();
 	while(nitems > 0) {
-		++iteration;
+		++ iter;
 		unsigned nblocks = (nitems + BLKSIZE - 1) / BLKSIZE; 
-		//printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iteration, nblocks, BLKSIZE, nitems);
+		printf("iteration=%d, nblocks=%d, wlsz=%d\n", iter, nblocks, nitems);
 		sssp_kernel<<<nblocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_weight, d_dist, *inwl, *outwl);
 		nitems = outwl->nitems();
 		Worklist2 *tmp = inwl;
@@ -190,9 +189,8 @@ void sssp(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_w
 	};
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	endtime = rtclock();
-	printf("\titerations = %d.\n", iteration);
+	printf("\titerations = %d.\n", iter);
 	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
-	CUDA_SAFE_CALL(cudaFree(nerr));
+	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, runtime);
 	return;
 }

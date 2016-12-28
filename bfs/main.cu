@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
 
 	BFSSolver(m, nnz, d_row_offsets, d_column_indices, d_dist); // start breadth first search
 	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
-	BFSVerifier(m, h_dist, h_row_offsets, h_column_indices, h_weight); // verify results
+	BFSVerifier(m, h_row_offsets, h_column_indices, h_weight, h_dist); // verify results
 	write_solution("bfs-out.txt", m, h_dist);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));

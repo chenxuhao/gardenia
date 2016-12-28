@@ -35,20 +35,20 @@ to relabel the graph, we use the heuristic in WorthRelabelling.
 
 using namespace std;
 
-__global__ void tc_kernel(int m, int *row_offsets, int *column_indices, unsigned *total) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void tc_kernel(int m, int *row_offsets, int *column_indices, size_t *total) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if(src < m) {
-			unsigned row_begin = row_offsets[src];
-			unsigned row_end = row_offsets[src + 1]; 
-			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
+			int row_begin = row_offsets[src];
+			int row_end = row_offsets[src + 1]; 
+			for (int offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
 				if(dst > src) break;
-				unsigned row_begin_dst = row_offsets[dst];
-				unsigned row_end_dst = row_offsets[dst + 1];
-				unsigned it = row_begin;
-				for (unsigned offset_dst = row_begin_dst; offset_dst < row_end_dst; ++ offset_dst) {
+				int row_begin_dst = row_offsets[dst];
+				int row_end_dst = row_offsets[dst + 1];
+				int it = row_begin;
+				for (int offset_dst = row_begin_dst; offset_dst < row_end_dst; ++ offset_dst) {
 					int dst_dst = column_indices[offset_dst];
 					if(dst_dst > dst) break;
 					while(column_indices[it] < dst_dst) it ++;
@@ -78,33 +78,24 @@ bool WorthRelabelling(int m, int nnz, int *row_offsets, int *column_indices, int
 	return sample_average / 2 > sample_median;
 }
 
-void PrintTriangleStats(size_t total_triangles) {
-	cout << total_triangles << " triangles" << endl;
-}
-
 // uses heuristic to see if worth relabeling
-void Hybrid(int m, int nnz, int *row_offsets, int *column_indices, int *degree) {
-	unsigned h_total = 0;
-	unsigned *d_total;
+void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, size_t *total) {
+	size_t zero = 0;
 	double starttime, endtime, runtime;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(unsigned)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_total, &h_total, sizeof(unsigned), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(total, &zero, sizeof(size_t), cudaMemcpyHostToDevice));
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
 	const size_t max_blocks = maximum_residency(tc_kernel, nthreads, 0);
-	//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
 	starttime = rtclock();
-	//if (WorthRelabelling(m, row_offsets, column_indices, degree))
-	//	OrderedCount<<<nblocks, nthreads>>>(m, row_offsets, column_indices, d_total);
+	//if (WorthRelabelling(m, nnz, row_offsets, column_indices, degree))
+	//	tc_kernel<<<nblocks, nthreads>>>(m, row_offsets, column_indices, total);
 	//else
-	tc_kernel<<<nblocks, nthreads>>>(m, row_offsets, column_indices, d_total);
+	tc_kernel<<<nblocks, nthreads>>>(m, row_offsets, column_indices, total);
 	CudaTest("solving failed");
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	endtime = rtclock();
 	runtime = (1000.0f * (endtime - starttime));
 	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, runtime);
-	CUDA_SAFE_CALL(cudaMemcpy(&h_total, d_total, sizeof(unsigned), cudaMemcpyDeviceToHost));
-	PrintTriangleStats(h_total);
 }
 

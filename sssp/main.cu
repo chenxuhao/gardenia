@@ -17,24 +17,27 @@ int main(int argc, char *argv[]) {
 	W_TYPE *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight);
 	print_device_info(argc, argv);
-	unsigned *h_dist = (unsigned *) malloc(m * sizeof(unsigned));
-	for(int i = 0; i < m; i ++) {
-		h_dist[i] = MYINFINITY;
-	}
-	unsigned * d_dist;
-	W_TYPE *d_weight;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(unsigned)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(unsigned), cudaMemcpyHostToDevice));
+
 	int *d_row_offsets, *d_column_indices;
+	W_TYPE *d_weight;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_weight, nnz * sizeof(W_TYPE)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(W_TYPE), cudaMemcpyHostToDevice));
-	sssp(m, nnz, d_row_offsets, d_column_indices, d_weight, d_dist);
-	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(unsigned), cudaMemcpyDeviceToHost));
-	SSSPVerifier(m, h_dist, h_row_offsets, h_column_indices, h_weight);
+
+	DistT *h_dist = (DistT *) malloc(m * sizeof(DistT));
+	for(int i = 0; i < m; i ++) {
+		h_dist[i] = MYINFINITY;
+	}
+	DistT * d_dist;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
+
+	SSSPSolver(m, nnz, d_row_offsets, d_column_indices, d_weight, d_dist);
+	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
+	SSSPVerifier(m, h_row_offsets, h_column_indices, h_weight, h_dist);
 	write_solution("sssp-out.txt", m, h_dist);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));

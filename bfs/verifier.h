@@ -1,4 +1,4 @@
-void BFSVerifier(int m , unsigned *dist, int *row_offsets, int *column_indices, W_TYPE *weight) {
+void BFSVerifier(int m, int *row_offsets, int *column_indices, W_TYPE *weight, DistT *dist) {
 	printf("Verifying...\n");
 	unsigned nerr = 0;
 	for (int u = 0; u < m; u ++) {

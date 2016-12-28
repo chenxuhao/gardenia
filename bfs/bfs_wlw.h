@@ -56,7 +56,7 @@ __global__ void insert(Worklist2 inwl) {
 
 void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_dist) {
 	DistT zero = 0;
-	int iteration = 0;
+	int iter = 0;
 	double starttime, endtime, runtime;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
@@ -74,9 +74,9 @@ void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsign
 	insert<<<1, nthreads>>>(*inwl);
 	nitems = inwl->nitems();
 	do {
-		++iteration;
+		++ iter;
 		nblocks = (nitems - 1) / nthreads + 1;
-		printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iteration, nblocks, nthreads, nitems);
+		printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iter, nblocks, nthreads, nitems);
 #ifdef TEXTURE
 		bfs_kernel <<<nblocks, nthreads>>> (m, d_dist, *inwl, *outwl);
 #else
@@ -91,7 +91,7 @@ void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsign
 	} while (nitems > 0);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	endtime = rtclock();
-	printf("\titerations = %d.\n", iteration);
+	printf("\titerations = %d.\n", iter);
 	runtime = (1000.0f * (endtime - starttime));
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
 	return;
