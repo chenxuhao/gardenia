@@ -8,22 +8,22 @@
 const float kDamp = 0.85;
 #define BLKSIZE 256
 
-__global__ void initialize(int m, float *pr, bool *active) {
+__global__ void initialize(int m, float *score, bool *active) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
-		pr[id] = 1.0f / (float)m;
+		score[id] = 1.0f / (float)m;
 		//active[id] = true;
 	}
 }
 
-__global__ void pr_kernel(int m, int *row_offsets, int *column_indices, float *pr, int *degree, float *outgoing_contrib, float *diff, bool *active, GlobalBarrier gb) {
+__global__ void pr_kernel(int m, int *row_offsets, int *column_indices, float *score, int *degree, float *outgoing_contrib, float *diff, bool *active, GlobalBarrier gb) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	typedef cub::BlockReduce<float, BLKSIZE> BlockReduce;
 	int num_vertices_per_thread = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	int total_inputs = num_vertices_per_thread;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if (src < m) {
-			outgoing_contrib[src] = kDamp * pr[src] / (float)degree[src];
+			outgoing_contrib[src] = kDamp * score[src] / (float)degree[src];
 		}
 	}
 	gb.Sync();
@@ -39,9 +39,9 @@ __global__ void pr_kernel(int m, int *row_offsets, int *column_indices, float *p
 				int dst = column_indices[offset];
 				incoming_total += outgoing_contrib[dst];
 			}
-			float old_pr = pr[src];
-			pr[src] = ((1.0f - kDamp) / (float)m) + incoming_total;
-			local_diff += abs(pr[src] - old_pr);
+			float old_score = score[src];
+			score[src] = ((1.0f - kDamp) / (float)m) + incoming_total;
+			local_diff += abs(score[src] - old_score);
 		}
 	}
 	float block_sum = BlockReduce(temp_storage).Sum(local_diff);
@@ -50,19 +50,18 @@ __global__ void pr_kernel(int m, int *row_offsets, int *column_indices, float *p
 	}
 }
 
-void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree) {
+void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree, float *d_score) {
 	float *d_diff, h_diff;
-	float *d_pr, *d_contrib;
+	float *d_contrib;
 	bool *d_active;
 	double starttime, endtime, runtime;
 	int iter = 0;
 	const int nthreads = BLKSIZE;
 	int nblocks = (m - 1) / nthreads + 1;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_pr, m * sizeof(float)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_contrib, m * sizeof(float)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
 	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_active, m * sizeof(bool)));
-	initialize <<<nblocks, nthreads>>> (m, d_pr, d_active);
+	initialize <<<nblocks, nthreads>>> (m, d_score, d_active);
 	CudaTest("initializing failed");
 
 	size_t max_blocks = 5;
@@ -79,7 +78,7 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree
 		++iter;
 		h_diff = 0.0f;
 		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(h_diff), cudaMemcpyHostToDevice));
-		pr_kernel<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_pr, d_degree, d_contrib, d_diff, d_active, gb);
+		pr_kernel<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_score, d_degree, d_contrib, d_diff, d_active, gb);
 		CudaTest("solving kernel failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(h_diff), cudaMemcpyDeviceToHost));
 		printf("iteration=%d, diff=%f\n", iter, h_diff);
@@ -89,7 +88,6 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree
 	printf("\titerations = %d.\n", iter);
 	runtime = (1000.0f * (endtime - starttime));
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
-	CUDA_SAFE_CALL(cudaFree(d_pr));
 	CUDA_SAFE_CALL(cudaFree(d_contrib));
 	CUDA_SAFE_CALL(cudaFree(d_diff));
 	//CUDA_SAFE_CALL(cudaFree(d_active));
