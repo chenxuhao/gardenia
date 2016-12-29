@@ -10,9 +10,12 @@ DESCRIPTION
 bc: betweenness centrality
 bfs: breadth first search
 color: graph coloring
+cc: connected components
 mst: minimum spanning tree (TODO: simulation does not terminate)
 pr: page rank
+sgd: stochastic gradient descent
 sssp: single source shortest path
+tc: triangle counting
 
 INSTALLATION
 You will need to download and install CUB from here:
@@ -25,5 +28,7 @@ Go to each sub-directory, e.g. bfs, and then
 $ make
 
 Author: Xuhao Chen <cxh@illinois.edu>
-Homepage: http://chenxuhao.weebly.com
-Citation: Pingfan Li, Xuhao Chen et al., High Performance Parallel Graph Coloring on GPGPUs, IPDPSW, 2016
+Homepage: http://chenxuhao.github.io
+Citations: 
+Pingfan Li, Xuhao Chen et al., High Performance Parallel Graph Coloring on GPGPUs, IPDPS Workshop, 2016
+Pingfan Li, Xuhao Chen et al., High Performance Detection of Strongly Connected Components in Sparse Graphs on GPUs, PPoPP Workshop, 2017

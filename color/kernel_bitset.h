@@ -88,7 +88,7 @@ __global__ void conflictResolve(int m, int *csrRowPtr, int *csrColInd, Worklist2
 	if(conflicted) outwl.push(vertex);
 }
 
-void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
+void ColorSolver(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
 	double starttime, endtime;
 	double runtime[ITERATIONS];
 	int colors[ITERATIONS];

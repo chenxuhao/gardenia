@@ -50,10 +50,6 @@ void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices,
 		count += vertices[i].size();
 	}
 	row_offsets[m] = count;
-	if (count != nnz) {
-		printf("This graph is not symmetric\n");
-		nnz = count;
-	}
 	double avgdeg;
 	double variance = 0.0;
 	int maxdeg = 0;
@@ -112,10 +108,6 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 		count += vertices[i].size();
 	}
 	row_offsets[m] = count;
-	if (count != nnz) {
-		printf("This graph is not symmetric\n");
-		nnz = count;
-	}
 	double avgdeg;
 	double variance = 0.0;
 	int maxdeg = 0;
@@ -144,7 +136,7 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 }
 
 // transfer mtx graph to CSR format
-void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight) {
+void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize) {
 	printf("Reading (.mtx) input file %s\n", mtx);
 	std::ifstream cfile;
 	cfile.open(mtx);
@@ -171,14 +163,17 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	for (int i = 0; i < nnz; i ++) {
 		getline(cfile, str);
 		sscanf(str.c_str(), "%d %d %d", &dst, &src, &wt);
-		if (wt <= 0) wt = 1;
+		if (wt < 1) wt = 1;
+		else wt = ceil(wt);
 		dst--;
 		src--;
 		Edge e1, e2;
 		e1.dst = dst; e1.wt = (W_TYPE)wt;
-		e2.dst = src; e2.wt = (W_TYPE)wt;
 		vertices[src].push_back(e1);
-		vertices[dst].push_back(e2);
+		if(symmetrize) {
+			e2.dst = src; e2.wt = (W_TYPE)wt;
+			vertices[dst].push_back(e2);
+		}
 	}
 	cfile.close();
 	row_offsets = (int *)malloc((m + 1) * sizeof(int));
@@ -188,9 +183,16 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 		count += vertices[i].size();
 	}
 	row_offsets[m] = count;
-	if (count != nnz) {
-		printf("This graph is not symmetric\n");
-		nnz = count;
+	if (symmetrize) {
+		if(count == nnz)
+			printf("This graph is originally symmetric (undirected)\n");
+		else {
+			printf("This graph is directed but symmetrized\n");
+			nnz = count;
+		}
+	} else {
+		if (count != nnz)
+			printf("Error reading graph, number of edges in edge list %d != %d\n", count, nnz);
 	}
 	double avgdeg;
 	double variance = 0.0;
@@ -220,9 +222,9 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	}
 }
 
-void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight) {
+void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight, bool symmetrize) {
 	if (strstr(argv[1], ".mtx"))
-		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight);
+		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight, symmetrize);
 	else if (strstr(argv[1], ".graph"))
 		graph2csr(argv[1], m, nnz, row_offsets, column_indices, weight);
 	else if (strstr(argv[1], ".gr"))

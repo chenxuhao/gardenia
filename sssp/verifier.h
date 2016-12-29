@@ -6,13 +6,14 @@ void SSSPVerifier(int m, int *row_offsets, int *column_indices, W_TYPE *weight, 
 		int row_end = row_offsets[src + 1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
-			DistT wt = weight? (DistT)weight[offset] : 1;
+			DistT wt = (DistT)weight[offset];
+			//DistT wt = 3;
 			if (wt > 0 && dist[src] + wt < dist[dst]) {
-				//printf("%d %d %d %d\n", src, dst, dist[src], dist[dst]);
+				if(nerr < 10) printf("Error: src=%d dst=%d dist[src]=%d dist[dst]=%d wt=%d\n", src, dst, dist[src], dist[dst],wt);
 				++ nerr;
 			}
 		}
-	}   
+	}
 	printf("\tNumber of errors = %d.\n", nerr);
 }
 

@@ -5,6 +5,8 @@
 #include "cutil_subset.h"
 //#include "bitmap.h"
 #include "worklistc.h"
+#include <thrust/extrema.h>
+#include <thrust/execution_policy.h>
 /*
 Gardenia Benchmark Suite
 Kernel: Betweenness Centrality (BC)
@@ -101,15 +103,19 @@ __global__ void push_frontier(Worklist2 inwl, int *queue, int queue_len) {
 	}
 }
 
-void Brandes(int m, int nnz, int *row_offsets, int *column_indices, int *degree) {
-	ScoreT *h_scores, *d_scores, *d_deltas;
+__global__ void bc_normalize(int m, ScoreT *scores, ScoreT *max_score) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	if (tid < m)
+		scores[tid] = scores[tid] / *max_score;
+}
+
+void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_scores) {
+	ScoreT *d_deltas;
 	int *d_path_counts, *d_depths, *d_frontiers;
 	double starttime, endtime, runtime;
 	int depth = 0;
-	h_scores = (ScoreT *)malloc(m * sizeof(ScoreT));
 	int *h_path_counts = (int *)malloc(m * sizeof(int));
 	vector<int> depth_index;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scores, sizeof(ScoreT) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_deltas, sizeof(ScoreT) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_path_counts, sizeof(int) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_depths, sizeof(int) * m));
@@ -155,25 +161,17 @@ void Brandes(int m, int nnz, int *row_offsets, int *column_indices, int *degree)
 		bc_reverse<<<nblocks, nthreads>>>(nitems, row_offsets, column_indices, depth_index[d], d_frontiers, d_scores, d_path_counts, d_depths, d, d_deltas);
 		CudaTest("solving kernel2 failed");
 	}
-
+	ScoreT *d_max_score;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_max_score, sizeof(ScoreT)));
+	d_max_score = thrust::max_element(thrust::device, d_scores, d_scores + m);;
+	ScoreT h_max_score;
+	CUDA_SAFE_CALL(cudaMemcpy(&h_max_score, d_max_score, sizeof(ScoreT), cudaMemcpyDeviceToHost));
+	printf("max_score = %f\n", h_max_score);
+	bc_normalize<<<nblocks, nthreads>>>(m, d_scores, d_max_score);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	endtime = rtclock();
-	CUDA_SAFE_CALL(cudaMemcpy(h_scores, d_scores, sizeof(ScoreT) * m, cudaMemcpyDeviceToHost));
 	runtime = (1000.0f * (endtime - starttime));
 	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, runtime);
-
-	for (int i = 0; i < 10; i++)
-		printf("scores[%d] = %f\n", i, h_scores[i]);
-	ScoreT biggest_score = 0;
-#pragma omp parallel for reduction(max : biggest_score)
-	for (int i = 0; i < m; i++)
-		biggest_score = max(biggest_score, h_scores[i]);
-	printf("biggest_score = %f\n", biggest_score);
-#pragma omp parallel for
-	for (int i = 0; i < m; i++)
-		h_scores[i] = h_scores[i] / biggest_score;
-	for (int i = 0; i < 10; i++)
-		printf("scores[%d] = %f\n", i, h_scores[i]);
 	CUDA_SAFE_CALL(cudaFree(d_path_counts));
 }
 

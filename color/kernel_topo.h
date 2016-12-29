@@ -57,7 +57,7 @@ __global__ void conflictResolve(int m, int *csrRowPtr, int *csrColInd, int *colo
 	}
 }
 
-void color(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
+void ColorSolver(int m, int nnz, int *csrRowPtr, int *csrColInd, int *coloring) {
 	double starttime, endtime, t1, t2;
 	double runtime[ITERATIONS];
 	int colors[ITERATIONS];
