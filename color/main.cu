@@ -28,11 +28,8 @@ int main(int argc, char *argv[]) {
 	int *coloring = (int *)calloc(m, sizeof(int));
 	ColorSolver(m, nnz, h_row_offsets, h_column_indices, coloring);
 	//write_solution("color-out.txt", coloring, m);
-	int correct = 1;
-	ColorVerifier(m, nnz, h_row_offsets, h_column_indices, coloring, &correct);
-	if (correct)
-		printf("correct.\n");
-	else
-		printf("incorrect.\n");
+	ColorVerifier(m, nnz, h_row_offsets, h_column_indices, coloring);
+	free(h_row_offsets);
+	free(h_column_indices);
 	return 0;
 }
