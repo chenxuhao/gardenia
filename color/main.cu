@@ -7,14 +7,8 @@ using namespace std;
 #include "variants.h"
 #include "verifier.h"
 
-#ifndef	ITERATIONS
-#define	ITERATIONS 1
-#endif
-#ifndef	BLKSIZE
-#define	BLKSIZE 128
-#endif
-
 int main(int argc, char *argv[]) {
+	printf("Graph coloring with CUDA by Xuhao Chen\n");
 	if (argc < 2) {
 		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
 		exit(1);
@@ -27,8 +21,8 @@ int main(int argc, char *argv[]) {
 
 	int *colors = (int *)calloc(m, sizeof(int));
 	ColorSolver(m, nnz, h_row_offsets, h_column_indices, colors);
-	//write_solution("color-out.txt", colors, m);
 	ColorVerifier(m, nnz, h_row_offsets, h_column_indices, colors);
+	//write_solution("color-out.txt", colors, m);
 	free(h_row_offsets);
 	free(h_column_indices);
 	free(colors);

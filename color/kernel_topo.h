@@ -7,7 +7,7 @@
 #include <thrust/execution_policy.h>
 #define	MAXCOLOR 128
 
-__global__ void initialize(int *colors, bool *colored, int m) {
+__global__ void initialize(int m, int *colors, bool *colored) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		colors[id] = MAXCOLOR;
@@ -72,8 +72,8 @@ void ColorSolver(int m, int nnz, int *row_offsets, int *column_indices, int *col
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	int nblocks = (m - 1) / nthreads + 1;
-	initialize <<<nblocks, nthreads>>> (d_colors, d_colored, m);
-	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
+	initialize <<<nblocks, nthreads>>> (m, d_colors, d_colored);
+	printf("Solving, nblocks=%d, nthreads=%d\n", nblocks, nthreads);
 	starttime = rtclock();	
 	do {
 		iter ++;
