@@ -18,7 +18,6 @@ int main(int argc, char *argv[]) {
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	W_TYPE *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
-	for(int i=0; i<10; i++) printf("weight[%d]=%f\n", i, h_weight[i]);
 	print_device_info(argc, argv);
 	int *d_row_offsets, *d_column_indices;
 	W_TYPE *d_weight;

@@ -25,11 +25,12 @@ int main(int argc, char *argv[]) {
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
 	print_device_info(argc, argv);
 
-	int *coloring = (int *)calloc(m, sizeof(int));
-	ColorSolver(m, nnz, h_row_offsets, h_column_indices, coloring);
-	//write_solution("color-out.txt", coloring, m);
-	ColorVerifier(m, nnz, h_row_offsets, h_column_indices, coloring);
+	int *colors = (int *)calloc(m, sizeof(int));
+	ColorSolver(m, nnz, h_row_offsets, h_column_indices, colors);
+	//write_solution("color-out.txt", colors, m);
+	ColorVerifier(m, nnz, h_row_offsets, h_column_indices, colors);
 	free(h_row_offsets);
 	free(h_column_indices);
+	free(colors);
 	return 0;
 }

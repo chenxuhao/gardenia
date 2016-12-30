@@ -12,7 +12,7 @@ struct Edge {
 	W_TYPE wt;
 };
 
-void fill_data(int m, int nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, vector<vector<Edge> > vertices, bool symmetrize) {
+void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, vector<vector<Edge> > vertices, bool symmetrize) {
 	row_offsets = (int *)malloc((m + 1) * sizeof(int));
 	int count = 0;
 	for (int i = 0; i < m; i++) {
@@ -24,7 +24,7 @@ void fill_data(int m, int nnz, int *&row_offsets, int *&column_indices, W_TYPE *
 		if(count == nnz)
 			printf("This graph is originally symmetric (undirected)\n");
 		else {
-			printf("This graph is directed but symmetrized\n");
+			printf("This graph is directed, but we symmetrized it and now num_edges=%d\n", count);
 			nnz = count;
 		}
 	} else {
@@ -44,7 +44,7 @@ void fill_data(int m, int nnz, int *&row_offsets, int *&column_indices, W_TYPE *
 			mindeg = deg_i;
 		variance += (deg_i - avgdeg) * (deg_i - avgdeg) / m;
 	}
-	printf("mindeg %d maxdeg %d avgdeg %.2f variance %.2f\n", mindeg, maxdeg, avgdeg, variance);
+	printf("min_degree %d max_degree %d avg_degree %.2f variance %.2f\n", mindeg, maxdeg, avgdeg, variance);
 	column_indices = (int *)malloc(count * sizeof(int));
 	weight = (W_TYPE *)malloc(count * sizeof(W_TYPE));
 	vector<Edge>::iterator neighbor_list;
@@ -160,8 +160,7 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	for (int i = 0; i < nnz; i ++) {
 		getline(cfile, str);
 		sscanf(str.c_str(), "%d %d %d", &dst, &src, &wt);
-		if (wt < 1) wt = 1;
-		else wt = ceil(wt);
+		if (wt <= 0) wt = 1;
 		dst--;
 		src--;
 		Edge e1, e2;
@@ -177,6 +176,7 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 }
 
 void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight, bool symmetrize) {
+	if(symmetrize) printf("Requiring undirected graphs for this algorithm\n");
 	if (strstr(argv[1], ".mtx"))
 		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight, symmetrize);
 	else if (strstr(argv[1], ".graph"))
@@ -184,6 +184,7 @@ void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int
 	else if (strstr(argv[1], ".gr"))
 		gr2csr(argv[1], m, nnz, row_offsets, column_indices, weight, symmetrize);
 	else { printf("Unrecognizable input file format\n"); exit(0); }
+	printf("Calculating degree...\n");
 	degree = (int *)malloc(m * sizeof(int));
 	for (int i = 0; i < m; i++) {
 		degree[i] = row_offsets[i + 1] - row_offsets[i];

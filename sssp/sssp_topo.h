@@ -29,6 +29,7 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE
 				if (altdist < dist[dst]) {
 					DistT olddist = atomicMin(&dist[dst], altdist);
 					if (altdist < olddist) {
+						if(expanded[dst]) expanded[dst] = false;
 						*changed = true;
 					}
 				}
