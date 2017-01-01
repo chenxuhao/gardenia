@@ -6,7 +6,7 @@ B40C_INC=-I $(B40_DIR) -I $(B40_DIR)/test
 EXTRA=-cudart shared
 SRC=main.cu
 
-all: bfs_wlw bfs_wlc bfs_topo bfs_merrill
+all: bfs_wlw bfs_wlc bfs_topo
 
 bfs_wlw:
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
