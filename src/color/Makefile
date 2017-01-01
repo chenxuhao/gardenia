@@ -1,7 +1,5 @@
 include ../common.mk
-INCLUDES+=-I ~/cub-1.1.1
-EXTRA=-cudart shared
-#EXTRA+=-DITERATIONS=1 -DBLKSIZE=128
+INCLUDES+=-I $(CUB_DIR)
 SRC=main.cu
 
 all: color_base color_bitset color_topo

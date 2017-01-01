@@ -1,9 +1,6 @@
 include ../common.mk
-INCLUDES+=-I ~/cub-1.1.1
-LIBS=-L$(CUDA_HOME)/lib64
-B40_DIR=~/back40computing-read-only
+INCLUDES+=-I $(CUB_DIR)
 B40C_INC=-I $(B40_DIR) -I $(B40_DIR)/test
-EXTRA=-cudart shared
 SRC=main.cu
 
 all: bfs_wlw bfs_wlc bfs_topo
@@ -21,7 +18,7 @@ bfs_topo:
 	mv $@ $(BIN)
 
 bfs_merrill:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(B40C_INC) $(B40C_DIR) $(EXTRA) $(SRC) -DVARIANT=4 -o $@ $(LIBS)
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(B40C_INC) $(EXTRA) $(SRC) -DVARIANT=4 -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 clean:

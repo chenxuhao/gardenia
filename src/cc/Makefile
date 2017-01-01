@@ -1,8 +1,5 @@
 include ../common.mk
-#INCLUDES+=-I ~/cub-1.1.1
-LIBS=-L$(CUDA_HOME)/lib64
-EXTRA=-std=c++11
-#EXTRA+=-cudart shared
+NVFLAGS+=-std=c++11
 SRC=main.cu
 
 all: cc
