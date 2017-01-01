@@ -1,5 +1,5 @@
 CUDA_HOME=/usr/local/cuda
-GARDINIA_ROOT=/Users/cxh/Work/gardinia
+GARDINIA_ROOT=/home/cxh/gardinia
 GCC=gcc
 GXX=g++
 NVCC=$(CUDA_HOME)/bin/nvcc
