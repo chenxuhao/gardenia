@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMemcpy(h_scores, d_scores, sizeof(ScoreT) * m, cudaMemcpyDeviceToHost));
 	for (int i = 0; i < 10; i++)
 		printf("scores[%d] = %f\n", i, h_scores[i]);
-	BCVerifier(m, h_row_offsets, h_column_indices, h_scores);
+	BCVerifier(m, h_row_offsets, h_column_indices, 1, h_scores);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_degree));

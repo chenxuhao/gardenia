@@ -36,7 +36,7 @@ using namespace std;
 typedef float ScoreT;
 
 __global__ void initialize(int m, ScoreT *scores, int *path_counts, int *depths, ScoreT *deltas) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		scores[id] = 0;
 		path_counts[id] = 0;
@@ -47,12 +47,12 @@ __global__ void initialize(int m, ScoreT *scores, int *path_counts, int *depths,
 
 // Shortest path calculation by forward BFS
 __global__ void bc_forward(int *row_offsets, int *column_indices, ScoreT *scores, int *path_counts, int *depths, int depth, Worklist2 inwl, Worklist2 outwl) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
 	if(inwl.pop_id(tid, src)) {
-		unsigned row_begin = row_offsets[src];
-		unsigned row_end = row_offsets[src + 1]; 
-		for (unsigned offset = row_begin; offset < row_end; ++ offset) {
+		int row_begin = row_offsets[src];
+		int row_end = row_offsets[src + 1]; 
+		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
 			//if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depth))) {
 			if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depths[src]+1))) {
@@ -68,13 +68,13 @@ __global__ void bc_forward(int *row_offsets, int *column_indices, ScoreT *scores
 
 // Dependency accumulation by back propagation
 __global__ void bc_reverse(int num, int *row_offsets, int *column_indices, int start, int *frontiers, ScoreT *scores, int *path_counts, int *depths, int depth, ScoreT *deltas) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	if(tid < num) {
 		int src = frontiers[start + tid];
-		unsigned row_begin = row_offsets[src];
-		unsigned row_end = row_offsets[src + 1];
+		int row_begin = row_offsets[src];
+		int row_end = row_offsets[src + 1];
 		ScoreT delta_src = 0;
-		for (unsigned offset = row_begin; offset < row_end; ++ offset) {
+		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
 			if(depths[dst] == depths[src] + 1) {
 				delta_src += static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
@@ -86,7 +86,7 @@ __global__ void bc_reverse(int num, int *row_offsets, int *column_indices, int s
 }
 
 __global__ void insert(Worklist2 inwl, int src, int *path_counts, int *depths) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if(id == 0) {
 		inwl.push(src);
 		path_counts[src] = 1;
@@ -96,7 +96,7 @@ __global__ void insert(Worklist2 inwl, int src, int *path_counts, int *depths) {
 }
 
 __global__ void push_frontier(Worklist2 inwl, int *queue, int queue_len) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
 	if(inwl.pop_id(tid, vertex)) {
 		queue[queue_len+tid] = vertex;

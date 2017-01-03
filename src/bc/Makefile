@@ -1,6 +1,5 @@
 include ../common.mk
 SRC=main.cu
-
 all: bc
 
 bc:
