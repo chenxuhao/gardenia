@@ -31,6 +31,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 		if (count != nnz)
 			printf("Error reading graph, number of edges in edge list %d != %d\n", count, nnz);
 	}
+	/*
 	double avgdeg;
 	double variance = 0.0;
 	int maxdeg = 0;
@@ -45,6 +46,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 		variance += (deg_i - avgdeg) * (deg_i - avgdeg) / m;
 	}
 	printf("min_degree %d max_degree %d avg_degree %.2f variance %.2f\n", mindeg, maxdeg, avgdeg, variance);
+	*/
 	column_indices = (int *)malloc(count * sizeof(int));
 	weight = (W_TYPE *)malloc(count * sizeof(W_TYPE));
 	vector<Edge>::iterator neighbor_list;
@@ -60,7 +62,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 }
 
 // transfer R-MAT generated gr graph to CSR format
-void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize) {
+void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize, bool transpose) {
 	printf("Reading RMAT (.gr) input file %s\n", gr);
 	std::ifstream cfile;
 	cfile.open(gr);
@@ -88,18 +90,24 @@ void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices,
 		dst--;
 		src--;
 		Edge e1, e2;
-		e1.dst = dst; e1.wt = 1;
-		vertices[src].push_back(e1);
 		if(symmetrize) {
 			e2.dst = src; e2.wt = 1;
 			vertices[dst].push_back(e2);
+			transpose = false;
+		}
+		if(!transpose) {
+			e1.dst = dst; e1.wt = 1;
+			vertices[src].push_back(e1);
+		} else {
+			e1.dst = src; e1.wt = 1;
+			vertices[dst].push_back(e1);
 		}
 	}
 	fill_data(m, nnz, row_offsets, column_indices, weight, vertices, symmetrize);
 }
 
 // transfer *.graph file to CSR format
-void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize) {
+void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize, bool transpose) {
 	printf("Reading .graph input file %s\n", graph);
 	std::ifstream cfile;
 	cfile.open(graph);
@@ -119,11 +127,17 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 		while(istr>>dst) {
 			dst --;
 			Edge e1, e2;
-			e1.dst = dst; e1.wt = 1;
-			vertices[src].push_back(e1);
 			if(symmetrize) {
 				e2.dst = src; e2.wt = 1;
 				vertices[dst].push_back(e2);
+				transpose = false;
+			}
+			if(!transpose) {
+				e1.dst = dst; e1.wt = 1;
+				vertices[src].push_back(e1);
+			} else {
+				e1.dst = src; e1.wt = 1;
+				vertices[dst].push_back(e1);
 			}
 		}
 		istr.clear();
@@ -133,7 +147,7 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 }
 
 // transfer mtx graph to CSR format
-void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize) {
+void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize, bool transpose) {
 	printf("Reading (.mtx) input file %s\n", mtx);
 	std::ifstream cfile;
 	cfile.open(mtx);
@@ -164,25 +178,31 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 		dst--;
 		src--;
 		Edge e1, e2;
-		e1.dst = dst; e1.wt = (W_TYPE)wt;
-		vertices[src].push_back(e1);
 		if(symmetrize) {
 			e2.dst = src; e2.wt = (W_TYPE)wt;
 			vertices[dst].push_back(e2);
+			transpose = false;
+		}
+		if(!transpose) {
+			e1.dst = dst; e1.wt = (W_TYPE)wt;
+			vertices[src].push_back(e1);
+		} else {
+			e1.dst = src; e1.wt = (W_TYPE)wt;
+			vertices[dst].push_back(e1);
 		}
 	}
 	cfile.close();
 	fill_data(m, nnz, row_offsets, column_indices, weight, vertices, symmetrize);
 }
 
-void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight, bool symmetrize) {
-	if(symmetrize) printf("Requiring undirected graphs for this algorithm\n");
+void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight, bool is_symmetrize, bool is_transpose=false) {
+	if(is_symmetrize) printf("Requiring undirected graphs for this algorithm\n");
 	if (strstr(argv[1], ".mtx"))
-		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight, symmetrize);
+		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight, is_symmetrize, is_transpose);
 	else if (strstr(argv[1], ".graph"))
-		graph2csr(argv[1], m, nnz, row_offsets, column_indices, weight, symmetrize);
+		graph2csr(argv[1], m, nnz, row_offsets, column_indices, weight, is_symmetrize, is_transpose);
 	else if (strstr(argv[1], ".gr"))
-		gr2csr(argv[1], m, nnz, row_offsets, column_indices, weight, symmetrize);
+		gr2csr(argv[1], m, nnz, row_offsets, column_indices, weight, is_symmetrize, is_transpose);
 	else { printf("Unrecognizable input file format\n"); exit(0); }
 	printf("Calculating degree...\n");
 	degree = (int *)malloc(m * sizeof(int));

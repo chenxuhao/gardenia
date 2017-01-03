@@ -1,29 +1,30 @@
-#define BFS_VARIANT "fusion"
+#define PR_VARIANT "fusion"
 #include <cub/cub.cuh>
 #include "gbar.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #define EPSILON 0.001
 #define MAX_ITER 19
-const float kDamp = 0.85;
 #define BLKSIZE 256
+const float kDamp = 0.85;
+typedef float ScoreT;
+typedef cub::BlockReduce<float, BLKSIZE> BlockReduce;
 
-__global__ void initialize(int m, float *score, bool *active) {
+__global__ void initialize(int m, ScoreT *score, ScoreT init_score) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
-		score[id] = 1.0f / (float)m;
+		score[id] = init_score;
 		//active[id] = true;
 	}
 }
 
-__global__ void pr_kernel(int m, int *row_offsets, int *column_indices, float *score, int *degree, float *outgoing_contrib, float *diff, bool *active, GlobalBarrier gb) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
-	typedef cub::BlockReduce<float, BLKSIZE> BlockReduce;
+__global__ void pr_kernel(int m, int *row_offsets, int *column_indices, ScoreT *score, int *degree, ScoreT *outgoing_contrib, float *diff, bool *active, ScoreT base_score, GlobalBarrier gb) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int num_vertices_per_thread = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	int total_inputs = num_vertices_per_thread;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if (src < m) {
-			outgoing_contrib[src] = kDamp * score[src] / (float)degree[src];
+			outgoing_contrib[src] = score[src] / degree[src];
 		}
 	}
 	gb.Sync();
@@ -32,15 +33,15 @@ __global__ void pr_kernel(int m, int *row_offsets, int *column_indices, float *s
 	__shared__ typename BlockReduce::TempStorage temp_storage;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if (src < m) {
-			unsigned row_begin = row_offsets[src];
-			unsigned row_end = row_offsets[src + 1];
-			float incoming_total = 0;
-			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
+			int row_begin = row_offsets[src];
+			int row_end = row_offsets[src + 1];
+			ScoreT incoming_total = 0;
+			for (int offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
 				incoming_total += outgoing_contrib[dst];
 			}
-			float old_score = score[src];
-			score[src] = ((1.0f - kDamp) / (float)m) + incoming_total;
+			ScoreT old_score = score[src];
+			score[src] = base_score + kDamp * incoming_total;
 			local_diff += abs(score[src] - old_score);
 		}
 	}
@@ -50,18 +51,20 @@ __global__ void pr_kernel(int m, int *row_offsets, int *column_indices, float *s
 	}
 }
 
-void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree, float *d_score) {
+void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree, ScoreT *d_score) {
 	float *d_diff, h_diff;
-	float *d_contrib;
+	ScoreT *d_contrib;
 	bool *d_active;
 	double starttime, endtime, runtime;
 	int iter = 0;
-	const int nthreads = BLKSIZE;
+	int nthreads = BLKSIZE;
 	int nblocks = (m - 1) / nthreads + 1;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_contrib, m * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_contrib, m * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
 	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_active, m * sizeof(bool)));
-	initialize <<<nblocks, nthreads>>> (m, d_score, d_active);
+	const ScoreT base_score = (1.0f - kDamp) / m;
+	const ScoreT init_score = 1.0f / m;
+	initialize <<<nblocks, nthreads>>> (m, d_score, init_score);
 	CudaTest("initializing failed");
 
 	size_t max_blocks = 5;
@@ -78,7 +81,7 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree
 		++iter;
 		h_diff = 0.0f;
 		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(h_diff), cudaMemcpyHostToDevice));
-		pr_kernel<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_score, d_degree, d_contrib, d_diff, d_active, gb);
+		pr_kernel<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_score, d_degree, d_contrib, d_diff, d_active, base_score, gb);
 		CudaTest("solving kernel failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(h_diff), cudaMemcpyDeviceToHost));
 		printf("iteration=%d, diff=%f\n", iter, h_diff);
@@ -87,7 +90,7 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree
 	endtime = rtclock();
 	printf("\titerations = %d.\n", iter);
 	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
+	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, runtime);
 	CUDA_SAFE_CALL(cudaFree(d_contrib));
 	CUDA_SAFE_CALL(cudaFree(d_diff));
 	//CUDA_SAFE_CALL(cudaFree(d_active));

@@ -15,7 +15,15 @@ int main(int argc, char *argv[]) {
 	}
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	W_TYPE *h_weight = NULL;
-	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
+	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
+	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false);
+	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true);
+	#if VARIANT==PR_SCATTER
+	h_row_offsets = out_row_offsets; h_column_indices = out_column_indices;
+	#else
+	h_row_offsets = in_row_offsets; h_column_indices = in_column_indices;
+	#endif
+	h_degree = out_degree;
 	print_device_info(argc, argv);
 
 	W_TYPE *d_weight;
@@ -36,7 +44,7 @@ int main(int argc, char *argv[]) {
 	pr(m, nnz, d_row_offsets, d_column_indices, d_degree, d_pr);
 	CUDA_SAFE_CALL(cudaMemcpy(h_pr, d_pr, m * sizeof(float), cudaMemcpyDeviceToHost));
 	//for(int i = 0; i < 10; i++) printf("pr[%d]=%.8f\n", i, h_pr[i]);
-	PRVerifier(m, h_row_offsets, h_column_indices, h_degree, h_pr, EPSILON);
+	PRVerifier(m, out_row_offsets, out_column_indices, out_degree, h_pr, EPSILON);
 
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));

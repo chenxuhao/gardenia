@@ -5,7 +5,7 @@ B40_DIR=~/back40computing-read-only
 GCC=gcc
 GXX=g++
 NVCC=$(CUDA_HOME)/bin/nvcc
-COMPUTECAPABILITY=sm_35
+COMPUTECAPABILITY=sm_20
 CXX_FLAGS += -std=c++11 -O3 -Wall
 PAR_FLAG = -fopenmp
 #NVFLAGS=-g -arch=$(COMPUTECAPABILITY) #-Xptxas -v

@@ -1,5 +1,6 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
+#define COLOR_VARIANT "base"
 #include <cub/cub.cuh>
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
@@ -109,6 +110,8 @@ void ColorSolver(int m, int nnz, int *row_offsets, int *column_indices, int *col
 	CUDA_SAFE_CALL(cudaMemcpy(colors, d_colors, m * sizeof(int), cudaMemcpyDeviceToHost));
 	num_colors = thrust::reduce(colors, colors + m, 0, thrust::maximum<int>()) + 1;
 	//num_colors = thrust::reduce(thrust::device, d_colors, d_colors + m, 0, thrust::maximum<int>()) + 1;
+    printf("\titerations = %d.\n", iter);
+    printf("\truntime[%s] = %f ms, num_colors = %d.\n", COLOR_VARIANT, runtime, num_colors);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_colors));
