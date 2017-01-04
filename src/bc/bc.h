@@ -54,8 +54,8 @@ __global__ void bc_forward(int *row_offsets, int *column_indices, ScoreT *scores
 		int row_end = row_offsets[src + 1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
-			//if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depth))) {
-			if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depths[src]+1))) {
+			//if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depth)==-1)) {
+			if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depths[src]+1)==-1)) {
 				assert(outwl.push(dst));
 			}
 			//if (depths[dst] == depth) {
@@ -71,17 +71,20 @@ __global__ void bc_reverse(int num, int *row_offsets, int *column_indices, int s
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	if(tid < num) {
 		int src = frontiers[start + tid];
+		//if(num<13) printf("depth=%d: %d\n", depth, src);
 		int row_begin = row_offsets[src];
 		int row_end = row_offsets[src + 1];
-		ScoreT delta_src = 0;
+		//ScoreT delta_src = 0;
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
+			//if(src==237) printf("dst %d: depth=%d, path_counts=%d, delta=%.8f, accu=%.8f\n", dst, depths[dst], path_counts[dst], deltas[dst], static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]));
 			if(depths[dst] == depths[src] + 1) {
-				delta_src += static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
+				deltas[src] += static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
 			}
 		}
-		deltas[src] = delta_src;
-		scores[src] += delta_src;
+		//deltas[src] = delta_src;
+		scores[src] += deltas[src];
+		//if(src==237) printf("Vertex %d: depth=%d, out_degree=%d, path_count=%d, delta=%.8f, score=%.8f\n", src, depths[src], row_end-row_begin, path_counts[src], deltas[src], scores[src]);
 	}
 }
 
@@ -120,7 +123,7 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_s
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_path_counts, sizeof(int) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_depths, sizeof(int) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_frontiers, sizeof(int) * 2 * m));
-	const int nthreads = 256;
+	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
 	const size_t max_blocks = maximum_residency(bc_forward, nthreads, 0);
 	initialize <<<nblocks, nthreads>>> (m, d_scores, d_path_counts, d_depths, d_deltas);
@@ -139,7 +142,8 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_s
 		push_frontier<<<nblocks, nthreads>>>(*inwl, d_frontiers, frontiers_len);
 		frontiers_len += nitems;
 		depth_index.push_back(frontiers_len);
-		printf("Forward: depth=%d, nblocks=%d, queue_length=%d\n", depth, nblocks, nitems);
+		//printf("Forward: depth=%d, frontire_size=%d\n", depth, nitems);
+		//if(nitems < 30) inwl->display_items();
 		depth++;
 		bc_forward<<<nblocks, nthreads>>>(row_offsets, column_indices, d_scores, d_path_counts, d_depths, depth, *inwl, *outwl);
 		CudaTest("solving kernel1 failed");
@@ -150,28 +154,36 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_s
 		outwl->reset();
 	} while (nitems > 0);
 	CUDA_SAFE_CALL(cudaMemcpy(h_path_counts, d_path_counts, sizeof(int) * m, cudaMemcpyDeviceToHost));
-	for (int i = 0; i < 10; i++)
-		printf("path_counts[%d] = %d\n", i, h_path_counts[i]);
-	printf("\nDone Forward BFS, starting back propagation (dependency accumulation)\n");
-	printf("depth=%d, depth_index.size=%d\n", depth, depth_index.size());
+	//int *h_depths = (int *)malloc(m * sizeof(int));
+	//CUDA_SAFE_CALL(cudaMemcpy(h_depths, d_depths, sizeof(int) * m, cudaMemcpyDeviceToHost));
+	//FILE *fp = fopen("depths.txt", "w");
+	//for (int i = 0; i < m; i++) fprintf(fp, "depths[%d] = %d\n", i, h_depths[i]);
+	//fclose(fp);
+	//printf("\nDone Forward BFS, starting back propagation (dependency accumulation)\n");
+	//printf("depth=%d, depth_index.size=%d\n", depth, depth_index.size());
 	for (int d = depth_index.size() - 2; d >= 0; d--) {
 		nitems = depth_index[d+1] - depth_index[d];
 		nblocks = (nitems - 1) / nthreads + 1;
-		printf("Reverse: depth=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", d, nblocks, nthreads, nitems);
+		//printf("Reverse: depth=%d, frontier_size=%d\n", d, nitems);
 		bc_reverse<<<nblocks, nthreads>>>(nitems, row_offsets, column_indices, depth_index[d], d_frontiers, d_scores, d_path_counts, d_depths, d, d_deltas);
 		CudaTest("solving kernel2 failed");
 	}
+	//ScoreT *h_scores = (ScoreT *)malloc(m * sizeof(ScoreT));
+	//CUDA_SAFE_CALL(cudaMemcpy(h_scores, d_scores, sizeof(ScoreT) * m, cudaMemcpyDeviceToHost));
+	//for (int i = 0; i < 10; i++) printf("scores[%d] = %.8f\n", i, h_scores[i]);
+	// Normalize scores
 	ScoreT *d_max_score;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_max_score, sizeof(ScoreT)));
 	d_max_score = thrust::max_element(thrust::device, d_scores, d_scores + m);;
 	ScoreT h_max_score;
 	CUDA_SAFE_CALL(cudaMemcpy(&h_max_score, d_max_score, sizeof(ScoreT), cudaMemcpyDeviceToHost));
-	printf("max_score = %f\n", h_max_score);
+	nblocks = (m - 1) / nthreads + 1;
 	bc_normalize<<<nblocks, nthreads>>>(m, d_scores, d_max_score);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	endtime = rtclock();
 	runtime = (1000.0f * (endtime - starttime));
 	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, runtime);
+	//printf("max_score = %f\n", h_max_score);
 	CUDA_SAFE_CALL(cudaFree(d_path_counts));
 }
 

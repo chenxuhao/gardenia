@@ -37,9 +37,10 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 #else
 			int dst = column_indices[offset];
 #endif
-			DistT altdist = dist[src] + 1;
-			if (dist[dst] == MYINFINITY) {//Not visited
-				dist[dst] = altdist;
+			//DistT altdist = dist[src] + 1;
+			if ((dist[dst] == MYINFINITY) && (atomicCAS(&dist[dst], MYINFINITY, dist[src]+1)==MYINFINITY)) {
+			//if (dist[dst] == MYINFINITY) {//Not visited
+			//	dist[dst] = altdist;
 				assert(outwl.push(dst));
 			}
 		}

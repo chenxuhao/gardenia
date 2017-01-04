@@ -6,11 +6,12 @@
 // - regenerates successors from depths
 void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test) {
 	vector<ScoreT> scores(m, 0);
+	vector<int> depths(m, -1);
 	for (int i = 0; i < m; i ++) scores[i] = 0;
 	for (int iter=0; iter < num_iters; iter++) {
 		int source = 0;
 		// BFS phase, only records depth & path_counts
-		vector<int> depths(m, -1);
+		//vector<int> depths(m, -1);
 		depths[source] = 0;
 		vector<int> path_counts(m, 0);
 		path_counts[source] = 1;
@@ -31,6 +32,7 @@ void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, Sco
 					path_counts[dst] += path_counts[src];
 			}
 		}
+		//for (int i = 0; i < 10; i++) printf("path_counts[%d] = %d\n", i, path_counts[i]);
 		// Get lists of vertices at each depth
 		vector<vector<int> > verts_at_depth;
 		for (int n = 0; n < m; n ++) {
@@ -58,18 +60,22 @@ void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, Sco
 			}
 		}
 	}
+	//for (int i = 0; i < 10; i++) printf("scores[%d] = %.8f\n", i, scores[i]);
 	// Normalize scores
 	ScoreT biggest_score = *max_element(scores.begin(), scores.end());
+	//printf("max_score = %f\n", biggest_score);
 	for (int n = 0; n < m; n ++)
 		scores[n] = scores[n] / biggest_score;
+	//for (int i = 0; i < 10; i++) printf("scores[%d] = %.8f\n", i, scores[i]);
 	// Compare scores
-	bool all_ok = true;
+	int num_errors = 0;
 	for (int n = 0; n < m; n ++) {
-		if (scores[n] != scores_to_test[n]) {
-			cout << n << ": " << scores[n] << " != " << scores_to_test[n] << endl;
-			all_ok = false;
+		if (fabs(scores[n] - scores_to_test[n]) > 0.0000001) {
+			if(num_errors<10) printf("Vertex %d (depth=%d): %.8f != %.8f\n", n, depths[n], scores[n], scores_to_test[n]);
+			num_errors ++;
 		}
 	}
-	if(all_ok) printf("Correct\n");
+	if(num_errors == 0) printf("Correct\n");
+	else printf("Wrong: num_errors = %d\n", num_errors);
 	return;
 }
