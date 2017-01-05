@@ -6,7 +6,7 @@
 #include <cub/cub.cuh>
 #define BLKSIZE 128
 
-__global__ void initialize(foru *dist, unsigned int m) {
+__global__ void initialize(DistT *dist, unsigned int m) {
 	unsigned int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		dist[id] = MYINFINITY;
@@ -14,7 +14,7 @@ __global__ void initialize(foru *dist, unsigned int m) {
 }
 
 typedef cub::BlockScan<int, BLKSIZE> BlockScan;
-__device__ void expandByCta(int m, int *row_offsets, int *column_indices, foru *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
+__device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
 	__shared__ int owner;
@@ -68,7 +68,7 @@ __device__ __forceinline__ unsigned LaneId() {
 #define WARP_SIZE 32
 #define LOG_WARP_SIZE 5
 #define NUM_WARPS (BLKSIZE / WARP_SIZE)
-__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, foru *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
+__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
 	unsigned lane_id = LaneId();
@@ -112,7 +112,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	}
 }
 
-__device__ unsigned process_vertex(int m, int *row_offsets, int *column_indices, foru *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
+__device__ unsigned process_vertex(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 &inwl, Worklist2 &outwl, unsigned iteration) {
 	//expandByCta(m, row_offsets, column_indices, dist, inwl, outwl, iteration);
 	//expandByWarp(m, row_offsets, column_indices, dist, inwl, outwl, iteration);
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -173,7 +173,7 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-__global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, foru *dist, Worklist2 inwl, Worklist2 outwl, int iteration, GlobalBarrier gb) {
+__global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 inwl, Worklist2 outwl, int iteration, GlobalBarrier gb) {
 	Worklist2 *in;
 	Worklist2 *out;
 	Worklist2 *tmp;
@@ -189,8 +189,8 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, foru *d
 	}
 }
 
-void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_dist) {
-	foru foruzero = 0;
+void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT *d_dist) {
+	DistT zero = 0;
 	int iteration = 0;
 	unsigned *nerr;
 	double starttime, endtime, runtime;
@@ -198,7 +198,7 @@ void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, foru *d_dist
 	int nblocks = (m - 1) / nthreads + 1;
 	initialize <<<nblocks, nthreads>>> (d_dist, m);
 	CudaTest("initializing failed");
-	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &foruzero, sizeof(foruzero), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&nerr, sizeof(unsigned)));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;

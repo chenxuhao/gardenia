@@ -1,7 +1,5 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#include <stdio.h>
-using namespace std;
 #include "common.h"
 #include "graph_io.h"
 #include "variants.h"
@@ -24,7 +22,6 @@ int main(int argc, char *argv[]) {
 	h_row_offsets = in_row_offsets; h_column_indices = in_column_indices;
 	#endif
 	h_degree = out_degree;
-	print_device_info(argc, argv);
 
 	W_TYPE *d_weight;
 	int *d_row_offsets, *d_column_indices, *d_degree;

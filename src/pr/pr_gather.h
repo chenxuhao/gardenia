@@ -56,6 +56,7 @@ __global__ void gather(int m, int *row_offsets, int *column_indices, ScoreT *sco
 }
 
 void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree, ScoreT *d_score) {
+	print_device_info(0);
 	double starttime, endtime, runtime;
 	float *d_diff, h_diff;
 	ScoreT *d_contrib;

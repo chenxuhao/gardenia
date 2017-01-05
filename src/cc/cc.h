@@ -56,6 +56,7 @@ __global__ void cc_kernel2(int m, int *row_offsets, int *column_indices, CompT *
 }
 
 void ConnectedComponents(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp) {
+	print_device_info(0);
 	bool h_changed, *d_changed;
 	double starttime, endtime, runtime;
 	int iter = 0;

@@ -47,6 +47,7 @@ __global__ void sssp_update(int m, DistT *dist, bool *visited) {
 }
 
 void SSSPSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, DistT *d_dist) {
+	print_device_info(0);
 	DistT zero = 0;
 	bool *d_changed, h_changed, *d_visited, *d_expanded;
 	int *d_num_frontier, h_num_frontier;

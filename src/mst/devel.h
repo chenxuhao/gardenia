@@ -2,9 +2,9 @@
 
 /* Development routines */
 
-void print_comp_mins(ComponentSpace cs, Graph graph, foru *minwtcomponent, unsigned *goaheadnodeofcomponent, unsigned *partners, bool *pin)
+void print_comp_mins(ComponentSpace cs, Graph graph, DistT *minwtcomponent, unsigned *goaheadnodeofcomponent, unsigned *partners, bool *pin)
 {
-  foru *cminwt;
+  DistT *cminwt;
   unsigned *cgah, *cpart;
   unsigned *ele2comp;
   bool *cpin;
@@ -12,7 +12,7 @@ void print_comp_mins(ComponentSpace cs, Graph graph, foru *minwtcomponent, unsig
   ele2comp = (unsigned *) calloc(cs.nelements, sizeof(unsigned));
   cgah = (unsigned *) calloc(cs.nelements, sizeof(unsigned));
   cpart = (unsigned *) calloc(cs.nelements, sizeof(unsigned));
-  cminwt = (foru *) calloc(cs.nelements, sizeof(unsigned));
+  cminwt = (DistT *) calloc(cs.nelements, sizeof(unsigned));
   cpin = (bool *) calloc(cs.nelements, sizeof(bool));
 
 
@@ -33,7 +33,7 @@ void print_comp_mins(ComponentSpace cs, Graph graph, foru *minwtcomponent, unsig
   free(cminwt);
 }
 
-__global__ void dfindcompmintwo_serial(unsigned *mstwt, Graph graph, ComponentSpace csr, ComponentSpace csw, foru *eleminwts, foru *minwtcomponent, unsigned *partners, unsigned *phores, bool *processinnextiteration, unsigned *goaheadnodeofcomponent, unsigned inpid, GlobalBarrier gb, bool *repeat, unsigned *count) {
+__global__ void dfindcompmintwo_serial(unsigned *mstwt, Graph graph, ComponentSpace csr, ComponentSpace csw, DistT *eleminwts, DistT *minwtcomponent, unsigned *partners, unsigned *phores, bool *processinnextiteration, unsigned *goaheadnodeofcomponent, unsigned inpid, GlobalBarrier gb, bool *repeat, unsigned *count) {
   unsigned id;
 	if (inpid < graph.nnodes) id = inpid;
 

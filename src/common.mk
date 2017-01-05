@@ -13,4 +13,4 @@ NVFLAGS=-w -O3 -arch=$(COMPUTECAPABILITY) #-Xptxas -v
 INCLUDES=-I$(CUDA_HOME)/include -I$(GARDINIA_ROOT)/include
 LIBS=-L$(CUDA_HOME)/lib64
 #EXTRA=-cudart shared
-BIN=$(GARDINIA_ROOT)/bin/
+BIN=$(GARDINIA_ROOT)/bin

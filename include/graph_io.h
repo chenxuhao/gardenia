@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <string.h>
 #define W_TYPE double
 struct Edge {
 	int dst;

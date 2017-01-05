@@ -1,9 +1,8 @@
 // Copyright (c) 2016, Xuhao Chen
-
 #define BC_VARIANT "linear"
+#include "cu_base.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-//#include "bitmap.h"
 #include "worklistc.h"
 #include <thrust/extrema.h>
 #include <thrust/execution_policy.h>
@@ -31,9 +30,6 @@ propagation phase.
 	implementations for evaluating betweenness centrality on massive datasets."
 	International Symposium on Parallel & Distributed Processing (IPDPS), 2009.
 */
-
-using namespace std;
-typedef float ScoreT;
 
 __global__ void initialize(int m, ScoreT *scores, int *path_counts, int *depths, ScoreT *deltas) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -77,14 +73,16 @@ __global__ void bc_reverse(int num, int *row_offsets, int *column_indices, int s
 		//ScoreT delta_src = 0;
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
-			//if(src==237) printf("dst %d: depth=%d, path_counts=%d, delta=%.8f, accu=%.8f\n", dst, depths[dst], path_counts[dst], deltas[dst], static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]));
+			if(src==237) printf("Before: src %d dst %d depth_src=%d, depth_dst=%d, delta_src=%.8f, delta_dst=%.8f, accu=%.8f\n", src, dst, depths[src], depths[dst], deltas[src], deltas[dst], static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]));
 			if(depths[dst] == depths[src] + 1) {
-				deltas[src] += static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
+				//deltas[src] += static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
+				deltas[src] += (ScoreT)path_counts[src] / (ScoreT)path_counts[dst] * (1 + deltas[dst]);
 			}
+			if(src==237) printf("After: src %d dst %d depth_src=%d, depth_dst=%d, delta_src=%.8f, delta_dst=%.8f\n", src, dst, depths[src], depths[dst], deltas[src], deltas[dst]);
 		}
 		//deltas[src] = delta_src;
 		scores[src] += deltas[src];
-		//if(src==237) printf("Vertex %d: depth=%d, out_degree=%d, path_count=%d, delta=%.8f, score=%.8f\n", src, depths[src], row_end-row_begin, path_counts[src], deltas[src], scores[src]);
+		if(src==237) printf("Vertex %d: depth=%d, out_degree=%d, path_count=%d, delta=%.8f, score=%.8f\n", src, depths[src], row_end-row_begin, path_counts[src], deltas[src], scores[src]);
 	}
 }
 
@@ -112,13 +110,22 @@ __global__ void bc_normalize(int m, ScoreT *scores, ScoreT *max_score) {
 		scores[tid] = scores[tid] / *max_score;
 }
 
-void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_scores) {
+void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_scores, int device) {
+	printf("Launching CUDA BC solver...\n");
+	print_device_info(device);
 	ScoreT *d_deltas;
 	int *d_path_counts, *d_depths, *d_frontiers;
 	double starttime, endtime, runtime;
 	int depth = 0;
-	int *h_path_counts = (int *)malloc(m * sizeof(int));
 	vector<int> depth_index;
+	int *d_row_offsets, *d_column_indices, *d_degree;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+
+	ScoreT *d_scores;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scores, sizeof(ScoreT) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_deltas, sizeof(ScoreT) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_path_counts, sizeof(int) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_depths, sizeof(int) * m));
@@ -145,7 +152,7 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_s
 		//printf("Forward: depth=%d, frontire_size=%d\n", depth, nitems);
 		//if(nitems < 30) inwl->display_items();
 		depth++;
-		bc_forward<<<nblocks, nthreads>>>(row_offsets, column_indices, d_scores, d_path_counts, d_depths, depth, *inwl, *outwl);
+		bc_forward<<<nblocks, nthreads>>>(d_row_offsets, d_column_indices, d_scores, d_path_counts, d_depths, depth, *inwl, *outwl);
 		CudaTest("solving kernel1 failed");
 		nitems = outwl->nitems();
 		Worklist2 *tmp = inwl;
@@ -153,7 +160,8 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_s
 		outwl = tmp;
 		outwl->reset();
 	} while (nitems > 0);
-	CUDA_SAFE_CALL(cudaMemcpy(h_path_counts, d_path_counts, sizeof(int) * m, cudaMemcpyDeviceToHost));
+	//int *h_path_counts = (int *)malloc(m * sizeof(int));
+	//CUDA_SAFE_CALL(cudaMemcpy(h_path_counts, d_path_counts, sizeof(int) * m, cudaMemcpyDeviceToHost));
 	//int *h_depths = (int *)malloc(m * sizeof(int));
 	//CUDA_SAFE_CALL(cudaMemcpy(h_depths, d_depths, sizeof(int) * m, cudaMemcpyDeviceToHost));
 	//FILE *fp = fopen("depths.txt", "w");
@@ -165,7 +173,7 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_s
 		nitems = depth_index[d+1] - depth_index[d];
 		nblocks = (nitems - 1) / nthreads + 1;
 		//printf("Reverse: depth=%d, frontier_size=%d\n", d, nitems);
-		bc_reverse<<<nblocks, nthreads>>>(nitems, row_offsets, column_indices, depth_index[d], d_frontiers, d_scores, d_path_counts, d_depths, d, d_deltas);
+		bc_reverse<<<nblocks, nthreads>>>(nitems, d_row_offsets, d_column_indices, depth_index[d], d_frontiers, d_scores, d_path_counts, d_depths, d, d_deltas);
 		CudaTest("solving kernel2 failed");
 	}
 	//ScoreT *h_scores = (ScoreT *)malloc(m * sizeof(ScoreT));
@@ -174,7 +182,7 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_s
 	// Normalize scores
 	ScoreT *d_max_score;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_max_score, sizeof(ScoreT)));
-	d_max_score = thrust::max_element(thrust::device, d_scores, d_scores + m);;
+	d_max_score = thrust::max_element(thrust::device, d_scores, d_scores + m);
 	ScoreT h_max_score;
 	CUDA_SAFE_CALL(cudaMemcpy(&h_max_score, d_max_score, sizeof(ScoreT), cudaMemcpyDeviceToHost));
 	nblocks = (m - 1) / nthreads + 1;
@@ -184,6 +192,13 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *d_s
 	runtime = (1000.0f * (endtime - starttime));
 	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, runtime);
 	//printf("max_score = %f\n", h_max_score);
+	CUDA_SAFE_CALL(cudaMemcpy(h_scores, d_scores, sizeof(ScoreT) * m, cudaMemcpyDeviceToHost));
+	//for (int i = 0; i < 10; i++) printf("scores[%d] = %.8f\n", i, h_scores[i]);
 	CUDA_SAFE_CALL(cudaFree(d_path_counts));
+	CUDA_SAFE_CALL(cudaFree(d_depths));
+	CUDA_SAFE_CALL(cudaFree(d_deltas));
+	CUDA_SAFE_CALL(cudaFree(d_frontiers));
+	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 }
 

@@ -1,7 +1,5 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
-#include <stdio.h>
-using namespace std;
 #include "common.h"
 #include "graph_io.h"
 #include "variants.h"
@@ -17,7 +15,6 @@ int main(int argc, char *argv[]) {
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	W_TYPE *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
-	print_device_info(argc, argv);
 
 	int *colors = (int *)calloc(m, sizeof(int));
 	ColorSolver(m, nnz, h_row_offsets, h_column_indices, colors);

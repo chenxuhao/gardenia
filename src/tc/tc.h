@@ -80,6 +80,7 @@ bool WorthRelabelling(int m, int nnz, int *row_offsets, int *column_indices, int
 
 // uses heuristic to see if worth relabeling
 void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, size_t *total) {
+	print_device_info(0);
 	size_t zero = 0;
 	double starttime, endtime, runtime;
 	CUDA_SAFE_CALL(cudaMemcpy(total, &zero, sizeof(size_t), cudaMemcpyHostToDevice));

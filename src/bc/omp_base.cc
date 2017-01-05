@@ -1,16 +1,22 @@
-#include<algorithm>
-// Still uses Brandes algorithm, but has the following differences:
-// - serial (no need for atomics or dynamic scheduling)
-// - uses vector for BFS queue
-// - regenerates farthest to closest traversal order from depths
-// - regenerates successors from depths
-void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test) {
-	vector<ScoreT> scores(m, 0);
-	vector<int> depths(m, -1);
-	for (int iter=0; iter < num_iters; iter++) {
+#include "omp_base.h"
+#include "timer.h"
+#define BC_VARIANT "openmp"
+void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *scores, int device) {
+	printf("Launching OpenMP BC solver...\n");
+	omp_set_num_threads(2);
+	int num_threads = 1;
+	#pragma omp parallel
+	{
+	num_threads = omp_get_num_threads();
+	}
+	printf("Launching %d threads...\n", num_threads);
+	Timer t;
+	t.Start();
+	for(int i=0; i<m; i++) scores[i] = 0;
+	//for (int iter=0; iter < num_iters; iter++) {
 		int source = 0;
 		// BFS phase, only records depth & path_counts
-		//vector<int> depths(m, -1);
+		vector<int> depths(m, -1);
 		depths[source] = 0;
 		vector<int> path_counts(m, 0);
 		path_counts[source] = 1;
@@ -31,7 +37,7 @@ void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, Sco
 					path_counts[dst] += path_counts[src];
 			}
 		}
-		//for (int i = 0; i < 10; i++) printf("path_counts[%d] = %d\n", i, path_counts[i]);
+
 		// Get lists of vertices at each depth
 		vector<vector<int> > verts_at_depth;
 		for (int n = 0; n < m; n ++) {
@@ -41,9 +47,11 @@ void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, Sco
 				verts_at_depth[depths[n]].push_back(n);
 			}
 		}
+
 		// Going from farthest to clostest, compute "depencies" (deltas)
 		vector<ScoreT> deltas(m, 0);
 		for (int depth = verts_at_depth.size() - 1; depth >= 0; depth --) {
+			#pragma omp parallel for schedule(dynamic, 64)
 			for (int id = 0; id < verts_at_depth[depth].size(); id ++) {
 				int src = verts_at_depth[depth][id];
 				int row_begin = row_offsets[src];
@@ -60,24 +68,18 @@ void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, Sco
 		if(src==237) printf("Vertex %d: depth=%d, out_degree=%d, path_count=%d, delta=%.8f, score=%.8f\n", src, depths[src], row_end-row_begin, path_counts[src], deltas[src], scores[src]);
 			}
 		}
-	}
-	//for (int i = 0; i < 10; i++) printf("scores[%d] = %.8f\n", i, scores[i]);
+	//}
+
 	// Normalize scores
-	ScoreT biggest_score = *max_element(scores.begin(), scores.end());
-	//printf("max_score = %f\n", biggest_score);
+	ScoreT biggest_score = 0;
+	#pragma omp parallel for reduction(max : biggest_score)
+	for (int n = 0; n < m; n ++)
+		biggest_score = max(biggest_score, scores[n]);
+	#pragma omp parallel for
 	for (int n = 0; n < m; n ++)
 		scores[n] = scores[n] / biggest_score;
 	//for (int i = 0; i < 10; i++) printf("scores[%d] = %.8f\n", i, scores[i]);
-	// Compare scores
-	int num_errors = 0;
-	for (int n = 0; n < m; n ++) {
-		//if (fabs(scores[n] - scores_to_test[n]) > 0.0000001) {
-		if (scores[n] != scores_to_test[n]) {
-			if(depths[n]>15 && num_errors<10) printf("Vertex %d (depth=%d): %.8f != %.8f\n", n, depths[n], scores[n], scores_to_test[n]);
-			num_errors ++;
-		}
-	}
-	if(num_errors == 0) printf("Correct\n");
-	else printf("Wrong: num_errors = %d\n", num_errors);
+	t.Stop();
+	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, t.Millisecs());
 	return;
 }

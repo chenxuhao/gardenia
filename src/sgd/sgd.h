@@ -75,6 +75,7 @@ __global__ void changed(int m, double *lv_pre, double *lv_cur, bool * changed) {
 */
 
 void sgd(int m, int num_users, int nnz, int *row_offsets, int *column_indices, W_TYPE *rating) {
+	print_device_info(0);
 	double starttime, endtime, runtime;
 	double h_error, *d_error;
 	const int k = 20;

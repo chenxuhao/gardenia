@@ -58,6 +58,7 @@ __global__ void conflict_resolve(int m, int *row_offsets, int *column_indices, i
 }
 
 void ColorSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
+	print_device_info(0);
 	double starttime, endtime, runtime;
 	int num_colors = 0, iter = 0;
 	int *d_row_offsets, *d_column_indices, *d_colors;
