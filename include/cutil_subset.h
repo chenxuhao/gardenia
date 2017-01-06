@@ -1,30 +1,21 @@
 #pragma once
 
-#  define CUDA_SAFE_CALL_NO_SYNC( call) {                                    \
-    cudaError err = call;                                                    \
-    if( cudaSuccess != err) {                                                \
-        fprintf(stderr, "error %d: Cuda error in file '%s' in line %i : %s.\n",        \
-                err, __FILE__, __LINE__, cudaGetErrorString( err) );              \
-        exit(EXIT_FAILURE);                                                  \
+#  define CUDA_SAFE_CALL_NO_SYNC( call) {                                      \
+    cudaError err = call;                                                      \
+    if( cudaSuccess != err) {                                                  \
+        fprintf(stderr, "error %d: Cuda error in file '%s' in line %i : %s.\n",\
+                err, __FILE__, __LINE__, cudaGetErrorString( err) );           \
+        exit(EXIT_FAILURE);                                                    \
     } }
 
-#  define CUDA_SAFE_CALL( call)     CUDA_SAFE_CALL_NO_SYNC(call);                                            \
+#  define CUDA_SAFE_CALL( call)     CUDA_SAFE_CALL_NO_SYNC(call);              \
 
-#  define CUDA_SAFE_THREAD_SYNC( ) {                                         \
-    cudaError err = CUT_DEVICE_SYNCHRONIZE();                                 \
-    if ( cudaSuccess != err) {                                               \
-        fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",        \
-                __FILE__, __LINE__, cudaGetErrorString( err) );              \
+#  define CUDA_SAFE_THREAD_SYNC( ) {                                           \
+    cudaError err = CUT_DEVICE_SYNCHRONIZE();                                  \
+    if ( cudaSuccess != err) {                                                 \
+        fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",          \
+                __FILE__, __LINE__, cudaGetErrorString( err) );                \
     } }
-
-double rtclock() {
-	struct timezone Tzp;
-	struct timeval Tp; 
-	int stat;
-	stat = gettimeofday (&Tp, &Tzp);
-	if (stat != 0) printf("Error return from gettimeofday: %d",stat);
-	return(Tp.tv_sec + Tp.tv_usec*1.0e-6);
-}
 
 // from http://forums.nvidia.com/index.php?showtopic=186669
 static __device__ unsigned get_smid(void) {

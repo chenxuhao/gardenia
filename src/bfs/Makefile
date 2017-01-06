@@ -1,25 +1,32 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 B40C_INC=-I $(B40_DIR) -I $(B40_DIR)/test
-SRC=main.cu
+SRC=main.cc
+OBJS= topo.o base.o linear.o merrill.o
 
-all: bfs_wlw bfs_wlc bfs_topo
+all: $(OBJ) bfs_base bfs_linear bfs_topo
 
-bfs_wlw:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
+%.o: %.cc
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+
+%.o: %.cu
+	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
+
+bfs_base: base.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) base.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-bfs_wlc:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=2 -o $@ $(LIBS)
+bfs_linear: linear.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) linear.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-bfs_topo:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=3 -o $@ $(LIBS)
+bfs_topo: topo.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) topo.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-bfs_merrill:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(B40C_INC) $(EXTRA) $(SRC) -DVARIANT=4 -o $@ $(LIBS)
+bfs_merrill: merrill.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(B40C_INC) $(EXTRA) $(SRC) merrill.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 clean:
-	rm bfs_wlw bfs_wlc bfs_topo
+	rm *.o

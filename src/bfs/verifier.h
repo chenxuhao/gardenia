@@ -26,19 +26,3 @@ void write_solution(const char *fname, int m, DistT *h_dist) {
 	fprintf(f, "]");
 }
 
-__global__ void dverify(int m, unsigned *dist, int *row_offsets, int *column_indices, W_TYPE *weight, unsigned *nerr) {
-	int u = blockIdx.x * blockDim.x + threadIdx.x;
-	if (u < m) {
-		int row_begin = row_offsets[u];
-		int row_end = row_offsets[u + 1]; 
-		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int v = column_indices[offset];
-			W_TYPE wt = weight[offset];
-			if (wt > 0 && dist[u] + wt < dist[v]) {
-				//printf("%d %d %d %d\n", u, v, dist[u], dist[v]);
-				++*nerr;
-			}
-		}
-	}
-}
-

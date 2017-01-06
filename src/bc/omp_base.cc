@@ -1,4 +1,5 @@
-#include "omp_base.h"
+#include "bc.h"
+#include <omp.h>
 #include "timer.h"
 #define BC_VARIANT "openmp"
 void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *scores, int device) {

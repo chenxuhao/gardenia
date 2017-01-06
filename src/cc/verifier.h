@@ -5,22 +5,22 @@
 // - Asserts every vertex is visited (degree-0 vertex should have own label)
 void CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
 	printf("Verifying...\n");
-	unordered_map<NodeID, NodeID> label_to_source;
+	unordered_map<int, int> label_to_source;
 	vector<bool> visited(m);
-	vector<NodeID> frontier;
-	for (NodeID i=0; i<m; i++) {
+	vector<int> frontier;
+	for (int i=0; i<m; i++) {
 		visited[i] = false;
 		label_to_source[comp[i]] = i;
 	}
 	frontier.reserve(m);
 	for (auto label_source_pair : label_to_source) {
-		NodeID curr_label = label_source_pair.first;
-		NodeID source = label_source_pair.second;
+		int curr_label = label_source_pair.first;
+		int source = label_source_pair.second;
 		frontier.clear();
 		frontier.push_back(source);
 		visited[source] = true;
 		for (auto it = frontier.begin(); it != frontier.end(); it++) {
-			NodeID src = *it;
+			int src = *it;
 			unsigned row_begin = row_offsets[src];
 			unsigned row_end = row_offsets[src + 1]; 
 			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
@@ -49,7 +49,7 @@ void CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
 			*/
 		}   
 	}
-	for (NodeID n = 0; n < m; n ++) {
+	for (int n = 0; n < m; n ++) {
 		if (!visited[n]) {
 			printf("Wrong\n");
 			return;

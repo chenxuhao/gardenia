@@ -24,5 +24,5 @@ void TCVerifier(int m, int *row_offsets, int *column_indices, size_t test_total)
 	total = total / 6;  // each triangle was counted 6 times
 		cout << total << " != " << test_total << endl;
 	if(total == test_total) printf("Correct\n");
-	else printf("Wrong: total=%d, test_total=%d\n", total, test_total);
+	else printf("Wrong: total=%ld, test_total=%ld\n", total, test_total);
 }

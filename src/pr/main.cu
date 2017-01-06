@@ -2,7 +2,7 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "common.h"
 #include "graph_io.h"
-#include "variants.h"
+#include "pr.h"
 #include "verifier.h"
 
 int main(int argc, char *argv[]) {
@@ -23,30 +23,12 @@ int main(int argc, char *argv[]) {
 	#endif
 	h_degree = out_degree;
 
-	W_TYPE *d_weight;
-	int *d_row_offsets, *d_column_indices, *d_degree;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_weight, nnz * sizeof(W_TYPE)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
-	float *h_pr, *d_pr;
+	float *h_pr;
 	h_pr = (float *) malloc(m * sizeof(float));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_pr, m * sizeof(float)));
 
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(W_TYPE), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
-
-	pr(m, nnz, d_row_offsets, d_column_indices, d_degree, d_pr);
-	CUDA_SAFE_CALL(cudaMemcpy(h_pr, d_pr, m * sizeof(float), cudaMemcpyDeviceToHost));
-	//for(int i = 0; i < 10; i++) printf("pr[%d]=%.8f\n", i, h_pr[i]);
+	PRSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, h_pr);
 	PRVerifier(m, out_row_offsets, out_column_indices, out_degree, h_pr, EPSILON);
 
-	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
-	CUDA_SAFE_CALL(cudaFree(d_column_indices));
-	CUDA_SAFE_CALL(cudaFree(d_weight));
-	CUDA_SAFE_CALL(cudaFree(d_pr));
 	free(h_row_offsets);
 	free(h_column_indices);
 	free(h_weight);

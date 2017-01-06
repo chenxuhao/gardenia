@@ -1,7 +1,8 @@
 #define BFS_VARIANT "topology"
+#include "bfs.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-typedef unsigned DistT;
+#include "timer.h"
 
 __global__ void initialize(int m, DistT *dist, bool *visited, bool *expanded) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -44,15 +45,26 @@ __global__ void bfs_update(int m, DistT *dist, bool *visited) {
 	}
 }
 
-void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT *d_dist) {
+void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_dist) {
 	print_device_info(0);
 	DistT zero = 0;
 	bool *d_changed, h_changed, *d_visited, *d_expanded;
 	int *d_num_frontier, h_num_frontier;
-	double starttime, endtime, runtime;
+	Timer t;
 	int iter = 0;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
+
+	int *d_row_offsets, *d_column_indices;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+
+	DistT * d_dist;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
+
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_num_frontier, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_visited, m * sizeof(bool)));
@@ -68,7 +80,7 @@ void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT 
 	//const size_t max_blocks = 6;
 	//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
-	starttime = rtclock();
+	t.Start();
 	do {
 		++ iter;
 		h_changed = false;
@@ -83,10 +95,14 @@ void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT 
 		printf("iteration=%d, num_frontier=%d\n", iter, h_num_frontier);
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	endtime = rtclock();
+	t.Stop();
 	printf("\titerations = %d.\n", iter);
-	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
+	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
+
+	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_dist));
 	CUDA_SAFE_CALL(cudaFree(d_changed));
 	CUDA_SAFE_CALL(cudaFree(d_num_frontier));
 	return;

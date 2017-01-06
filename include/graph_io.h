@@ -13,7 +13,55 @@ struct Edge {
 	W_TYPE wt;
 };
 
-void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, vector<vector<Edge> > vertices, bool symmetrize) {
+bool sort_by_id(Edge a, Edge b) { return (a.dst < b.dst); }
+
+void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, vector<vector<Edge> > vertices, bool symmetrize, bool sorted=true, bool remove_selfloops=true, bool remove_redundents=true) {
+	//sort the neighbor list
+	if(sorted) {
+		for(int i = 0; i < m; i++) {
+			std::sort(vertices[i].begin(), vertices[i].end(), sort_by_id);
+		}
+	}
+
+	//remove self loops
+	int num_selfloops = 0;
+	if(remove_selfloops) {
+		for(int i = 0; i < m; i++) {
+			for(int j = 0; j < vertices[i].size(); j ++) {
+				if(i == vertices[i][j].dst) {
+					vertices[i].erase(vertices[i].begin()+j);
+					num_selfloops ++;
+					j --;
+				}
+			}
+		}
+	}
+	printf("%d selfloops are removed\n", num_selfloops);
+
+	// remove redundent
+	int num_redundents = 0;
+	if(remove_redundents) {
+		for (int i = 0; i < m; i++) {
+			for (int j = 0; j < vertices[i].size(); j ++) {
+				if (vertices[i][j].dst == vertices[i][j-1].dst) {
+					vertices[i].erase(vertices[i].begin()+j);
+					num_redundents ++;
+					j --;
+				}
+			}
+		}
+	}
+	printf("%d redundents are removed\n", num_redundents);
+
+/*
+	// print some neighbor lists
+	for (int i = 0; i < 3; i++) {
+		cout << "src " << i << ": ";
+		for (int j = 0; j < vertices[i].size(); j ++)
+			cout << vertices[i][j].dst << "  ";
+		cout << endl;
+	}
+*/
 	row_offsets = (int *)malloc((m + 1) * sizeof(int));
 	int count = 0;
 	for (int i = 0; i < m; i++) {
@@ -59,6 +107,15 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 			index ++;
 			neighbor_list ++;
 		}
+	}
+	// print some neighbor lists
+	for (int i = 0; i < 3; i++) {
+		int row_begin = row_offsets[i];
+		int row_end = row_offsets[i + 1];
+		cout << "src " << i << ": ";
+		for (int j = row_begin; j < row_end; j ++)
+			cout << column_indices[j] << "  ";
+		cout << endl;
 	}
 }
 
@@ -195,7 +252,24 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	cfile.close();
 	fill_data(m, nnz, row_offsets, column_indices, weight, vertices, symmetrize);
 }
-
+/*
+void sort_neighbors(int m, int *row_offsets, int *&column_indices) {
+	vector<int> neighbors;
+	#pragma omp parallel for
+	for(int i = 0; i < m; i++) {
+		int row_begin = row_offsets[i];
+		int row_end = row_offsets[i + 1];
+		for (int offset = row_begin; offset < row_end; ++ offset) {
+			neighbors.push_back(column_indices[offset]);
+		}
+		std::sort(neighbors.begin(), neighbors.end());
+		int k = 0;
+		for (int offset = row_begin; offset < row_end; ++ offset) {
+			column_indices[offset] = neighbors[k++];
+		}
+	}	
+}
+*/
 void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight, bool is_symmetrize, bool is_transpose=false) {
 	if(is_symmetrize) printf("Requiring undirected graphs for this algorithm\n");
 	if (strstr(argv[1], ".mtx"))

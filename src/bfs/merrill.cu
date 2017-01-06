@@ -1,17 +1,18 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
+#define BFS_VARIANT "merrill"
 #include <cub/cub.cuh>
+#include "bfs.h"
 #include "gbar.h"
 #include "cuda_launch_config.hpp"
-#define BFS_VARIANT "merrill"
 #include "cutil_subset.h"
+#include "timer.h"
 #include <b40c_test_util.h>
 #include <b40c/graph/builder/dimacs.cuh>
 #include <b40c/graph/bfs/csr_problem.cuh>
 #include <b40c/graph/csr_graph.cuh>
 #include <b40c/graph/bfs/enactor_hybrid.cuh>
 #include <b40c/graph/bfs/enactor_two_phase.cuh>
-typedef unsigned DistT;
 using namespace b40c;
 using namespace graph;
 

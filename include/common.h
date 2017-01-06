@@ -6,9 +6,12 @@
 #include <cassert>
 #include <vector>
 #include <algorithm>
-typedef int NodeID;
-typedef float ScoreT;
+#define BLKSIZE 256
 using namespace std;
+typedef float ScoreT;
+typedef unsigned DistT;
+typedef int CompT;
+const float kDamp = 0.85;
 
 #define MYINFINITY	1000000000
 #define MAXNBLOCKS  (4*NBLOCKS)
@@ -17,6 +20,5 @@ using namespace std;
 #define MAXSHARED   (48*1024)
 #define MAXSHAREDUINT   (MAXSHARED / 4)
 #define SHAREDPERTHREAD (MAXSHAREDUINT / MAXBLOCKSIZE)
-
 
 #endif

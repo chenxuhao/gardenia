@@ -1,13 +1,10 @@
 #define PR_VARIANT "fusion"
 #include <cub/cub.cuh>
+#include "pr.h"
+#include "timer.h"
 #include "gbar.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-#define EPSILON 0.001
-#define MAX_ITER 19
-#define BLKSIZE 256
-const float kDamp = 0.85;
-typedef float ScoreT;
 typedef cub::BlockReduce<float, BLKSIZE> BlockReduce;
 
 __global__ void initialize(int m, ScoreT *score, ScoreT init_score) {
@@ -51,14 +48,25 @@ __global__ void pr_kernel(int m, int *row_offsets, int *column_indices, ScoreT *
 	}
 }
 
-void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree, ScoreT *d_score) {
+void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, ScoreT *h_score) {
 	float *d_diff, h_diff;
 	ScoreT *d_contrib;
 	bool *d_active;
-	double starttime, endtime, runtime;
+	Timer t;
 	int iter = 0;
 	int nthreads = BLKSIZE;
 	int nblocks = (m - 1) / nthreads + 1;
+
+	int *d_row_offsets, *d_column_indices, *d_degree;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
+	float *d_score;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_score, m * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
+
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_contrib, m * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
 	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_active, m * sizeof(bool)));
@@ -76,7 +84,7 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree
 	GlobalBarrierLifetime gb;
 	gb.Setup(nblocks);
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
-	starttime = rtclock();
+	t.Start();
 	do {
 		++iter;
 		h_diff = 0.0f;
@@ -87,10 +95,13 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree
 		printf("iteration=%d, diff=%f\n", iter, h_diff);
 	} while (h_diff > EPSILON && iter < MAX_ITER);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	endtime = rtclock();
+	t.Stop();
 	printf("\titerations = %d.\n", iter);
-	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, runtime);
+	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());
+
+	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_score));
 	CUDA_SAFE_CALL(cudaFree(d_contrib));
 	CUDA_SAFE_CALL(cudaFree(d_diff));
 	//CUDA_SAFE_CALL(cudaFree(d_active));

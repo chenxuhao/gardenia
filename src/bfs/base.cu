@@ -1,9 +1,9 @@
-#define BFS_VARIANT "vertex-serial"
-#define MAXBLOCKSIZE 1024
+#define BFS_VARIANT "base"
+#include "bfs.h"
 #include "worklistc.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-typedef unsigned DistT;
+#include "timer.h"
 
 #ifdef TEXTURE
 texture <int, 1, cudaReadModeElementType> row_offsets;
@@ -58,7 +58,7 @@ __global__ void insert(Worklist2 inwl) {
 void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsigned *d_dist) {
 	DistT zero = 0;
 	int iter = 0;
-	double starttime, endtime, runtime;
+	Timer t;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
 #ifdef TEXTURE
@@ -71,7 +71,7 @@ void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsign
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	unsigned nitems = 1;
-	starttime = rtclock();
+	t.Start();
 	insert<<<1, nthreads>>>(*inwl);
 	nitems = inwl->nitems();
 	do {
@@ -91,9 +91,8 @@ void BFSSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, unsign
 		outwl->reset();
 	} while (nitems > 0);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	endtime = rtclock();
+	t.Stop();
 	printf("\titerations = %d.\n", iter);
-	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
+	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
 	return;
 }

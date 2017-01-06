@@ -1,9 +1,10 @@
 // Copyright (c) 2016, Xuhao Chen
 #define BC_VARIANT "linear"
-#include "cu_base.h"
+#include "bc.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include "worklistc.h"
+#include "timer.h"
 #include <thrust/extrema.h>
 #include <thrust/execution_policy.h>
 /*
@@ -115,7 +116,7 @@ void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT 
 	print_device_info(device);
 	ScoreT *d_deltas;
 	int *d_path_counts, *d_depths, *d_frontiers;
-	double starttime, endtime, runtime;
+	Timer t;
 	int depth = 0;
 	vector<int> depth_index;
 	int *d_row_offsets, *d_column_indices, *d_degree;
@@ -141,7 +142,7 @@ void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT 
 	int frontiers_len = 0;
 	depth_index.push_back(0);
 	printf("Solving, max_blocks_per_SM=%d, nthreads=%d\n", max_blocks, nthreads);
-	starttime = rtclock();
+	t.Start();
 
 	insert<<<1, 1>>>(*inwl, source, d_path_counts, d_depths);
 	do {
@@ -188,9 +189,8 @@ void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT 
 	nblocks = (m - 1) / nthreads + 1;
 	bc_normalize<<<nblocks, nthreads>>>(m, d_scores, d_max_score);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	endtime = rtclock();
-	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, runtime);
+	t.Stop();
+	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, t.Millisecs());
 	//printf("max_score = %f\n", h_max_score);
 	CUDA_SAFE_CALL(cudaMemcpy(h_scores, d_scores, sizeof(ScoreT) * m, cudaMemcpyDeviceToHost));
 	//for (int i = 0; i < 10; i++) printf("scores[%d] = %.8f\n", i, h_scores[i]);
