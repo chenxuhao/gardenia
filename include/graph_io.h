@@ -13,13 +13,13 @@ struct Edge {
 	W_TYPE wt;
 };
 
-bool sort_by_id(Edge a, Edge b) { return (a.dst < b.dst); }
+bool compare_id(Edge a, Edge b) { return (a.dst < b.dst); }
 
 void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, vector<vector<Edge> > vertices, bool symmetrize, bool sorted=true, bool remove_selfloops=true, bool remove_redundents=true) {
 	//sort the neighbor list
 	if(sorted) {
 		for(int i = 0; i < m; i++) {
-			std::sort(vertices[i].begin(), vertices[i].end(), sort_by_id);
+			std::sort(vertices[i].begin(), vertices[i].end(), compare_id);
 		}
 	}
 
@@ -77,9 +77,11 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 			nnz = count;
 		}
 	} else {
-		if (count != nnz)
+		if (count + num_selfloops + num_redundents != nnz)
 			printf("Error reading graph, number of edges in edge list %d != %d\n", count, nnz);
+		nnz = count;
 	}
+	printf("num_vertices %d num_edges %d\n", m, nnz);
 	/*
 	double avgdeg;
 	double variance = 0.0;
@@ -108,6 +110,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 			neighbor_list ++;
 		}
 	}
+	/*
 	// print some neighbor lists
 	for (int i = 0; i < 3; i++) {
 		int row_begin = row_offsets[i];
@@ -117,6 +120,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 			cout << column_indices[j] << "  ";
 		cout << endl;
 	}
+	*/
 }
 
 // transfer R-MAT generated gr graph to CSR format
@@ -134,7 +138,6 @@ void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices,
 	}
 	char sp[3];
 	sscanf(str.c_str(), "%c %s %d %d", &c, sp, &m, &nnz);
-	printf("num_vertices %d num_edges %d\n", m, nnz);
 	vector<vector<Edge> > vertices;
 	vector<Edge> neighbors;
 	for (int i = 0; i < m; i++)
@@ -172,7 +175,6 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 	std::string str;
 	getline(cfile, str);
 	sscanf(str.c_str(), "%d %d", &m, &nnz);
-	printf("num_vertices %d num_edges %d\n", m, nnz);
 	vector<vector<Edge> > vertices;
 	vector<Edge> neighbors;
 	for (int i = 0; i < m; i++)
@@ -223,7 +225,6 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 		printf("error!\n");
 		exit(0);
 	}
-	printf("num_vertices %d num_edges %d\n", m, nnz);
 	vector<vector<Edge> > vertices;
 	vector<Edge> neighbors;
 	for (int i = 0; i < m; i ++)
