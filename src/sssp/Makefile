@@ -1,22 +1,29 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 EXE=sssp
-SRC=main.cu
+SRC=main.cc
+OBJS= topo.o base.o linear.o
 
-all: $(EXE)_wlw $(EXE)_wlc $(EXE)_topo
+all: $(OBJS) $(EXE)_base $(EXE)_linear $(EXE)_topo
 
-$(EXE)_wlw:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@ $(LIBS)
+%.o: %.cc
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+
+%.o: %.cu
+	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
+
+$(EXE)_base:
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) base.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-$(EXE)_wlc:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=2 -o $@ $(LIBS)
+$(EXE)_linear:
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) linear.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 $(EXE)_topo:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=3 -o $@ $(LIBS)
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) topo.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 clean:
-	rm $(EXE)_wlw $(EXE)_wlc $(EXE)_topo
+	rm *.o
 

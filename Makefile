@@ -18,4 +18,4 @@ all:
 
 .PHONY: clean
 clean:
-	rm -rf bin/
+	rm src/*/*.o

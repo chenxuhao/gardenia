@@ -2,6 +2,7 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 // Topology-driven Minimum Spanning Tree using CUDA
 #include "common.h"
+#include "timer.h"
 #include "graph_io.h"
 #include "gbar.h"
 #include "component.h"
@@ -227,7 +228,6 @@ int main(int argc, char *argv[]) {
 	MST_TYPE *eleminwts, *minwtcomponent;
 	bool *processinnextiteration;
 	unsigned *goaheadnodeofcomponent;
-	double starttime, endtime;
 	ComponentSpace cs(m);
 	unsigned prevncomponents, currncomponents = m;
 	bool repeat = false, *grepeat;
@@ -249,12 +249,13 @@ int main(int argc, char *argv[]) {
 	int nblocks = (m - 1) / nthreads + 1;
 	int nSM = 13;
 	//const size_t max_blocks = maximum_residency(dfindcompmintwo, nthreads, 0);
-	const size_t max_blocks = 1;
+	size_t max_blocks = 1;
 	printf("Setup global barrier, max_blocks=%d\n", max_blocks);
 	GlobalBarrierLifetime gb;
 	gb.Setup(nSM * max_blocks);
 	printf("Finding mst...\n");
-	starttime = rtclock();
+	Timer t;
+	t.Start();
 	do {
 		++iteration;
 		prevncomponents = currncomponents;
@@ -277,10 +278,10 @@ int main(int argc, char *argv[]) {
 		printf("\titeration %d, number of components = %d (%d), mstwt = %u mstedges = %u\n", iteration, currncomponents, prevncomponents, hmstwt, edgecount);
 	} while (currncomponents != prevncomponents);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	endtime = rtclock();
+	t.Stop();
 
 	printf("\tmstwt = %u, iterations = %d.\n", hmstwt, iteration);
 	printf("\t%s result: weight: %u, components: %u, edges: %u\n", argv[1], hmstwt, currncomponents, edgecount);
-	printf("\truntime [mst] = %f ms.\n", 1000 * (endtime - starttime));
+	printf("\truntime [mst] = %f ms.\n", t.Millisecs());
 	return 0;
 }

@@ -5,16 +5,13 @@ EXE=mst
 
 all: $(EXE)_topo
 
-$(EXE)_wlw:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=3 -o $@ $(LIBS)
-
-$(EXE)_wlc:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=2 -o $@ $(LIBS)
+$(EXE)_base:
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) base.o -o $@ $(LIBS)
 
 $(EXE)_topo:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -DVARIANT=1 -o $@
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -o $@
 	mv $@ $(BIN)
 
 clean:
-	rm $(EXE)_topo
+	rm *.o
 

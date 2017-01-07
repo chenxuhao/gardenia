@@ -7,6 +7,7 @@
 #include <vector>
 #include <algorithm>
 #define BLKSIZE 256
+#define	MAXCOLOR 128 // assume graph can be colored with less than 128 colors
 using namespace std;
 typedef float ScoreT;
 typedef unsigned DistT;

@@ -1,7 +1,8 @@
 #define SSSP_VARIANT "topology"
+#include "sssp.h"
+#include "timer.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-typedef unsigned DistT;
 
 __global__ void initialize(int m, DistT *dist, bool *visited, bool *expanded) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -13,7 +14,7 @@ __global__ void initialize(int m, DistT *dist, bool *visited, bool *expanded) {
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE *weight, DistT *dist, bool *changed, bool *visited, bool *expanded, int *num_frontier) {
+__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, bool *changed, bool *visited, bool *expanded, int *num_frontier) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
@@ -24,7 +25,7 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, W_TYPE
 			int row_end = row_offsets[src + 1];
 			for (int offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
-				DistT wt = (DistT)weight[offset];
+				DistT wt = weight[offset];
 				DistT altdist = dist[src] + wt;
 				if (altdist < dist[dst]) {
 					DistT olddist = atomicMin(&dist[dst], altdist);
@@ -46,15 +47,27 @@ __global__ void sssp_update(int m, DistT *dist, bool *visited) {
 	}
 }
 
-void SSSPSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYPE *d_weight, DistT *d_dist) {
+void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
 	print_device_info(0);
 	DistT zero = 0;
 	bool *d_changed, h_changed, *d_visited, *d_expanded;
 	int *d_num_frontier, h_num_frontier;
-	double starttime, endtime, runtime;
+	Timer t;
 	int iter = 0;
-	const int nthreads = 256;
+	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
+
+	int *d_row_offsets, *d_column_indices;
+	DistT *d_weight;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_weight, nnz * sizeof(DistT)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(DistT), cudaMemcpyHostToDevice));
+	DistT * d_dist;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_num_frontier, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_visited, m * sizeof(bool)));
@@ -67,7 +80,7 @@ void SSSPSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYP
 	const size_t max_blocks = maximum_residency(sssp_kernel, nthreads, 0);
 	//const size_t max_blocks = 6;
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
-	starttime = rtclock();
+	t.Start();
 	do {
 		++ iter;
 		h_changed = false;
@@ -82,10 +95,15 @@ void SSSPSolver(int m, int nnz, int *d_row_offsets, int *d_column_indices, W_TYP
 		printf("iteration=%d, num_frontier=%d\n", iter, h_num_frontier);
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	endtime = rtclock();
+	t.Stop();
 	printf("\titerations = %d.\n", iter);
-	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, runtime);
+	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, t.Millisecs());
+
+	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_weight));
+	CUDA_SAFE_CALL(cudaFree(d_dist));
 	CUDA_SAFE_CALL(cudaFree(d_changed));
 	CUDA_SAFE_CALL(cudaFree(d_num_frontier));
 	return;

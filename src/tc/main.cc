@@ -1,8 +1,7 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#include "common.h"
-#include "graph_io.h"
 #include "tc.h"
+#include "graph_io.h"
 #include "verifier.h"
 
 int main(int argc, char *argv[]) {

@@ -1,8 +1,7 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
-#include "common.h"
+#include "color.h"
 #include "graph_io.h"
-#include "variants.h"
 #include "verifier.h"
 
 int main(int argc, char *argv[]) {
