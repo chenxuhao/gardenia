@@ -191,13 +191,24 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 	}
 }
 
-void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT *d_dist) {
+void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_dist) {
 	DistT zero = 0;
 	int iteration = 0;
 	unsigned *nerr;
-	double starttime, endtime, runtime;
+	Timer t;
 	const int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
+
+	int *d_row_offsets, *d_column_indices;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+
+	DistT * d_dist;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
+
 	initialize <<<nblocks, nthreads>>> (d_dist, m);
 	CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
@@ -210,17 +221,20 @@ void bfs(int m, int nnz, int *d_row_offsets, int *d_column_indices, DistT *d_dis
 	const size_t max_blocks = 5;
 	printf("Solving, max_blocks=%d, nthreads=%d\n", max_blocks, nthreads);
 
-	starttime = rtclock();
+	t.Start();
 	GlobalBarrierLifetime gb;
 	gb.Setup(nSM * max_blocks);
 	insert<<<1, BLKSIZE>>>(*inwl);
 	bfs_kernel<<<nSM * max_blocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_dist, *inwl, *outwl, 1, gb);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	endtime = rtclock();
-
+	t.Stop();
 	printf("\titerations = %d.\n", iteration);
-	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
+	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
+
+	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_dist));
 	CUDA_SAFE_CALL(cudaFree(nerr));
 	return;
 }
