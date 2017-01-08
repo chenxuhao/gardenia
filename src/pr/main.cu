@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	W_TYPE *h_weight = NULL;
 	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
-	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false);
+	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight);
 	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true);
 	#if VARIANT==PR_SCATTER
 	h_row_offsets = out_row_offsets; h_column_indices = out_column_indices;
