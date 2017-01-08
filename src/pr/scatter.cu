@@ -26,6 +26,7 @@ __global__ void scatter(int m, int *row_offsets, int *column_indices, ScoreT *cu
 			//if(src<3) printf("score[%d]=%.8f, degree[%d]=%d\n", src, cur_score[src], src, degree);
 			for (int offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
+				//if(dst==0) printf("src=%d\n", src);
 				atomicAdd(&next_score[dst], value);
 			}
 		}
@@ -62,7 +63,7 @@ __global__ void reduce(int m, ScoreT *cur_score, ScoreT *next_score, float *diff
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 //*/
-void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, ScoreT *h_score) {
+void PRSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, ScoreT *h_score) {
 	float *d_diff, h_diff;
 	Timer t;
 	ScoreT *d_next_score;
@@ -70,21 +71,22 @@ void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 	int nthreads = BLKSIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 
-	int *d_row_offsets, *d_column_indices, *d_degree;
+	int *d_row_offsets, *d_column_indices;
 	ScoreT *d_score;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_score, m * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_next_score, m * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	//CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
 	const ScoreT init_score = 1.0f / m;
 	const ScoreT base_score = (1.0f - kDamp) / m;
+	printf("base_score=%.8f, init_score=%.8f\n", base_score, init_score);
 	initialize <<<nblocks, nthreads>>> (m, d_score, d_next_score, init_score, base_score);
 	CudaTest("initializing failed");
+	//CUDA_SAFE_CALL(cudaMemcpy(h_score, d_score, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
+	//for(int i = 0; i < 5; i++) printf("score[%d]=%.8f\n", i, h_score[i]);
 
 	const size_t max_blocks = maximum_residency(scatter, nthreads, 0);
 	//const size_t max_blocks = 5;
@@ -100,6 +102,8 @@ void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 		CudaTest("solving kernel2 failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(float), cudaMemcpyDeviceToHost));
 		printf("iteration=%d, diff=%f\n", iter, h_diff);
+		//CUDA_SAFE_CALL(cudaMemcpy(h_score, d_score, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
+		//for(int i = 0; i < 5; i++) printf("score[%d]=%.8f\n", i, h_score[i]);
 	} while (h_diff > EPSILON && iter < MAX_ITER);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();

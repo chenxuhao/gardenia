@@ -48,7 +48,7 @@ __global__ void pr_kernel(int m, int *row_offsets, int *column_indices, ScoreT *
 	}
 }
 
-void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, ScoreT *h_score) {
+void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *out_row_offsets, int *out_column_indices, int *h_degree, ScoreT *h_score) {
 	float *d_diff, h_diff;
 	ScoreT *d_contrib;
 	bool *d_active;

@@ -18,6 +18,7 @@ bool compare_id(Edge a, Edge b) { return (a.dst < b.dst); }
 void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, vector<vector<Edge> > vertices, bool symmetrize, bool sorted, bool remove_selfloops, bool remove_redundents) {
 	//sort the neighbor list
 	if(sorted) {
+		printf("Sorting the neighbor lists...\n");
 		for(int i = 0; i < m; i++) {
 			std::sort(vertices[i].begin(), vertices[i].end(), compare_id);
 		}
@@ -26,6 +27,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 	//remove self loops
 	int num_selfloops = 0;
 	if(remove_selfloops) {
+		printf("Removing self loops...\n");
 		for(int i = 0; i < m; i++) {
 			for(int j = 0; j < vertices[i].size(); j ++) {
 				if(i == vertices[i][j].dst) {
@@ -35,12 +37,13 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 				}
 			}
 		}
+		printf("%d selfloops are removed\n", num_selfloops);
 	}
-	printf("%d selfloops are removed\n", num_selfloops);
 
 	// remove redundent
 	int num_redundents = 0;
 	if(remove_redundents) {
+		printf("Removing redundent edges...\n");
 		for (int i = 0; i < m; i++) {
 			for (int j = 0; j < vertices[i].size(); j ++) {
 				if (vertices[i][j].dst == vertices[i][j-1].dst) {
@@ -50,8 +53,8 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 				}
 			}
 		}
+		printf("%d redundent edges are removed\n", num_redundents);
 	}
-	printf("%d redundents are removed\n", num_redundents);
 
 /*
 	// print some neighbor lists
@@ -229,7 +232,7 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	vector<Edge> neighbors;
 	for (int i = 0; i < m; i ++)
 		vertices.push_back(neighbors);
-	int dst, src, wt;
+	int dst, src, wt = 1;
 	for (int i = 0; i < nnz; i ++) {
 		getline(cfile, str);
 		sscanf(str.c_str(), "%d %d %d", &dst, &src, &wt);

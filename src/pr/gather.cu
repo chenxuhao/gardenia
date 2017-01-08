@@ -40,6 +40,7 @@ __global__ void gather(int m, int *row_offsets, int *column_indices, ScoreT *sco
 			ScoreT incoming_total = 0;
 			for (int offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
+				//if(src==0) printf("dst=%d\n", dst);
 				incoming_total += contrib[dst];
 			}
 			ScoreT old_score = score[src];
@@ -51,7 +52,7 @@ __global__ void gather(int m, int *row_offsets, int *column_indices, ScoreT *sco
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
-void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, ScoreT *h_score) {
+void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *out_row_offsets, int *out_column_indices, int *h_degree, ScoreT *h_score) {
 	print_device_info(0);
 	Timer t;
 	float *d_diff, h_diff;
@@ -75,8 +76,11 @@ void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
 	const ScoreT base_score = (1.0f - kDamp) / m;
 	const ScoreT init_score = 1.0f / m;
+	printf("base_score=%.8f, init_score=%.8f\n", base_score, init_score);
 	initialize <<<nblocks, nthreads>>> (m, d_score, init_score);
 	CudaTest("initializing failed");
+	//CUDA_SAFE_CALL(cudaMemcpy(h_score, d_score, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
+	//for(int i = 0; i < 5; i++) printf("score[%d]=%.8f\n", i, h_score[i]);
 
 	size_t max_blocks = 5;
 	max_blocks = maximum_residency(gather, nthreads, 0);
@@ -93,7 +97,7 @@ void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(float), cudaMemcpyDeviceToHost));
 		printf("iteration=%d, diff=%f\n", iter, h_diff);
 		//CUDA_SAFE_CALL(cudaMemcpy(h_score, d_score, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
-		//for(int i = 0; i < 10; i++) printf("score[%d]=%.8f\n", i, h_score[i]);
+		//for(int i = 0; i < 5; i++) printf("score[%d]=%.8f\n", i, h_score[i]);
 	} while (h_diff > EPSILON && iter < MAX_ITER);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
