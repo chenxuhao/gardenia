@@ -22,14 +22,18 @@ int main(int argc, char *argv[]) {
 	#endif
 	h_degree = out_degree;
 
-	float *h_pr;
-	h_pr = (float *) malloc(m * sizeof(float));
+	ScoreT *h_score = (ScoreT *) malloc(m * sizeof(ScoreT));
 
-	PRSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, h_pr);
-	PRVerifier(m, out_row_offsets, out_column_indices, out_degree, h_pr, EPSILON);
+	PRSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, h_score);
+	PRVerifier(m, out_row_offsets, out_column_indices, out_degree, h_score, EPSILON);
 
-	free(h_row_offsets);
-	free(h_column_indices);
+	free(in_row_offsets);
+	free(in_column_indices);
+	free(in_degree);
+	free(out_row_offsets);
+	free(out_column_indices);
+	free(out_degree);
+	free(h_score);
 	free(h_weight);
 	return 0;
 }

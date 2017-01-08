@@ -58,18 +58,18 @@ void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 	int nblocks = (m - 1) / nthreads + 1;
 
 	int *d_row_offsets, *d_column_indices, *d_degree;
+	ScoreT *d_score;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
-	float *d_score;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_score, m * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_score, m * sizeof(ScoreT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_contrib, m * sizeof(ScoreT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
+	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_active, m * sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
 
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_contrib, m * sizeof(ScoreT)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
-	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_active, m * sizeof(bool)));
 	const ScoreT base_score = (1.0f - kDamp) / m;
 	const ScoreT init_score = 1.0f / m;
 	initialize <<<nblocks, nthreads>>> (m, d_score, init_score);
@@ -98,9 +98,10 @@ void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 	t.Stop();
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());
-
+	CUDA_SAFE_CALL(cudaMemcpy(h_score, d_score, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_degree));
 	CUDA_SAFE_CALL(cudaFree(d_score));
 	CUDA_SAFE_CALL(cudaFree(d_contrib));
 	CUDA_SAFE_CALL(cudaFree(d_diff));
