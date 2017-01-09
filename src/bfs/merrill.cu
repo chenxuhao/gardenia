@@ -22,10 +22,13 @@ void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT 
 	typedef unsigned Value;
 	typedef int SizeT;
 	int *d_row_offsets, *d_column_indices;
+	DistT *d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
 
 	graph::CsrGraph<VertexId, Value, SizeT> csr_graph;
 	csr_graph.FromScratch<true>(m, nnz);
@@ -38,7 +41,6 @@ void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT 
 	CsrProblem csr_problem;
 	if (csr_problem.FromHostProblem(false, csr_graph.nodes, csr_graph.edges, csr_graph.column_indices, csr_graph.row_offsets, 1)) exit(1);
 	cudaError_t	retval = cudaSuccess;
-	VertexId src = 0;
 	Timer t;
 	t.Start();
 	if (retval = csr_problem.Reset(hybrid.GetFrontierType(), 1.3))

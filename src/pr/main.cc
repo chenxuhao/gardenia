@@ -13,8 +13,8 @@ int main(int argc, char *argv[]) {
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	W_TYPE *h_weight = NULL;
 	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
-	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false, false, false, false, false);
-	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true, false, false, false);
+	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false, false, false);
+	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true, false);
 
 	ScoreT *h_score = (ScoreT *) malloc(m * sizeof(ScoreT));
 	PRSolver(m, nnz, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, out_degree, h_score);

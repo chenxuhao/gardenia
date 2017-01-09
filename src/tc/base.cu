@@ -1,11 +1,12 @@
 // Copyright (c) 2016, Xuhao Chen
 #define TC_VARIANT "topology"
 #include <iostream>
+#include <cub/cub.cuh>
 #include "tc.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include "timer.h"
-
+typedef cub::BlockReduce<float, BLKSIZE> BlockReduce;
 /*
 Gardenia Benchmark Suite
 Kernel: Triangle Counting (TC)
@@ -34,8 +35,10 @@ degree distribution is sufficiently non-uniform. To decide whether or not
 to relabel the graph, we use the heuristic in WorthRelabelling.
 */
 
-__global__ void tc_kernel(int m, int *row_offsets, int *column_indices, size_t *total) {
+__global__ void tc_kernel(int m, int *row_offsets, int *column_indices, int *total) {
+	__shared__ typename BlockReduce::TempStorage temp_storage;
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
+	int local_total = 0;
 	if (src < m) {
 		//if (src == 2) printf("src=2\n");
 		int row_begin_src = row_offsets[src];
@@ -54,7 +57,7 @@ __global__ void tc_kernel(int m, int *row_offsets, int *column_indices, size_t *
 				//if (dst_dst == src) continue;
 				//while(column_indices[it] < dst_dst && it <row_end_src) it ++;
 				while(column_indices[it] < dst_dst) it ++;
-				if(column_indices[it] == dst_dst) (*total) ++;
+				if(column_indices[it] == dst_dst) local_total += 1;
 				/*
 				for (it = row_begin_src; it < row_end_src; it ++) {
 					int dst_src = column_indices[it];
@@ -66,6 +69,8 @@ __global__ void tc_kernel(int m, int *row_offsets, int *column_indices, size_t *
 			}
 		}
 	}
+	int block_total = BlockReduce(temp_storage).Sum(local_total);
+	if(threadIdx.x == 0) atomicAdd(total, block_total);
 }
 
 // heuristic to see if sufficently dense power-law graph
@@ -88,20 +93,21 @@ bool WorthRelabelling(int m, int nnz, int *row_offsets, int *column_indices, int
 }
 
 // uses heuristic to see if worth relabeling
-void TCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, size_t *h_total) {
-	print_device_info(0);
-	size_t zero = 0;
+void TCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, int *h_total) {
 	Timer t;
+	int zero = 0;
 	int *d_row_offsets, *d_column_indices, *d_degree;
-	size_t *d_total;
+	int *d_total;
+	print_device_info(0);
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(size_t)));
 	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(int)));
+
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	//CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_total, &zero, sizeof(size_t), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_total, &zero, sizeof(int), cudaMemcpyHostToDevice));
 
 	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
@@ -116,7 +122,7 @@ void TCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_total, d_total, sizeof(size_t), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(h_total, d_total, sizeof(int), cudaMemcpyDeviceToHost));
 	cout << *h_total << " triangles" << endl;
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));

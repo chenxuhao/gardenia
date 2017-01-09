@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
 	// CSR data structures
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	W_TYPE *h_weight = NULL;
-	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
+	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight);
 
 	DistT *h_distance = (DistT *) malloc(nnz * sizeof(DistT));
 	DistT *h_dist = (DistT *) malloc(m * sizeof(DistT));

@@ -18,18 +18,19 @@ bool compare_id(Edge a, Edge b) { return (a.dst < b.dst); }
 void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, vector<vector<Edge> > vertices, bool symmetrize, bool sorted, bool remove_selfloops, bool remove_redundents) {
 	//sort the neighbor list
 	if(sorted) {
-		printf("Sorting the neighbor lists...\n");
+		printf("Sorting the neighbor lists...");
 		for(int i = 0; i < m; i++) {
 			std::sort(vertices[i].begin(), vertices[i].end(), compare_id);
 		}
+		printf(" Done\n");
 	}
 
 	//remove self loops
 	int num_selfloops = 0;
 	if(remove_selfloops) {
-		printf("Removing self loops...\n");
+		printf("Removing self loops...");
 		for(int i = 0; i < m; i++) {
-			for(int j = 0; j < vertices[i].size(); j ++) {
+			for(unsigned j = 0; j < vertices[i].size(); j ++) {
 				if(i == vertices[i][j].dst) {
 					vertices[i].erase(vertices[i].begin()+j);
 					num_selfloops ++;
@@ -37,15 +38,15 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 				}
 			}
 		}
-		printf("%d selfloops are removed\n", num_selfloops);
+		printf(" %d selfloops are removed\n", num_selfloops);
 	}
 
 	// remove redundent
 	int num_redundents = 0;
 	if(remove_redundents) {
-		printf("Removing redundent edges...\n");
+		printf("Removing redundent edges...");
 		for (int i = 0; i < m; i++) {
-			for (int j = 0; j < vertices[i].size(); j ++) {
+			for (unsigned j = 1; j < vertices[i].size(); j ++) {
 				if (vertices[i][j].dst == vertices[i][j-1].dst) {
 					vertices[i].erase(vertices[i].begin()+j);
 					num_redundents ++;
@@ -53,7 +54,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 				}
 			}
 		}
-		printf("%d redundent edges are removed\n", num_redundents);
+		printf(" %d redundent edges are removed\n", num_redundents);
 	}
 
 /*
@@ -283,10 +284,11 @@ void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int
 	else if (strstr(argv[1], ".gr"))
 		gr2csr(argv[1], m, nnz, row_offsets, column_indices, weight, is_symmetrize, is_transpose, sorted, remove_selfloops, remove_redundents);
 	else { printf("Unrecognizable input file format\n"); exit(0); }
-	printf("Calculating degree...\n");
+	printf("Calculating degree...");
 	degree = (int *)malloc(m * sizeof(int));
 	for (int i = 0; i < m; i++) {
 		degree[i] = row_offsets[i + 1] - row_offsets[i];
 	}
+	printf(" Done\n");
 }
 

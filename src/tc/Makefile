@@ -1,25 +1,25 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 SRC=main.cc
+OBJS=omp_base.o base.o main.o
+all: $(OBJS) tc_base tc_omp
 
-all: tc_base tc_omp
+%.o: %.cc
+	$(CXX) $(CXXFLAGS) $(PARFLAG) $(INCLUDES) -c $<
 
-omp_base.o: omp_base.cc
-	$(CXX) $(CXXFLAGS) $(INCLUDES) omp_base.cc -fopenmp -c -o $@
+%.o: %.cu
+	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
-cu_base.o: cu_base.cu
-	$(NVCC) $(NVFLAGS) $(INCLUDES) cu_base.cu -c -o $@
-
-tc_base: cu_base.o
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) cu_base.o -o $@ $(LIBS)
+tc_base: base.o main.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 tc_lb:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(SRC) -o $@ $(LIBS)
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o lb.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-tc_omp: omp_base.o
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(SRC) omp_base.o -o $@ -lgomp
+tc_omp: omp_base.o main.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) omp_base.o main.o -o $@ -lgomp
 	mv $@ $(BIN)
 
 clean:

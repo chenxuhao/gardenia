@@ -13,8 +13,9 @@ int main(int argc, char *argv[]) {
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	W_TYPE *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
+	//read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true, false, true, false, false);
 
-	size_t h_total = 0;
+	int h_total = 0;
 	TCSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, &h_total);
 	TCVerifier(m, h_row_offsets, h_column_indices, h_total);
 

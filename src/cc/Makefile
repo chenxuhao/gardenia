@@ -11,7 +11,7 @@ all: $(OBJS) cc_base
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
-cc_base:
+cc_base: main.o base.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
@@ -20,4 +20,4 @@ cc_lb:
 	mv $@ $(BIN)
 
 clean:
-	rm cc
+	rm *.o

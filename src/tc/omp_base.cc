@@ -1,6 +1,6 @@
 #include "tc.h"
-void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, size_t *total) {
-	size_t total_num = 0;
+void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, int *total) {
+	int total_num = 0;
 #pragma omp parallel for reduction(+ : total_num) schedule(dynamic, 64)
 	for (int src = 0; src < m; src ++) {
 		int row_begin_src = row_offsets[src];

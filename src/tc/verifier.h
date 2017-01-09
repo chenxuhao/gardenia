@@ -1,8 +1,8 @@
 #include <algorithm>
 // Compares with simple serial implementation that uses std::set_intersection
-void TCVerifier(int m, int *row_offsets, int *column_indices, size_t test_total) {
-	printf("Verifying...\n");
-	size_t total = 0;
+void TCVerifier(int m, int *row_offsets, int *column_indices, int test_total) {
+	printf("Verifying... ");
+	int total = 0;
 	vector<int> intersection;
 	intersection.reserve(m);
 	for (int src = 0; src < m; src ++) {
@@ -12,7 +12,7 @@ void TCVerifier(int m, int *row_offsets, int *column_indices, size_t test_total)
 			int dst = column_indices[offset];
 			int row_begin_dst = row_offsets[dst];
 			int row_end_dst = row_offsets[dst + 1];
-			std:vector<int>::iterator new_end = set_intersection(column_indices + row_begin,
+			std::vector<int>::iterator new_end = set_intersection(column_indices + row_begin,
 					column_indices + row_end,
 					column_indices + row_begin_dst,
 					column_indices + row_end_dst,
@@ -22,7 +22,8 @@ void TCVerifier(int m, int *row_offsets, int *column_indices, size_t test_total)
 		}
 	}
 	total = total / 6;  // each triangle was counted 6 times
-		cout << total << " != " << test_total << endl;
 	if(total == test_total) printf("Correct\n");
-	else printf("Wrong: total=%ld, test_total=%ld\n", total, test_total);
+	else printf("Wrong\n");
+	printf("total=%d, test_total=%d\n", total, test_total);
+	return;
 }
