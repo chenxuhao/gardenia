@@ -24,7 +24,7 @@ static __device__ unsigned get_smid(void) {
      return ret;
 }
 
-static unsigned CudaTest(char *msg)
+static unsigned CudaTest(const char *msg)
 {
 	cudaError_t e;
 

@@ -51,22 +51,22 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *sco
 
 		// Going from farthest to clostest, compute "depencies" (deltas)
 		vector<ScoreT> deltas(m, 0);
-		for (int depth = verts_at_depth.size() - 1; depth >= 0; depth --) {
+		for (int depth = static_cast<int>(verts_at_depth.size()) - 1; depth >= 0; depth --) {
 			#pragma omp parallel for schedule(dynamic, 64)
-			for (int id = 0; id < verts_at_depth[depth].size(); id ++) {
+			for (int id = 0; id < static_cast<int>(verts_at_depth[depth].size()); id ++) {
 				int src = verts_at_depth[depth][id];
 				int row_begin = row_offsets[src];
 				int row_end = row_offsets[src + 1];
 				for (int offset = row_begin; offset < row_end; offset ++) {
 					int dst = column_indices[offset];
-			if(src==237) printf("dst %d: depth=%d, path_counts=%d, delta=%.8f, accu=%.8f\n", dst, depths[dst], path_counts[dst], deltas[dst], static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]));
+			//if(src==237) printf("dst %d: depth=%d, path_counts=%d, delta=%.8f, accu=%.8f\n", dst, depths[dst], path_counts[dst], deltas[dst], static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]));
 					if (depths[dst] == depths[src] + 1) {
 						deltas[src] += static_cast<ScoreT>(path_counts[src]) /
 							static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
 					}
 				}
 				scores[src] += deltas[src];
-		if(src==237) printf("Vertex %d: depth=%d, out_degree=%d, path_count=%d, delta=%.8f, score=%.8f\n", src, depths[src], row_end-row_begin, path_counts[src], deltas[src], scores[src]);
+		//if(src==237) printf("Vertex %d: depth=%d, out_degree=%d, path_count=%d, delta=%.8f, score=%.8f\n", src, depths[src], row_end-row_begin, path_counts[src], deltas[src], scores[src]);
 			}
 		}
 	//}
