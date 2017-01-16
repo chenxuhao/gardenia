@@ -17,6 +17,7 @@ int main(int argc, char *argv[]) {
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
 
 	ScoreT *h_scores = (ScoreT *)malloc(m * sizeof(ScoreT));
+	for (int i = 0; i < m; i++) h_scores[i] = 0;
 	BCSolver(m, nnz, h_row_offsets, h_column_indices, h_scores, device);
 	BCVerifier(m, h_row_offsets, h_column_indices, 1, h_scores);
 

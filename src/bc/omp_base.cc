@@ -4,8 +4,9 @@
 #define BC_VARIANT "openmp"
 void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *scores, int device) {
 	printf("Launching OpenMP BC solver...\n");
-	omp_set_num_threads(2);
+	omp_set_num_threads(12);
 	int num_threads = 1;
+	int num_iters = 1;
 	#pragma omp parallel
 	{
 	num_threads = omp_get_num_threads();
@@ -14,7 +15,7 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *sco
 	Timer t;
 	t.Start();
 	for(int i=0; i<m; i++) scores[i] = 0;
-	//for (int iter=0; iter < num_iters; iter++) {
+	for (int iter=0; iter < num_iters; iter++) {
 		int source = 0;
 		// BFS phase, only records depth & path_counts
 		vector<int> depths(m, -1);
@@ -59,17 +60,15 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *sco
 				int row_end = row_offsets[src + 1];
 				for (int offset = row_begin; offset < row_end; offset ++) {
 					int dst = column_indices[offset];
-			//if(src==237) printf("dst %d: depth=%d, path_counts=%d, delta=%.8f, accu=%.8f\n", dst, depths[dst], path_counts[dst], deltas[dst], static_cast<ScoreT>(path_counts[src]) / static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]));
 					if (depths[dst] == depths[src] + 1) {
 						deltas[src] += static_cast<ScoreT>(path_counts[src]) /
 							static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
 					}
 				}
 				scores[src] += deltas[src];
-		//if(src==237) printf("Vertex %d: depth=%d, out_degree=%d, path_count=%d, delta=%.8f, score=%.8f\n", src, depths[src], row_end-row_begin, path_counts[src], deltas[src], scores[src]);
 			}
 		}
-	//}
+	}
 
 	// Normalize scores
 	ScoreT biggest_score = 0;
@@ -79,7 +78,6 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *sco
 	#pragma omp parallel for
 	for (int n = 0; n < m; n ++)
 		scores[n] = scores[n] / biggest_score;
-	//for (int i = 0; i < 10; i++) printf("scores[%d] = %.8f\n", i, scores[i]);
 	t.Stop();
 	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, t.Millisecs());
 	return;
