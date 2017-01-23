@@ -1,3 +1,4 @@
+#include "cc.h"
 #include <unordered_map>
 // Verifies CC result by performing a BFS from a vertex in each component
 // - Asserts search does not reach a vertex with a different component label

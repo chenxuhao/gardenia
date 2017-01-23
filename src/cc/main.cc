@@ -2,7 +2,6 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "cc.h"
 #include "graph_io.h"
-#include "verifier.h"
 
 int main(int argc, char *argv[]) {
 	printf("Connected Component with CUDA by Xuhao Chen\n");
