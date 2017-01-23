@@ -2,6 +2,7 @@
 #include <omp.h>
 #include "timer.h"
 #define CC_VARIANT "openmp"
+
 void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp) {
 	printf("Launching OpenMP CC solver...\n");
 	omp_set_num_threads(2);

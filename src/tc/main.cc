@@ -2,7 +2,6 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "tc.h"
 #include "graph_io.h"
-#include "verifier.h"
 
 int main(int argc, char *argv[]) {
 	printf("Triangle Count with CUDA by Xuhao Chen\n");

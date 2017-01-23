@@ -6,7 +6,7 @@ OBJS=base.o omp_base.o verifier.o main.o
 all: $(OBJS) cc_base cc_omp
 
 %.o: %.cc
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(CXXFLAGS) $(PARFLAG) $(INCLUDES) -c $<
 
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<

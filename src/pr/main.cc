@@ -2,7 +2,6 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "pr.h"
 #include "graph_io.h"
-#include "verifier.h"
 
 int main(int argc, char *argv[]) {
 	printf("PageRank with CUDA by Xuhao Chen\n");
@@ -10,15 +9,15 @@ int main(int argc, char *argv[]) {
 		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
 		exit(1);
 	}
-	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
+	int m, nnz;//, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	W_TYPE *h_weight = NULL;
 	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
 	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false, false, false);
 	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true, false);
 
-	ScoreT *h_score = (ScoreT *) malloc(m * sizeof(ScoreT));
-	PRSolver(m, nnz, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, out_degree, h_score);
-	PRVerifier(m, out_row_offsets, out_column_indices, out_degree, h_score, EPSILON);
+	ScoreT *h_scores = (ScoreT *) malloc(m * sizeof(ScoreT));
+	PRSolver(m, nnz, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, out_degree, h_scores);
+	PRVerifier(m, out_row_offsets, out_column_indices, out_degree, h_scores, EPSILON);
 
 	free(in_row_offsets);
 	free(in_column_indices);
@@ -26,7 +25,7 @@ int main(int argc, char *argv[]) {
 	free(out_row_offsets);
 	free(out_column_indices);
 	free(out_degree);
-	free(h_score);
+	free(h_scores);
 	free(h_weight);
 	return 0;
 }

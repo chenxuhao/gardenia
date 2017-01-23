@@ -1,4 +1,4 @@
-#include <algorithm>
+#include "tc.h"
 // Compares with simple serial implementation that uses std::set_intersection
 void TCVerifier(int m, int *row_offsets, int *column_indices, int test_total) {
 	printf("Verifying... ");

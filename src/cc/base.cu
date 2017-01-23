@@ -71,7 +71,7 @@ void CCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, CompT *
 
 	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	const size_t max_blocks = maximum_residency(cc_kernel1, nthreads, 0);
+	int max_blocks = maximum_residency(cc_kernel1, nthreads, 0);
 	initialize <<<nblocks, nthreads>>> (m, d_comp);
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
 	t.Start();
