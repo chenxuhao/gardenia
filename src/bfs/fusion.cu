@@ -191,7 +191,7 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 	}
 }
 
-void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
 	DistT zero = 0;
 	int iteration = 0;
 	unsigned *nerr;

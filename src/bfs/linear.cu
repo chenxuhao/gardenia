@@ -172,7 +172,7 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
 	DistT zero = 0;
 	int iter = 0;
 	Timer t;

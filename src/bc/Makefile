@@ -1,4 +1,5 @@
 include ../common.mk
+CXXFLAGS+=-std=c++11
 SRC=main.cc
 OBJS=omp_base.o base.o main.o verifier.o
 all: $(OBJS) bc_base bc_omp

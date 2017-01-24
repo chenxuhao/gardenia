@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
 		h_dist[i] = MYINFINITY;
 	}
 
-	BFSSolver(m, nnz, h_row_offsets, h_column_indices, h_dist); // start breadth first search
+	BFSSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, h_dist); // start breadth first search
 	BFSVerifier(m, h_row_offsets, h_column_indices, h_dist); // verify results
 	//write_solution("bfs-out.txt", m, h_dist);
 
