@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
 
 	DistT *h_distance = (DistT *) malloc(nnz * sizeof(DistT));
 	DistT *h_dist = (DistT *) malloc(m * sizeof(DistT));
-	for(int i = 0; i < m; i ++) { h_distance[i] = (DistT) h_weight[i]; }
+	for(int i = 0; i < nnz; i ++) h_distance[i] = (DistT) h_weight[i];
 	for(int i = 0; i < m; i ++) h_dist[i] = kDistInf;
 
 	SSSPSolver(m, nnz, h_row_offsets, h_column_indices, h_distance, h_dist);

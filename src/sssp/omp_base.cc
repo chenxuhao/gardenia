@@ -35,7 +35,7 @@ bins.
 
 void SSSPSolver(int m, int nnz, int *row_offsets, int *column_indices, DistT *weight, DistT *dist) {
 	printf("Launching OpenMP SSSP solver...\n");
-	omp_set_num_threads(2);
+	omp_set_num_threads(8);
 	int num_threads = 1;
 #pragma omp parallel
 	{
@@ -52,6 +52,7 @@ void SSSPSolver(int m, int nnz, int *row_offsets, int *column_indices, DistT *we
 	size_t shared_indexes[2] = {0, kDistInf};
 	size_t frontier_tails[2] = {1, 0}; 
 	frontier[0] = source;
+	//printf("kDistInf=%d\n", kDistInf);
 	t.Start();
 #pragma omp parallel
 	{
@@ -62,6 +63,8 @@ void SSSPSolver(int m, int nnz, int *row_offsets, int *column_indices, DistT *we
 			size_t &next_bin_index = shared_indexes[(iter+1)&1];
 			size_t &curr_frontier_tail = frontier_tails[iter&1];
 			size_t &next_frontier_tail = frontier_tails[(iter+1)&1];
+			#pragma omp single
+			printf("\titer = %d, frontier_size = %d.\n", iter, curr_frontier_tail);
 #pragma omp for nowait schedule(dynamic, 64)
 			for (size_t i = 0; i < curr_frontier_tail; i ++) {
 				int src = frontier[i];
@@ -84,6 +87,7 @@ void SSSPSolver(int m, int nnz, int *row_offsets, int *column_indices, DistT *we
 							if (changed_dist) {
 								size_t dest_bin = new_dist/delta;
 								if (dest_bin >= local_bins.size()) {
+									//printf("\tdest_bin = %d, old_dist=%d, new_dist=%d.\n", dest_bin, old_dist, new_dist);
 									local_bins.resize(dest_bin+1);
 								}
 								local_bins[dest_bin].push_back(dst);
