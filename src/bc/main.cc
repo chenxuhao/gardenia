@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
 	int device = 0;
 	if (argc > 2) device = atoi(argv[2]);
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	W_TYPE *h_weight = NULL;
+	WeightT *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
 
 	ScoreT *h_scores = (ScoreT *)malloc(m * sizeof(ScoreT));

@@ -7,15 +7,15 @@
 #include <fstream>
 #include <sstream>
 #include <string.h>
-#define W_TYPE double
+typedef float WeightT;
 struct Edge {
 	int dst;
-	W_TYPE wt;
+	WeightT wt;
 };
 
 bool compare_id(Edge a, Edge b) { return (a.dst < b.dst); }
 
-void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, vector<vector<Edge> > vertices, bool symmetrize, bool sorted, bool remove_selfloops, bool remove_redundents) {
+void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, WeightT *&weight, vector<vector<Edge> > vertices, bool symmetrize, bool sorted, bool remove_selfloops, bool remove_redundents) {
 	//sort the neighbor list
 	if(sorted) {
 		printf("Sorting the neighbor lists...");
@@ -103,7 +103,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 	printf("min_degree %d max_degree %d avg_degree %.2f variance %.2f\n", mindeg, maxdeg, avgdeg, variance);
 	*/
 	column_indices = (int *)malloc(count * sizeof(int));
-	weight = (W_TYPE *)malloc(count * sizeof(W_TYPE));
+	weight = (WeightT *)malloc(count * sizeof(WeightT));
 	vector<Edge>::iterator neighbor_list;
 	for (int i = 0, index = 0; i < m; i++) {
 		neighbor_list = vertices[i].begin();
@@ -128,7 +128,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE 
 }
 
 // transfer R-MAT generated gr graph to CSR format
-void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize, bool transpose, bool sorted, bool remove_selfloops, bool remove_redundents) {
+void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices, WeightT *&weight, bool symmetrize, bool transpose, bool sorted, bool remove_selfloops, bool remove_redundents) {
 	printf("Reading RMAT (.gr) input file %s\n", gr);
 	std::ifstream cfile;
 	cfile.open(gr);
@@ -172,7 +172,7 @@ void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices,
 }
 
 // transfer *.graph file to CSR format
-void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize, bool transpose, bool sorted, bool remove_selfloops, bool remove_redundents) {
+void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_indices, WeightT *&weight, bool symmetrize, bool transpose, bool sorted, bool remove_selfloops, bool remove_redundents) {
 	printf("Reading .graph input file %s\n", graph);
 	std::ifstream cfile;
 	cfile.open(graph);
@@ -211,7 +211,7 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 }
 
 // transfer mtx graph to CSR format
-void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, W_TYPE *&weight, bool symmetrize, bool transpose, bool sorted, bool remove_selfloops, bool remove_redundents) {
+void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, WeightT *&weight, bool symmetrize, bool transpose, bool sorted, bool remove_selfloops, bool remove_redundents) {
 	printf("Reading (.mtx) input file %s\n", mtx);
 	std::ifstream cfile;
 	cfile.open(mtx);
@@ -242,15 +242,15 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 		src--;
 		Edge e1, e2;
 		if(symmetrize) {
-			e2.dst = src; e2.wt = (W_TYPE)wt;
+			e2.dst = src; e2.wt = (WeightT)wt;
 			vertices[dst].push_back(e2);
 			transpose = false;
 		}
 		if(!transpose) {
-			e1.dst = dst; e1.wt = (W_TYPE)wt;
+			e1.dst = dst; e1.wt = (WeightT)wt;
 			vertices[src].push_back(e1);
 		} else {
-			e1.dst = src; e1.wt = (W_TYPE)wt;
+			e1.dst = src; e1.wt = (WeightT)wt;
 			vertices[dst].push_back(e1);
 		}
 	}
@@ -275,7 +275,7 @@ void sort_neighbors(int m, int *row_offsets, int *&column_indices) {
 	}	
 }
 */
-void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, W_TYPE *&weight, bool is_symmetrize=false, bool is_transpose=false, bool sorted=true, bool remove_selfloops=true, bool remove_redundents=true) {
+void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, WeightT *&weight, bool is_symmetrize=false, bool is_transpose=false, bool sorted=true, bool remove_selfloops=true, bool remove_redundents=true) {
 	if(is_symmetrize) printf("Requiring undirected graphs for this algorithm\n");
 	if (strstr(argv[1], ".mtx"))
 		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight, is_symmetrize, is_transpose, sorted, remove_selfloops, remove_redundents);

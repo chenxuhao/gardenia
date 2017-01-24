@@ -5,7 +5,6 @@
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
 #include "timer.h"
-#define BLKSIZE 128
 
 __global__ void initialize(DistT *dist, unsigned int m) {
 	unsigned int id = blockIdx.x * blockDim.x + threadIdx.x;

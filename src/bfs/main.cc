@@ -2,7 +2,6 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "bfs.h"
 #include "graph_io.h"
-#include "verifier.h"
 
 int main(int argc, char *argv[]) {
 	printf("Breadth-first Search (BFS) with CUDA by Xuhao Chen\n");
@@ -13,7 +12,7 @@ int main(int argc, char *argv[]) {
 
 	// CSR data structures
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	W_TYPE *h_weight = NULL;
+	WeightT *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
 
 	// distance array
@@ -23,7 +22,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	BFSSolver(m, nnz, h_row_offsets, h_column_indices, h_dist); // start breadth first search
-	BFSVerifier(m, h_row_offsets, h_column_indices, h_weight, h_dist); // verify results
+	BFSVerifier(m, h_row_offsets, h_column_indices, h_dist); // verify results
 	//write_solution("bfs-out.txt", m, h_dist);
 
 	free(h_row_offsets);

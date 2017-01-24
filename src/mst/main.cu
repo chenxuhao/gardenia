@@ -20,7 +20,7 @@ __global__ void dinit(int m, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsi
 	}
 }
 
-__global__ void dfindelemin(int m, int *row_offsets, int *column_indices, W_TYPE *weight, MST_TYPE *mstwt, ComponentSpace cs, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners) {
+__global__ void dfindelemin(int m, int *row_offsets, int *column_indices, WeightT *weight, MST_TYPE *mstwt, ComponentSpace cs, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		unsigned src = id;
@@ -48,7 +48,7 @@ __global__ void dfindelemin(int m, int *row_offsets, int *column_indices, W_TYPE
 	}
 }
 
-__global__ void dfindelemin2(int m, int *row_offsets, int *column_indices, W_TYPE *weight, ComponentSpace cs, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners, unsigned *goaheadnodeofcomponent) {
+__global__ void dfindelemin2(int m, int *row_offsets, int *column_indices, WeightT *weight, ComponentSpace cs, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners, unsigned *goaheadnodeofcomponent) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		unsigned src = id;
@@ -70,7 +70,7 @@ __global__ void dfindelemin2(int m, int *row_offsets, int *column_indices, W_TYP
 	}
 }
 
-__global__ void verify_min_elem(int m, int *row_offsets, int *column_indices, W_TYPE *weight, ComponentSpace cs, MST_TYPE *minwtcomponent, unsigned *partners, bool *processinnextiteration, unsigned *goaheadnodeofcomponent) {
+__global__ void verify_min_elem(int m, int *row_offsets, int *column_indices, WeightT *weight, ComponentSpace cs, MST_TYPE *minwtcomponent, unsigned *partners, bool *processinnextiteration, unsigned *goaheadnodeofcomponent) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		if(cs.isBoss(id)) {
@@ -81,13 +81,11 @@ __global__ void verify_min_elem(int m, int *row_offsets, int *column_indices, W_
 			MST_TYPE minwt = minwtcomponent[id];
 			if(minwt == MYINFINITY)
 				return;
-			bool minwt_found = false;
 			unsigned row_begin = row_offsets[minwt_node];
 			unsigned row_end = row_offsets[minwt_node + 1];
 			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
 				MST_TYPE wt = (MST_TYPE)weight[offset];
 				if (wt == minwt) {
-					minwt_found = true;
 					unsigned dst = column_indices[offset];
 					unsigned tempdstboss = cs.find(dst);
 					if(tempdstboss == partners[minwt_node] && tempdstboss != id) {
@@ -208,17 +206,17 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	W_TYPE *h_weight = NULL;
+	WeightT *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
 	print_device_info(0);
-	W_TYPE *d_weight;
+	WeightT *d_weight;
 	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_weight, nnz * sizeof(W_TYPE)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_weight, nnz * sizeof(WeightT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(W_TYPE), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(WeightT), cudaMemcpyHostToDevice));
 	int mutex = 0;
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(g_mutex, &mutex, sizeof(int)));
 	
@@ -249,7 +247,7 @@ int main(int argc, char *argv[]) {
 	int nblocks = (m - 1) / nthreads + 1;
 	int nSM = 13;
 	//const size_t max_blocks = maximum_residency(dfindcompmintwo, nthreads, 0);
-	size_t max_blocks = 1;
+	int max_blocks = 1;
 	printf("Setup global barrier, max_blocks=%d\n", max_blocks);
 	GlobalBarrierLifetime gb;
 	gb.Setup(nSM * max_blocks);

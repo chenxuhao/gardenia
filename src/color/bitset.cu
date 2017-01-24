@@ -116,7 +116,6 @@ void ColorSolver(int m, int nnz, int *row_offsets, int *column_indices, int *col
 	CUDA_SAFE_CALL(cudaMemcpy(inwl.dindex, &m, sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(inwl.dwl, inwl.wl, m * sizeof(int), cudaMemcpyHostToDevice));
 	//thrust::sequence(thrust::device, inwl.dwl, inwl.dwl + m);
-	int iteration = 0;
 	while (nitems > 0) {
 		iter ++;
 		int nblocks = (nitems - 1) / BLKSIZE + 1;

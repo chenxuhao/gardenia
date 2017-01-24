@@ -76,7 +76,7 @@ void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT 
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
 	h_num_frontier = 1;
 
-	const size_t max_blocks = maximum_residency(bfs_kernel, nthreads, 0);
+	int max_blocks = maximum_residency(bfs_kernel, nthreads, 0);
 	//const size_t max_blocks = 6;
 	//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);

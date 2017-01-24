@@ -80,7 +80,7 @@ void SGDSolver(int m, int num_users, int nnz, int *h_row_offsets, int *h_column_
 	print_device_info(0);
 	double h_error, *d_error;
 	Timer t;
-	const int k = 20;
+	//const int k = 20;
 	srand(0);
 	double err = 0.0;
 	double *h_sqerr, *d_sqerr;
@@ -114,7 +114,7 @@ void SGDSolver(int m, int num_users, int nnz, int *h_row_offsets, int *h_column_
 	CUDA_SAFE_CALL(cudaMemcpy(d_lv, &h_lv, sizeof(double) * m * K, cudaMemcpyHostToDevice));
 	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	const size_t max_blocks = maximum_residency(sgd_process, nthreads, 0);
+	int max_blocks = maximum_residency(sgd_process, nthreads, 0);
 	//initialize <<<nblocks, nthreads>>> (m, d_sqerr, d_lv);
 	printf("RMSE error = %lf per edge \n", sqrt(err/nnz));
 	//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;

@@ -7,6 +7,7 @@
 #include <vector>
 #include <algorithm>
 #include <iomanip>
+#include <limits>
 #include <math.h>
 #define BLKSIZE 256
 #define	MAXCOLOR 128 // assume graph can be colored with less than 128 colors

@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
 	}
 	// read graph
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	W_TYPE *h_weight = NULL;
+	WeightT *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
 
 	int *colors = (int *)calloc(m, sizeof(int));

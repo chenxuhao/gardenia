@@ -1,4 +1,5 @@
-void BFSVerifier(int m, int *row_offsets, int *column_indices, W_TYPE *weight, DistT *dist) {
+#include "sssp.h"
+void SSSPVerifier(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist) {
 	printf("Verifying...\n");
 	int nerr = 0;
 	for (int src = 0; src < m; src ++) {
@@ -6,7 +7,7 @@ void BFSVerifier(int m, int *row_offsets, int *column_indices, W_TYPE *weight, D
 		int row_end = row_offsets[src + 1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
-			DistT wt = 1;
+			DistT wt = weight[offset];
 			if (wt > 0 && dist[src] + wt < dist[dst]) {
 				++ nerr;
 			}
