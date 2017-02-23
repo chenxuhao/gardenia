@@ -1,3 +1,5 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #define BFS_VARIANT "lb"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"

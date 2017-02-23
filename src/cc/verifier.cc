@@ -1,4 +1,8 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
+#include "cc.h"
 #include <unordered_map>
+#include "timer.h"
 // Verifies CC result by performing a BFS from a vertex in each component
 // - Asserts search does not reach a vertex with a different component label
 // - If the graph is directed, it performs the search as if it was undirected
@@ -12,6 +16,8 @@ void CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
 		visited[i] = false;
 		label_to_source[comp[i]] = i;
 	}
+	Timer t;
+	t.Start();
 	frontier.reserve(m);
 	for (auto label_source_pair : label_to_source) {
 		int curr_label = label_source_pair.first;
@@ -49,6 +55,9 @@ void CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
 			*/
 		}   
 	}
+	t.Stop();
+	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
+
 	for (int n = 0; n < m; n ++) {
 		if (!visited[n]) {
 			printf("Wrong\n");

@@ -1,3 +1,6 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
+#include "bc.h"
 #include "common.h"
 #include "timer.h"
 // Still uses Brandes algorithm, but has the following differences:
@@ -7,7 +10,7 @@
 // - regenerates successors from depths
 void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test) {
 	vector<ScoreT> scores(m, 0);
-	std::cout << setiosflags(ios::fixed);
+	//std::cout << setiosflags(ios::fixed);
 	Timer t;
 	t.Start();
 	for (int iter=0; iter < num_iters; iter++) {

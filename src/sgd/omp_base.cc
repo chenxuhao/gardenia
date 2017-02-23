@@ -1,3 +1,5 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #include <iostream>
 #include <vector>
 

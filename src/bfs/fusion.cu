@@ -1,3 +1,5 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #define BFS_VARIANT "fusion"
 #include "bfs.h"
 #include "worklistc.h"
@@ -191,7 +193,7 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 	}
 }
 
-void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
 	DistT zero = 0;
 	int iteration = 0;
 	unsigned *nerr;

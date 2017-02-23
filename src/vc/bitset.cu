@@ -2,13 +2,13 @@
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
 #define COLOR_VARIANT "bitset"
 #include <cub/cub.cuh>
-#include "color.h"
+#include "vc.h"
 #include "timer.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-#include <thrust/sequence.h>
-#include <thrust/reduce.h>
-#include <thrust/execution_policy.h>
+//#include <thrust/sequence.h>
+//#include <thrust/reduce.h>
+//#include <thrust/execution_policy.h>
 #include "worklistc.h"
 typedef cub::BlockScan<int, BLKSIZE> BlockScan;
 
@@ -89,7 +89,7 @@ __global__ void conflict_resolve(int m, int *row_offsets, int *column_indices, W
 	if(conflicted) outwl.push(vertex);
 }
 
-void ColorSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
+void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
 	int num_colors = 0, iter = 0;
 	Timer t;
 	int *d_row_offsets, *d_column_indices, *d_colors;
@@ -116,7 +116,6 @@ void ColorSolver(int m, int nnz, int *row_offsets, int *column_indices, int *col
 	CUDA_SAFE_CALL(cudaMemcpy(inwl.dindex, &m, sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(inwl.dwl, inwl.wl, m * sizeof(int), cudaMemcpyHostToDevice));
 	//thrust::sequence(thrust::device, inwl.dwl, inwl.dwl + m);
-	int iteration = 0;
 	while (nitems > 0) {
 		iter ++;
 		int nblocks = (nitems - 1) / BLKSIZE + 1;
@@ -132,7 +131,11 @@ void ColorSolver(int m, int nnz, int *row_offsets, int *column_indices, int *col
 	t.Stop();
 	CUDA_SAFE_CALL(cudaMemcpy(colors, d_colors, m * sizeof(int), cudaMemcpyDeviceToHost));
 	//num_colors = thrust::reduce(thrust::device, d_colors, d_colors + m, 0, thrust::maximum<int>()) + 1;
-	num_colors = thrust::reduce(colors, colors + m, 0, thrust::maximum<int>()) + 1;
+	//num_colors = thrust::reduce(colors, colors + m, 0, thrust::maximum<int>()) + 1;
+	#pragma omp parallel for reduction(max : num_colors)
+	for (int n = 0; n < m; n ++)
+		num_colors = max(num_colors, colors[n]);
+	
     printf("\titerations = %d.\n", iter);
     printf("\truntime[%s] = %f ms, num_colors = %d.\n", COLOR_VARIANT, t.Millisecs(), num_colors);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));

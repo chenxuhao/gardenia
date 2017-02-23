@@ -2,16 +2,15 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "cc.h"
 #include "graph_io.h"
-#include "verifier.h"
 
 int main(int argc, char *argv[]) {
-	printf("Connected Component with CUDA by Xuhao Chen\n");
+	printf("Connected Component by Xuhao Chen\n");
 	if (argc < 2) {
-		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
+		printf("Usage: %s <graph>\n", argv[0]);
 		exit(1);
 	}
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	W_TYPE *h_weight = NULL;
+	WeightT *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
 	CompT *h_comp = (CompT *)malloc(m * sizeof(CompT));
 

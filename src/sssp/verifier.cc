@@ -1,5 +1,11 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
+#include "sssp.h"
+#include "timer.h"
 void SSSPVerifier(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist) {
 	printf("Verifying...\n");
+	Timer t;
+	t.Start();
 	int nerr = 0;
 	for (int src = 0; src < m; src ++) {
 		int row_begin = row_offsets[src];
@@ -8,11 +14,12 @@ void SSSPVerifier(int m, int *row_offsets, int *column_indices, DistT *weight, D
 			int dst = column_indices[offset];
 			DistT wt = weight[offset];
 			if (wt > 0 && dist[src] + wt < dist[dst]) {
-				//if(nerr < 10) printf("Error: src=%d dst=%d dist[src]=%d dist[dst]=%d wt=%d\n", src, dst, dist[src], dist[dst],wt);
 				++ nerr;
 			}
 		}
 	}
+	t.Stop();
+	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
 	printf("\tNumber of errors = %d.\n", nerr);
 }
 

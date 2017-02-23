@@ -1,5 +1,11 @@
-void BFSVerifier(int m, int *row_offsets, int *column_indices, W_TYPE *weight, DistT *dist) {
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
+#include "bfs.h"
+#include "timer.h"
+void BFSVerifier(int m, int *row_offsets, int *column_indices, DistT *dist) {
 	printf("Verifying...\n");
+	Timer t;
+	t.Start();
 	int nerr = 0;
 	for (int src = 0; src < m; src ++) {
 		int row_begin = row_offsets[src];
@@ -12,6 +18,8 @@ void BFSVerifier(int m, int *row_offsets, int *column_indices, W_TYPE *weight, D
 			}
 		}
 	}
+	t.Stop();
+	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
 	printf("\tNumber of errors = %d.\n", nerr);
 }
 

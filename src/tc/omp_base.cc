@@ -1,5 +1,20 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #include "tc.h"
+#include <omp.h>
+#include "timer.h"
+#define TC_VARIANT "openmp"
 void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, int *total) {
+	printf("Launching OpenMP TC solver...\n");
+	//omp_set_num_threads(8);
+	int num_threads = 1;
+#pragma omp parallel
+	{
+		num_threads = omp_get_num_threads();
+	}
+	printf("Launching %d threads...\n", num_threads);
+	Timer t;
+	t.Start();
 	int total_num = 0;
 #pragma omp parallel for reduction(+ : total_num) schedule(dynamic, 64)
 	for (int src = 0; src < m; src ++) {
@@ -24,4 +39,7 @@ void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 		} 
 	}
 	*total = total_num;
+	t.Stop();
+	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, t.Millisecs());
+	return;
 }

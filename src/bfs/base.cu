@@ -1,3 +1,5 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #define BFS_VARIANT "base"
 #include "bfs.h"
 #include "worklistc.h"
@@ -55,7 +57,7 @@ __global__ void insert(Worklist2 inwl) {
 	return;
 }
 
-void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
 	DistT zero = 0;
 	int iter = 0;
 	Timer t;

@@ -1,3 +1,5 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #define SSSP_VARIANT "base"
 #include "sssp.h"
 #include "timer.h"

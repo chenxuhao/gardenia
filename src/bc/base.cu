@@ -7,30 +7,6 @@
 #include "timer.h"
 #include <thrust/extrema.h>
 #include <thrust/execution_policy.h>
-/*
-Gardenia Benchmark Suite
-Kernel: Betweenness Centrality (BC)
-Author: Xuhao Chen
-
-Will return array of approx betweenness centrality scores for each vertex
-
-This BC implementation makes use of the Brandes [1] algorithm with
-implementation optimizations from Madduri et al. [2]. It is only an approximate
-because it does not compute the paths from every start vertex, but only a small
-subset of them. Additionally, the scores are normalized to the range [0,1].
-
-As an optimization to save memory, this implementation uses a Bitmap to hold
-succ (list of successors) found during the BFS phase that are used in the back-
-propagation phase.
-
-[1] Ulrik Brandes. "A faster algorithm for betweenness centrality." Journal of
-    Mathematical Sociology, 25(2):163–177, 2001.
-
-[2] Kamesh Madduri, David Ediger, Karl Jiang, David A Bader, and Daniel
-	Chavarria-Miranda. "A faster parallel algorithm and efficient multithreaded
-	implementations for evaluating betweenness centrality on massive datasets."
-	International Symposium on Parallel & Distributed Processing (IPDPS), 2009.
-*/
 
 __global__ void initialize(int m, ScoreT *scores, int *path_counts, int *depths, ScoreT *deltas) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -125,9 +101,8 @@ __global__ void bc_normalize(int m, ScoreT *scores, ScoreT max_score) {
 	}
 }
 
-void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_scores, int device) {
-	printf("Launching CUDA BC solver...\n");
-	//print_device_info(device);
+void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_scores) {
+	//print_device_info(0);
 	Timer t;
 	int depth = 0;
 	vector<int> depth_index;
@@ -144,23 +119,23 @@ void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT 
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_frontiers, sizeof(int) * (m+1)));
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
-	printf("Copy data to device...\n");
+	//printf("Copy data to device...\n");
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 
 	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	printf("Initializing data on device...\n");
+	//printf("Initializing data on device...\n");
 	initialize <<<nblocks, nthreads>>> (m, d_scores, d_path_counts, d_depths, d_deltas);
 
-	Worklist2 wl1(2*m), wl2(2*m);
+	Worklist2 wl1(2*nnz), wl2(2*nnz);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	int source = 0;
 	int nitems = 1;
 	int frontiers_len = 0;
 	int max_blocks = maximum_residency(bc_forward, nthreads, 0);
 	depth_index.push_back(0);
-	printf("Solving, max_blocks_per_SM=%d, nthreads=%d\n", max_blocks, nthreads);
+	printf("Launching CUDA BC solver (%d CTAs/SM, %d threads/CTA) ...\n", max_blocks, nthreads);
 	t.Start();
 
 	insert<<<1, 1>>>(*inwl, source, d_path_counts, d_depths);
@@ -198,7 +173,7 @@ void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT 
 	CUDA_SAFE_CALL(cudaMemcpy(&h_max_score, d_max_score, sizeof(ScoreT), cudaMemcpyDeviceToHost));
 	//h_max_score = *max_element(h_scores, h_scores+m);
 	//for (int n = 0; n < m; n ++) h_scores[n] = h_scores[n] / h_max_score;
-	std::cout << "max_score = " << h_max_score << "\n";
+	//std::cout << "max_score = " << h_max_score << "\n";
 	nthreads = 512;
 	nblocks = (m - 1) / nthreads + 1;
 	bc_normalize<<<nblocks, nthreads>>>(m, d_scores, h_max_score);

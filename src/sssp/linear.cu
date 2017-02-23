@@ -1,3 +1,5 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #define SSSP_VARIANT "load-balance"
 #include "sssp.h"
 #include "timer.h"
@@ -14,7 +16,7 @@ __global__ void initialize(int m, DistT *dist) {
 	}
 }
 
-__device__ __forceinline__ unsigned process_edge(int src, int edge, int *column_indices, DistT *weight, DistT *dist, Worklist2 &outwl) {
+__device__ __forceinline__ void process_edge(int src, int edge, int *column_indices, DistT *weight, DistT *dist, Worklist2 &outwl) {
 	int dst = column_indices[edge];
 	DistT wt = weight[edge];
 	DistT altdist = dist[src] + wt;
@@ -183,14 +185,14 @@ void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	int nitems = 1;
-	const size_t max_blocks = maximum_residency(sssp_kernel, BLKSIZE, 0);
+	int max_blocks = maximum_residency(sssp_kernel, BLKSIZE, 0);
 	printf("Solving, max_blocks=%d, nthreads=%d\n", max_blocks, nthreads);
 	t.Start();
 	insert<<<1, BLKSIZE>>>(*inwl);
 	nitems = inwl->nitems();
 	while(nitems > 0) {
 		++ iter;
-		unsigned nblocks = (nitems + BLKSIZE - 1) / BLKSIZE; 
+		nblocks = (nitems + BLKSIZE - 1) / BLKSIZE; 
 		printf("iteration=%d, nblocks=%d, wlsz=%d\n", iter, nblocks, nitems);
 		sssp_kernel<<<nblocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_weight, d_dist, *inwl, *outwl);
 		nitems = outwl->nitems();

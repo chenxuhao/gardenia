@@ -2,19 +2,21 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "bfs.h"
 #include "graph_io.h"
-#include "verifier.h"
 
 int main(int argc, char *argv[]) {
-	printf("Breadth-first Search (BFS) with CUDA by Xuhao Chen\n");
+	printf("Breadth-first Search by Xuhao Chen\n");
 	if (argc < 2) {
-		printf("Usage: %s <graph> [device(0/1)]\n", argv[0]);
+		printf("Usage: %s <graph>\n", argv[0]);
 		exit(1);
 	}
 
 	// CSR data structures
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	W_TYPE *h_weight = NULL;
-	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
+	WeightT *h_weight = NULL;
+	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
+	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false, false, false);
+	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true, false);
+	//read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
 
 	// distance array
 	DistT *h_dist = (DistT *) malloc(m * sizeof(DistT));
@@ -22,8 +24,9 @@ int main(int argc, char *argv[]) {
 		h_dist[i] = MYINFINITY;
 	}
 
-	BFSSolver(m, nnz, h_row_offsets, h_column_indices, h_dist); // start breadth first search
-	BFSVerifier(m, h_row_offsets, h_column_indices, h_weight, h_dist); // verify results
+	BFSSolver(m, nnz, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, out_degree, h_dist); // start breadth first search
+	//BFSSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, h_dist); // start breadth first search
+	BFSVerifier(m, out_row_offsets, out_column_indices, h_dist); // verify results
 	//write_solution("bfs-out.txt", m, h_dist);
 
 	free(h_row_offsets);

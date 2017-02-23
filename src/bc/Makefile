@@ -1,6 +1,7 @@
 include ../common.mk
+CXXFLAGS+=-std=c++11
 SRC=main.cc
-OBJS=omp_base.o base.o main.o
+OBJS=omp_base.o base.o main.o verifier.o
 all: $(OBJS) bc_base bc_omp
 
 %.o: %.cc
@@ -9,12 +10,12 @@ all: $(OBJS) bc_base bc_omp
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
-bc_omp: omp_base.o main.o
-	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o -o $@ -lgomp
+bc_omp: omp_base.o main.o verifier.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
-bc_base: base.o main.o
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o -o $@ $(LIBS)
+bc_base: base.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o verifier.o -o $@ $(LIBS)
 	mv $@  $(BIN)
 
 bc_lb:

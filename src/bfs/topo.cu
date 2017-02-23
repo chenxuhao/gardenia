@@ -1,3 +1,5 @@
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #define BFS_VARIANT "topology"
 #include "bfs.h"
 #include "cuda_launch_config.hpp"
@@ -45,7 +47,7 @@ __global__ void bfs_update(int m, DistT *dist, bool *visited) {
 	}
 }
 
-void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
 	print_device_info(0);
 	DistT zero = 0;
 	bool *d_changed, h_changed, *d_visited, *d_expanded;
@@ -76,7 +78,7 @@ void BFSSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT 
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
 	h_num_frontier = 1;
 
-	const size_t max_blocks = maximum_residency(bfs_kernel, nthreads, 0);
+	int max_blocks = maximum_residency(bfs_kernel, nthreads, 0);
 	//const size_t max_blocks = 6;
 	//if(nblocks > nSM*max_blocks) nblocks = nSM*max_blocks;
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);

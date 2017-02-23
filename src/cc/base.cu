@@ -1,4 +1,5 @@
-// Copyright (c) 2016, Xuhao Chen
+// Copyright 2016, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
 #define CC_VARIANT "topology"
 #include "cc.h"
 #include "cuda_launch_config.hpp"
@@ -22,7 +23,7 @@ __global__ void initialize(int m, CompT *comp) {
 }
 
 __global__ void cc_kernel1(int m, int *row_offsets, int *column_indices, CompT *comp, bool *changed) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if(src < m) {
@@ -42,7 +43,7 @@ __global__ void cc_kernel1(int m, int *row_offsets, int *column_indices, CompT *
 }
 
 __global__ void cc_kernel2(int m, int *row_offsets, int *column_indices, CompT *comp) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if(src < m) {
@@ -71,7 +72,7 @@ void CCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, CompT *
 
 	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	const size_t max_blocks = maximum_residency(cc_kernel1, nthreads, 0);
+	int max_blocks = maximum_residency(cc_kernel1, nthreads, 0);
 	initialize <<<nblocks, nthreads>>> (m, d_comp);
 	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
 	t.Start();

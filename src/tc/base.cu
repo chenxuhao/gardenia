@@ -96,7 +96,7 @@ bool WorthRelabelling(int m, int nnz, int *row_offsets, int *column_indices, int
 void TCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_degree, int *h_total) {
 	Timer t;
 	int zero = 0;
-	int *d_row_offsets, *d_column_indices, *d_degree;
+	int *d_row_offsets, *d_column_indices;//, *d_degree;
 	int *d_total;
 	print_device_info(0);
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
@@ -111,7 +111,7 @@ void TCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 
 	int nthreads = 256;
 	int nblocks = (m - 1) / nthreads + 1;
-	const size_t max_blocks = maximum_residency(tc_kernel, nthreads, 0);
+	int max_blocks = maximum_residency(tc_kernel, nthreads, 0);
 	printf("Solving, max_blocks_per_SM=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
 	t.Start();
 	//if (WorthRelabelling(m, nnz, row_offsets, column_indices, degree))
