@@ -237,7 +237,7 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	for (int i = 0; i < nnz; i ++) {
 		getline(cfile, str);
 		sscanf(str.c_str(), "%d %d %d", &dst, &src, &wt);
-		if (wt <= 0) wt = 1;
+		if (wt < 0) wt = -wt;
 		dst--;
 		src--;
 		Edge e1, e2;

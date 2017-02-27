@@ -4,7 +4,7 @@ EXE=sssp
 SRC=main.cc
 OBJS= topo.o base.o linear.o main.o verifier.o
 
-all: $(OBJS) $(EXE)_base $(EXE)_linear $(EXE)_topo $(EXE)_omp
+all: $(OBJS) $(EXE)_base $(EXE)_linear $(EXE)_topo $(EXE)_omp $(EXE)_dstep
 
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(PARFLAG) $(INCLUDES) -c $<
@@ -22,6 +22,10 @@ $(EXE)_base: main.o base.o verifier.o
 
 $(EXE)_linear: main.o linear.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+$(EXE)_dstep: main.o dstep.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o dstep.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 $(EXE)_topo: main.o topo.o verifier.o

@@ -23,11 +23,10 @@ __global__ void initialize(int m, DistT *dist) {
 
 __device__ __forceinline__ void process_edge(int src, int edge, int *column_indices, DistT *weight, DistT *dist, Worklist2 &outwl) {
 	int dst = column_indices[edge];
-	DistT wt = weight[edge];
-	DistT altdist = dist[src] + wt;
-	if (altdist < dist[dst]) {
-		//atomicMin((unsigned *)&dist[dst], altdist);
-		atomicMin(&dist[dst], altdist);
+	DistT new_dist = dist[src] + weight[edge];
+	if (new_dist < dist[dst]) {
+		//atomicMin((unsigned *)&dist[dst], new_dist);
+		atomicMin(&dist[dst], new_dist);
 		outwl.push(dst);
 	}
 }
@@ -197,7 +196,7 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 	while(nitems > 0) {
 		++ iter;
 		nblocks = (nitems + BLKSIZE - 1) / BLKSIZE; 
-		printf("iteration=%d, nblocks=%d, wlsz=%d\n", iter, nblocks, nitems);
+		//printf("iteration=%d, nblocks=%d, wlsz=%d\n", iter, nblocks, nitems);
 		sssp_kernel<<<nblocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_weight, d_dist, *inwl, *outwl);
 		nitems = outwl->nitems();
 		Worklist2 *tmp = inwl;
@@ -209,5 +208,11 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 	t.Stop();
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, t.Millisecs());
+	
+	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_weight));
+	CUDA_SAFE_CALL(cudaFree(d_dist));
 	return;
 }

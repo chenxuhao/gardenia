@@ -19,7 +19,7 @@ void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indice
 	}
 	printf("Launching OpenMP SSSP solver (%d threads) ...\n", num_threads);
 	Timer t;
-	DistT delta = 1;
+	DistT delta = 4;
 	//for (int i = 0; i < m; i ++) dist[i] = kDistInf;
 	dist[source] = 0;
 	vector<int> frontier(nnz);

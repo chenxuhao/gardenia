@@ -45,11 +45,10 @@ __global__ void bellman_ford(int m, int *row_offsets, int *column_indices, DistT
 			int row_end = row_offsets[src + 1];
 			for (int offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
-				DistT wt = weight[offset];
-				DistT altdist = dist[src] + wt;
-				if (altdist < dist[dst]) {
-					DistT olddist = atomicMin(&dist[dst], altdist);
-					if (altdist < olddist) {
+				DistT new_dist = dist[src] + weight[offset];
+				if (new_dist < dist[dst]) {
+					DistT old_dist = atomicMin(&dist[dst], new_dist);
+					if (new_dist < old_dist) {
 						if(expanded[dst]) expanded[dst] = false;
 						*changed = true;
 					}
@@ -120,7 +119,7 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 		CudaTest("solving failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_changed, d_changed, sizeof(bool), cudaMemcpyDeviceToHost));
 		CUDA_SAFE_CALL(cudaMemcpy(&h_num_frontier, d_num_frontier, sizeof(int), cudaMemcpyDeviceToHost));
-		//printf("iteration=%d, num_frontier=%d\n", iter, h_num_frontier);
+		printf("iteration=%d, num_frontier=%d\n", iter, h_num_frontier);
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();

@@ -148,5 +148,6 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	t.Stop();
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
+	for(int i = 0; i < m; i ++) dist[i] = depth[i];
 	return;
 }
