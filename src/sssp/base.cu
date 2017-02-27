@@ -6,7 +6,14 @@
 #include "worklistc.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+/*
+Naive CUDA implementation of the Bellman-Ford algorithm for SSSP
 
+[1] A. Davidson, S. Baxter, M. Garland, and J. D. Owens, “Work-efficient
+	parallel gpu methods for single-source shortest paths,” in Proceedings
+	of the IEEE 28th International Parallel and Distributed Processing
+	Symposium (IPDPS), pp. 349–359, May 2014
+*/
 __global__ void initialize(int m, DistT *dist) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
@@ -14,7 +21,18 @@ __global__ void initialize(int m, DistT *dist) {
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 inwl, Worklist2 outwl) {
+/**
+ * @brief naive Bellman_Ford SSSP kernel entry point.
+ *
+ * @param[in] m                 Number of vertices
+ * @param[in] d_row_offsets     Device pointer of VertexId to the row offsets queue
+ * @param[in] d_column_indices  Device pointer of VertexId to the column indices queue
+ * @param[in] d_weight          Device pointer of DistT to the edge weight queue
+ * @param[out]d_dist            Device pointer of DistT to the distance queue
+ * @param[in] d_in_queue        Device pointer of VertexId to the incoming frontier queue
+ * @param[out]d_out_queue       Device pointer of VertexId to the outgoing frontier queue
+ */
+__global__ void bellman_ford(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 inwl, Worklist2 outwl) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
 	if(inwl.pop_id(tid, src)) {
@@ -34,15 +52,24 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, DistT 
 	}
 }
 
-__global__ void insert(Worklist2 inwl) {
+__global__ void insert(int source, Worklist2 inwl) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if(id == 0) {
-		inwl.push(0);
+		inwl.push(source);
 	}
 	return;
 }
 
-void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
+/**
+ * @brief naive data-driven mapping GPU SSSP entry point.
+ *
+ * @param[in] m                 Number of vertices
+ * @param[in] h_row_offsets     Host pointer of VertexId to the row offsets queue
+ * @param[in] h_column_indices  Host pointer of VertexId to the column indices queue
+ * @param[in] h_weight          Host pointer of DistT to the edge weight queue
+ * @param[out]h_dist            Host pointer of DistT to the distance queue
+ */
+void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
 	DistT zero = 0;
 	int iteration = 0;
 	Timer t;
@@ -62,19 +89,20 @@ void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT
 	DistT * d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
 	int nitems = 1;
-	//const size_t max_blocks = maximum_residency(sssp_kernel, nthreads, 0);
+	int max_blocks = maximum_residency(bellman_ford, nthreads, 0);
+	printf("Launching CUDA SSSP solver (%d CTAs/SM, %d threads/CTA) ...\n", max_blocks, nthreads);
 	t.Start();
-	insert<<<1, nthreads>>>(*inwl);
+	insert<<<1, nthreads>>>(source, *inwl);
 	nitems = inwl->nitems();
 	do {
 		++iteration;
 		nblocks = (nitems - 1) / nthreads + 1;
 		//printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iteration, nblocks, nthreads, nitems);
-		sssp_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_weight, d_dist, *inwl, *outwl);
+		bellman_ford<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_weight, d_dist, *inwl, *outwl);
 		CudaTest("solving failed");
 		nitems = outwl->nitems();
 		Worklist2 *tmp = inwl;

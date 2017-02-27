@@ -32,5 +32,5 @@ bins.
 */
 
 const DistT kDistInf = numeric_limits<DistT>::max()/2;
-void SSSPSolver(int m, int nnz, int *row_offsets, int *column_indices, DistT *weight, DistT *dist);
-void SSSPVerifier(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist);
+void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist);
+void SSSPVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist);

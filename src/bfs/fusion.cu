@@ -168,12 +168,9 @@ __device__ unsigned process_vertex(int m, int *row_offsets, int *column_indices,
 	return 0;
 }
 
-__global__ void insert(Worklist2 inwl) {
+__global__ void insert(int source, Worklist2 inwl) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
-	if(id == 0) {
-		int item = 0;
-		inwl.push(item);
-	}
+	if(id == 0) inwl.push(source);
 	return;
 }
 
@@ -193,7 +190,7 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 	}
 }
 
-void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
 	DistT zero = 0;
 	int iteration = 0;
 	unsigned *nerr;
@@ -213,7 +210,7 @@ void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 
 	initialize <<<nblocks, nthreads>>> (d_dist, m);
 	CudaTest("initializing failed");
-	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&nerr, sizeof(unsigned)));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
@@ -226,7 +223,7 @@ void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 	t.Start();
 	GlobalBarrierLifetime gb;
 	gb.Setup(nSM * max_blocks);
-	insert<<<1, BLKSIZE>>>(*inwl);
+	insert<<<1, BLKSIZE>>>(source, *inwl);
 	bfs_kernel<<<nSM * max_blocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_dist, *inwl, *outwl, 1, gb);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();

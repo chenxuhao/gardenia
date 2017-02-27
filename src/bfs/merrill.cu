@@ -1,11 +1,11 @@
 // Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
+// Author: Xuhao Chen <cxh@illinois.edu>
 #define BFS_VARIANT "merrill"
 #include <cub/cub.cuh>
 #include "bfs.h"
-#include "gbar.h"
-#include "cuda_launch_config.hpp"
-#include "cutil_subset.h"
+//#include "gbar.h"
+//#include "cuda_launch_config.hpp"
+//#include "cutil_subset.h"
 #include "timer.h"
 #include <b40c_test_util.h>
 #include <b40c/graph/builder/dimacs.cuh>
@@ -16,11 +16,8 @@
 using namespace b40c;
 using namespace graph;
 
-void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
 	printf("BFS data-driven Merrill's version\n");
-	typedef int VertexId;
-	typedef unsigned Value;
-	typedef int SizeT;
 	int *d_row_offsets, *d_column_indices;
 	DistT *d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
@@ -30,12 +27,12 @@ void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
 
-	graph::CsrGraph<VertexId, Value, SizeT> csr_graph;
+	graph::CsrGraph<int, DistT, int> csr_graph;
 	csr_graph.FromScratch<true>(m, nnz);
-	CUDA_SAFE_CALL(cudaMemcpy(csr_graph.row_offsets, d_row_offsets, sizeof(SizeT) * (m + 1), cudaMemcpyDeviceToHost));
-	CUDA_SAFE_CALL(cudaMemcpy(csr_graph.column_indices, d_column_indices, sizeof(VertexId) * nnz, cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(csr_graph.row_offsets, d_row_offsets, sizeof(int) * (m + 1), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(csr_graph.column_indices, d_column_indices, sizeof(int) * nnz, cudaMemcpyDeviceToHost));
 
-	typedef bfs::CsrProblem<VertexId, SizeT, false> CsrProblem;
+	typedef bfs::CsrProblem<int, int, false> CsrProblem;
 	//bfs::EnactorTwoPhase<false> two_phase(false);
 	bfs::EnactorHybrid<false> hybrid(false);
 	CsrProblem csr_problem;
@@ -46,7 +43,7 @@ void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 	if (retval = csr_problem.Reset(hybrid.GetFrontierType(), 1.3))
 	//if (retval = csr_problem.Reset(two_phase.GetFrontierType(), 1.3))
 		return;
-	if (retval = hybrid.EnactSearch(csr_problem, 0)) {
+	if (retval = hybrid.EnactSearch(csr_problem, source)) {
 	//if (retval = two_phase.EnactIterativeSearch(csr_problem, 0)) {
 		if (retval && (retval != cudaErrorInvalidDeviceFunction)) {
 			exit(1);
@@ -60,3 +57,4 @@ void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_dist));
 }
+

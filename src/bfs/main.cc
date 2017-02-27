@@ -11,6 +11,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// CSR data structures
+	int source = 0;
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	WeightT *h_weight = NULL;
 	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
@@ -24,9 +25,9 @@ int main(int argc, char *argv[]) {
 		h_dist[i] = MYINFINITY;
 	}
 
-	BFSSolver(m, nnz, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, out_degree, h_dist); // start breadth first search
+	BFSSolver(m, nnz, source, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, out_degree, h_dist); // start breadth first search
 	//BFSSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, h_dist); // start breadth first search
-	BFSVerifier(m, out_row_offsets, out_column_indices, h_dist); // verify results
+	BFSVerifier(m, source, out_row_offsets, out_column_indices, h_dist); // verify results
 	//write_solution("bfs-out.txt", m, h_dist);
 
 	free(h_row_offsets);

@@ -8,7 +8,12 @@
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
-
+/*
+[1] A. Davidson, S. Baxter, M. Garland, and J. D. Owens, “Work-efficient
+	parallel gpu methods for single-source shortest paths,” in Proceedings
+	of the IEEE 28th International Parallel and Distributed Processing
+	Symposium (IPDPS), pp. 349–359, May 2014
+*/
 __global__ void initialize(int m, DistT *dist) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
@@ -151,16 +156,15 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, DistT 
 	}
 }
 
-__global__ void insert(Worklist2 inwl) {
+__global__ void insert(int source, Worklist2 inwl) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if(id == 0) {
-		int item = 0;
-		inwl.push(item);
+		inwl.push(source);
 	}
 	return;
 }
 
-void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
+void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
 	DistT zero = 0;
 	int iter = 0;
 	Timer t;
@@ -180,7 +184,7 @@ void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT
 	DistT * d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(zero), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
@@ -188,7 +192,7 @@ void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT
 	int max_blocks = maximum_residency(sssp_kernel, BLKSIZE, 0);
 	printf("Solving, max_blocks=%d, nthreads=%d\n", max_blocks, nthreads);
 	t.Start();
-	insert<<<1, BLKSIZE>>>(*inwl);
+	insert<<<1, BLKSIZE>>>(source, *inwl);
 	nitems = inwl->nitems();
 	while(nitems > 0) {
 		++ iter;

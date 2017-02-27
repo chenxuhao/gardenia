@@ -6,12 +6,12 @@
 #include "cutil_subset.h"
 #include "timer.h"
 
-__global__ void initialize(int m, DistT *dist, bool *visited, bool *expanded) {
+__global__ void initialize(int m, int source, DistT *dist, bool *visited, bool *expanded) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		//dist[id] = MYINFINITY;
 		expanded[id] = false;
-		if(id == 0) visited[id] = true;
+		if(id == source) visited[id] = true;
 		else visited[id] = false;
 	}
 }
@@ -47,7 +47,7 @@ __global__ void bfs_update(int m, DistT *dist, bool *visited) {
 	}
 }
 
-void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
 	print_device_info(0);
 	DistT zero = 0;
 	bool *d_changed, h_changed, *d_visited, *d_expanded;
@@ -73,9 +73,9 @@ void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_expanded, m * sizeof(bool)));
 	//CUDA_SAFE_CALL(cudaMemset(d_visited, 0, m * sizeof(bool)));
 	//CUDA_SAFE_CALL(cudaMemset(d_expanded, 0, m * sizeof(bool)));
-	initialize <<<nblocks, nthreads>>> (m, d_dist, d_visited, d_expanded);
+	initialize <<<nblocks, nthreads>>> (m, source, d_dist, d_visited, d_expanded);
 	CudaTest("initializing failed");
-	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
 	h_num_frontier = 1;
 
 	int max_blocks = maximum_residency(bfs_kernel, nthreads, 0);

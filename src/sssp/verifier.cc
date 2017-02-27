@@ -1,35 +1,58 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
+#include <queue>
+#include <iostream>
 #include "sssp.h"
 #include "timer.h"
-void SSSPVerifier(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist) {
+void SSSPVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist_to_test) {
 	printf("Verifying...\n");
+	// Serial Dijkstra implementation to get oracle distances
+	vector<DistT> oracle_dist(m, kDistInf);
+	typedef pair<DistT, int> WN;
+	priority_queue<WN, vector<WN>, greater<WN> > mq;
 	Timer t;
 	t.Start();
-	int nerr = 0;
-	for (int src = 0; src < m; src ++) {
-		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1]; 
-		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int dst = column_indices[offset];
-			DistT wt = weight[offset];
-			if (wt > 0 && dist[src] + wt < dist[dst]) {
-				++ nerr;
+	oracle_dist[source] = 0;
+	mq.push(make_pair(0, source));
+	while (!mq.empty()) {
+		DistT td = mq.top().first;
+		int src = mq.top().second;
+		mq.pop();
+		if (td == oracle_dist[src]) {
+			int row_begin = row_offsets[src];
+			int row_end = row_offsets[src + 1]; 
+			for (int offset = row_begin; offset < row_end; ++ offset) {
+				int dst = column_indices[offset];
+				DistT wt = weight[offset];
+				if (td + wt < oracle_dist[dst]) {
+					oracle_dist[dst] = td + wt;
+					mq.push(make_pair(td + wt, dst));
+				}
 			}
 		}
 	}
 	t.Stop();
 	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
-	printf("\tNumber of errors = %d.\n", nerr);
+
+	// Report any mismatches
+	bool all_ok = true;
+	for (int n = 0; n < m; n ++) {
+		if (dist_to_test[n] != oracle_dist[n]) {
+			std::cout << n << ": " << dist_to_test[n] << " != " << oracle_dist[n] << std::endl;
+			all_ok = false;
+		}
+	}
+	if(all_ok) printf("Correct\n");
+	else printf("Wrong\n");
 }
 
-void write_solution(const char *fname, int m, DistT *h_dist) {
-	assert(h_dist != NULL);
+void write_solution(const char *fname, int m, DistT *dist) {
+	assert(dist != NULL);
 	printf("Writing solution to %s\n", fname);
 	FILE *f = fopen(fname, "w");
 	fprintf(f, "Computed solution (source dist): [");
-	for(int node = 0; node < m; node++) {
-		fprintf(f, "%d:%d\n ", node, h_dist[node]);
+	for(int n = 0; n < m; n ++) {
+		fprintf(f, "%d:%d\n ", n, dist[n]);
 	}
 	fprintf(f, "]");
 }

@@ -5,18 +5,36 @@
 #include "timer.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+/*
+Naive CUDA implementation of the Bellman-Ford algorithm for SSSP
 
-__global__ void initialize(int m, DistT *dist, bool *visited, bool *expanded) {
+[1] A. Davidson, S. Baxter, M. Garland, and J. D. Owens, “Work-efficient
+	parallel gpu methods for single-source shortest paths,” in Proceedings
+	of the IEEE 28th International Parallel and Distributed Processing
+	Symposium (IPDPS), pp. 349–359, May 2014
+*/
+__global__ void initialize(int m, int source, DistT *dist, bool *visited, bool *expanded) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		//dist[id] = MYINFINITY;
 		expanded[id] = false;
-		if(id == 0) visited[id] = true;
+		if(id == source) visited[id] = true;
 		else visited[id] = false;
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, bool *changed, bool *visited, bool *expanded, int *num_frontier) {
+/**
+ * @brief naive Bellman_Ford SSSP kernel entry point.
+ *
+ * @param[in] m                 Number of vertices
+ * @param[in] d_row_offsets     Device pointer of VertexId to the row offsets queue
+ * @param[in] d_column_indices  Device pointer of VertexId to the column indices queue
+ * @param[in] d_weight          Device pointer of DistT to the edge weight queue
+ * @param[out]d_dist            Device pointer of DistT to the distance queue
+ * @param[in] d_in_queue        Device pointer of VertexId to the incoming frontier queue
+ * @param[out]d_out_queue       Device pointer of VertexId to the outgoing frontier queue
+ */
+__global__ void bellman_ford(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, bool *changed, bool *visited, bool *expanded, int *num_frontier) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
@@ -41,7 +59,7 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, DistT 
 	}
 }
 
-__global__ void sssp_update(int m, DistT *dist, bool *visited) {
+__global__ void update(int m, DistT *dist, bool *visited) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		if(dist[id] < MYINFINITY && !visited[id])
@@ -49,7 +67,16 @@ __global__ void sssp_update(int m, DistT *dist, bool *visited) {
 	}
 }
 
-void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
+/**
+ * @brief naive topology-driven mapping GPU SSSP entry point.
+ *
+ * @param[in] m                 Number of vertices
+ * @param[in] h_row_offsets     Host pointer of VertexId to the row offsets queue
+ * @param[in] h_column_indices  Host pointer of VertexId to the column indices queue
+ * @param[in] h_weight          Host pointer of DistT to the edge weight queue
+ * @param[out]h_dist            Host pointer of DistT to the distance queue
+ */
+void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
 	print_device_info(0);
 	DistT zero = 0;
 	bool *d_changed, h_changed, *d_visited, *d_expanded;
@@ -74,27 +101,26 @@ void SSSPSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, DistT
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_num_frontier, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_visited, m * sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_expanded, m * sizeof(bool)));
-	initialize <<<nblocks, nthreads>>> (m, d_dist, d_visited, d_expanded);
+	initialize <<<nblocks, nthreads>>> (m, source, d_dist, d_visited, d_expanded);
 	CudaTest("initializing failed");
-	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[0], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
 	h_num_frontier = 1;
 
-	int max_blocks = maximum_residency(sssp_kernel, nthreads, 0);
-	//const size_t max_blocks = 6;
-	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
+	int max_blocks = maximum_residency(bellman_ford, nthreads, 0);
+	//max_blocks = 6;
+	printf("Launching CUDA SSSP solver (%d CTAs/SM, %d CTAs, %d threads/CTA) ...\n", max_blocks, nblocks, nthreads);
 	t.Start();
 	do {
 		++ iter;
 		h_changed = false;
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(bool), cudaMemcpyHostToDevice));
 		CUDA_SAFE_CALL(cudaMemcpy(d_num_frontier, &zero, sizeof(int), cudaMemcpyHostToDevice));
-		sssp_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_weight, d_dist, d_changed, d_visited, d_expanded, d_num_frontier);
-		sssp_update <<<nblocks, nthreads>>> (m, d_dist, d_visited);
+		bellman_ford<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_weight, d_dist, d_changed, d_visited, d_expanded, d_num_frontier);
+		update<<<nblocks, nthreads>>>(m, d_dist, d_visited);
 		CudaTest("solving failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_changed, d_changed, sizeof(bool), cudaMemcpyDeviceToHost));
 		CUDA_SAFE_CALL(cudaMemcpy(&h_num_frontier, d_num_frontier, sizeof(int), cudaMemcpyDeviceToHost));
-		//printf("iteration=%d\n", iter);
-		printf("iteration=%d, num_frontier=%d\n", iter, h_num_frontier);
+		//printf("iteration=%d, num_frontier=%d\n", iter, h_num_frontier);
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();

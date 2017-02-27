@@ -8,18 +8,21 @@
 #include "platform_atomics.h"
 #define BFS_VARIANT "openmp"
 
-int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &parent, Bitmap &front, Bitmap &next) {
+//int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &parent, Bitmap &front, Bitmap &next) {
+int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &depth, Bitmap &front, Bitmap &next) {
 	int64_t awake_count = 0;
 	next.reset();
 #pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
 	for (int src = 0; src < m; src ++) {
-		if (parent[src] < 0) {
+		//if (parent[src] < 0) {
+		if (depth[src] < 0) {
 			int row_begin = row_offsets[src];
 			int row_end = row_offsets[src + 1];
 			for (int offset = row_begin; offset < row_end; offset ++) {
 				int dst = column_indices[offset];
 				if (front.get_bit(dst)) {
-					parent[src] = dst;
+					//parent[src] = dst;
+					depth[src] = depth[dst] + 1;
 					awake_count++;
 					next.set_bit(src);
 					break;
@@ -30,7 +33,8 @@ int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &parent
 	return awake_count;
 }
 
-int64_t TDStep(int m, int *row_offsets, int *column_indices, vector<int> &parent, SlidingQueue<int> &queue) {
+//int64_t TDStep(int m, int *row_offsets, int *column_indices, vector<int> &parent, SlidingQueue<int> &queue) {
+int64_t TDStep(int m, int *row_offsets, int *column_indices, vector<int> &depth, SlidingQueue<int> &queue) {
 	int64_t scout_count = 0;
 #pragma omp parallel
 	{
@@ -42,9 +46,11 @@ int64_t TDStep(int m, int *row_offsets, int *column_indices, vector<int> &parent
 			int row_end = row_offsets[src + 1];
 			for (int offset = row_begin; offset < row_end; offset ++) {
 				int dst = column_indices[offset];
-				int curr_val = parent[dst];
+				//int curr_val = parent[dst];
+				int curr_val = depth[dst];
 				if (curr_val < 0) {
-					if (compare_and_swap(parent[dst], curr_val, src)) {
+					//if (compare_and_swap(parent[dst], curr_val, src)) {
+					if (compare_and_swap(depth[dst], curr_val, depth[src] + 1)) {
 						lqueue.push_back(dst);
 						scout_count += -curr_val;
 					}
@@ -85,21 +91,21 @@ vector<int> InitParent(int m, int *degree) {
 	return parent;
 }
 
-void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *degree, DistT *dist) {
-	printf("Launching OpenMP BFS solver...\n");
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *degree, DistT *dist) {
 	//omp_set_num_threads(12);
 	int num_threads = 1;
 	#pragma omp parallel
 	{
 	num_threads = omp_get_num_threads();
 	}
-	printf("Launching %d threads...\n", num_threads);
+	printf("Launching OpenMP BFS solver (%d threads) ...\n", num_threads);
 
-	int source = 0;
 	int alpha = 15, beta = 18;
 	Timer t;
-	vector<int> parent = InitParent(m, degree);
-	parent[source] = source;
+	//vector<int> parent = InitParent(m, degree);
+	//parent[source] = source;
+	vector<int> depth(m, -1);
+	depth[source] = 0;
 	SlidingQueue<int> queue(m);
 	queue.push_back(source);
 	queue.slide_window();
@@ -121,7 +127,8 @@ void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 				++ iter;
 				printf("BU: ");
 				old_awake_count = awake_count;
-				awake_count = BUStep(m, in_row_offsets, in_column_indices, parent, front, curr);
+				//awake_count = BUStep(m, in_row_offsets, in_column_indices, parent, front, curr);
+				awake_count = BUStep(m, in_row_offsets, in_column_indices, depth, front, curr);
 				front.swap(curr);
 				printf("iteration=%d, num_frontier=%ld\n", iter, awake_count);
 			} while ((awake_count >= old_awake_count) ||
@@ -132,7 +139,8 @@ void BFSSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 			++ iter;
 			printf("TD: ");
 			edges_to_check -= scout_count;
-			scout_count = TDStep(m, out_row_offsets, out_column_indices, parent, queue);
+			//scout_count = TDStep(m, out_row_offsets, out_column_indices, parent, queue);
+			scout_count = TDStep(m, out_row_offsets, out_column_indices, depth, queue);
 			queue.slide_window();
 			printf("iteration=%d, num_frontier=%ld\n", iter, queue.size());
 		}
