@@ -10,6 +10,7 @@ void SSSPVerifier(int m, int source, int *row_offsets, int *column_indices, Dist
 	vector<DistT> oracle_dist(m, kDistInf);
 	typedef pair<DistT, int> WN;
 	priority_queue<WN, vector<WN>, greater<WN> > mq;
+	int iter = 0;
 	Timer t;
 	t.Start();
 	oracle_dist[source] = 0;
@@ -30,8 +31,10 @@ void SSSPVerifier(int m, int source, int *row_offsets, int *column_indices, Dist
 				}
 			}
 		}
+		iter ++;
 	}
 	t.Stop();
+	printf("\titerations = %d.\n", iter);
 	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
 
 	// Report any mismatches

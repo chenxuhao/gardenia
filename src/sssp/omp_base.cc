@@ -10,7 +10,7 @@
 	algorithm." Journal of Algorithms, 49(1):114–152, 2003.
 */
 
-void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist) {
+void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, int delta) {
 	//omp_set_num_threads(8);
 	int num_threads = 1;
 #pragma omp parallel
@@ -19,7 +19,6 @@ void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indice
 	}
 	printf("Launching OpenMP SSSP solver (%d threads) ...\n", num_threads);
 	Timer t;
-	DistT delta = 4;
 	//for (int i = 0; i < m; i ++) dist[i] = kDistInf;
 	dist[source] = 0;
 	vector<int> frontier(nnz);

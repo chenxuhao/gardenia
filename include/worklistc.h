@@ -3,63 +3,59 @@
 static int zero = 0;
 
 struct Worklist {
-	int *dwl, *wl;
-	int length, *dnsize;
-	int *dindex;
+	int *d_queue, *h_queue;
+	int *d_size, *d_index;
 
-	Worklist(size_t nsize) {
-		wl = (int *) calloc(nsize, sizeof(int));
-		CUDA_SAFE_CALL(cudaMalloc(&dwl, nsize * sizeof(int)));
-		CUDA_SAFE_CALL(cudaMalloc(&dnsize, 1 * sizeof(int)));
-		CUDA_SAFE_CALL(cudaMalloc(&dindex, 1 * sizeof(int)));
-		CUDA_SAFE_CALL(cudaMemcpy(dnsize, &nsize, 1 * sizeof(int), cudaMemcpyHostToDevice));
-		CUDA_SAFE_CALL(cudaMemcpy((void *) dindex, &zero, 1 * sizeof(zero), cudaMemcpyHostToDevice));
-		CUDA_SAFE_CALL(cudaMemcpy(&length, dnsize, 1 * sizeof(int), cudaMemcpyDeviceToHost));
+	Worklist(size_t max_size) {
+		h_queue = (int *) calloc(max_size, sizeof(int));
+		CUDA_SAFE_CALL(cudaMalloc(&d_queue, max_size * sizeof(int)));
+		CUDA_SAFE_CALL(cudaMalloc(&d_size, sizeof(int)));
+		CUDA_SAFE_CALL(cudaMalloc(&d_index, sizeof(int)));
+		CUDA_SAFE_CALL(cudaMemcpy(d_size, &max_size, sizeof(int), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpy((void *)d_index, &zero, sizeof(zero), cudaMemcpyHostToDevice));
 	}
 
-	~Worklist() {/*CUDA_SAFE_CALL(cudaFree(dwl));*/}
-
-	void update_cpu() {
-		int nsize = nitems();
-		CUDA_SAFE_CALL(cudaMemcpy(wl, dwl, nsize  * sizeof(int), cudaMemcpyDeviceToHost));
-	}
+	~Worklist() {}
 
 	void display_items() {
 		int nsize = nitems();
-		CUDA_SAFE_CALL(cudaMemcpy(wl, dwl, nsize  * sizeof(int), cudaMemcpyDeviceToHost));
-		printf("WL: ");
+		CUDA_SAFE_CALL(cudaMemcpy(h_queue, d_queue, nsize  * sizeof(int), cudaMemcpyDeviceToHost));
+		printf("Queue: ");
 		for(int i = 0; i < nsize; i++)
-			printf("%d %d, ", i, wl[i]);
+			printf("%d %d, ", i, h_queue[i]);
 		printf("\n");
 		return;
 	}
 
 	void reset() {
-		CUDA_SAFE_CALL(cudaMemcpy((void *) dindex, &zero, 1 * sizeof(zero), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpy((void *)d_index, &zero, sizeof(int), cudaMemcpyHostToDevice));
 	}
 
 	int nitems() {
 		int index;
-		//printf("dindex=%p &index=%p\n", dindex, &index);
-		CUDA_SAFE_CALL(cudaMemcpy(&index, (void *) dindex, 1 * sizeof(index), cudaMemcpyDeviceToHost));
+		CUDA_SAFE_CALL(cudaMemcpy(&index, (void *)d_index, sizeof(int), cudaMemcpyDeviceToHost));
 		return index;
 	}
 
+	void set_index(int index) {
+		CUDA_SAFE_CALL(cudaMemcpy((void *)d_index, &index, sizeof(int), cudaMemcpyHostToDevice));
+	}
+
 	__device__ int push(int item) {
-		int lindex = atomicAdd((int *) dindex, 1);
-		if(lindex >= *dnsize)
+		int lindex = atomicAdd((int *) d_index, 1);
+		if(lindex >= *d_size)
 			return 0;
-		dwl[lindex] = item;
+		d_queue[lindex] = item;
 		return 1;
 	}
 
 	__device__ int pop(int &item) {
-		int lindex = atomicSub((int *) dindex, 1);
+		int lindex = atomicSub((int *) d_index, 1);
 		if(lindex <= 0) {
-			*dindex = 0;
+			*d_index = 0;
 			return 0;
 		}
-		item = dwl[lindex - 1];
+		item = d_queue[lindex - 1];
 		return 1;
 	}
 };
@@ -77,16 +73,16 @@ struct Worklist2: public Worklist {
 			T(temp_storage).ExclusiveSum(thread_data, thread_data, total_items);
 			__syncthreads();
 			if(threadIdx.x == 0) {	
-				queue_index = atomicAdd((int *) dindex, total_items);
+				queue_index = atomicAdd((int *) d_index, total_items);
 			}
 			__syncthreads();
 			if(nitem == 1) {
-				if(queue_index + thread_data >= *dnsize) {
-					printf("GPU: exceeded length: %d %d %d %d %d\n", queue_index, thread_data, *dnsize, total_items, *dindex);
+				if(queue_index + thread_data >= *d_size) {
+					printf("GPU: exceeded size: %d %d %d %d %d\n", queue_index, thread_data, *d_size, total_items, *d_index);
 					return 0;
 				}
-				//cub::ThreadStore<cub::STORE_CG>(dwl + queue_index + thread_data, item);
-				dwl[queue_index + thread_data] = item;
+				//cub::ThreadStore<cub::STORE_CG>(d_queue + queue_index + thread_data, item);
+				d_queue[queue_index + thread_data] = item;
 			}
 			__syncthreads();
 			return total_items;
@@ -101,25 +97,25 @@ struct Worklist2: public Worklist {
 			int thread_data = n_items;
 			T(temp_storage).ExclusiveSum(thread_data, thread_data, total_items);
 			if(threadIdx.x == 0) {	
-				queue_index = atomicAdd((int *) dindex, total_items);
+				queue_index = atomicAdd((int *) d_index, total_items);
 				//printf("queueindex: %d %d %d %d %d\n", blockIdx.x, threadIdx.x, queue_index, thread_data + n_items, total_items);
 			}
 			__syncthreads();
 			for(int i = 0; i < n_items; i++) {
 				//printf("pushing %d to %d\n", items[i], queue_index + thread_data + i);
-				if(queue_index + thread_data + i >= *dnsize) {
-					printf("GPU: exceeded length: %d %d %d %d\n", queue_index, thread_data, i, *dnsize);
+				if(queue_index + thread_data + i >= *d_size) {
+					printf("GPU: exceeded size: %d %d %d %d\n", queue_index, thread_data, i, *d_size);
 					return 0;
 				}
-				dwl[queue_index + thread_data + i] = items[i];
+				d_queue[queue_index + thread_data + i] = items[i];
 			}
 			return total_items;
 		}
 
 	__device__ int pop_id(int id, int &item) {
-		if(id < *dindex) {
-			//item = cub::ThreadLoad<cub::LOAD_CG>(dwl + id);
-			item = dwl[id];
+		if(id < *d_index) {
+			//item = cub::ThreadLoad<cub::LOAD_CG>(d_queue + id);
+			item = d_queue[id];
 			return 1;
 		}
 		return 0;

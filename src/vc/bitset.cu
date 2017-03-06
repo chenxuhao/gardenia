@@ -107,15 +107,15 @@ void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors
 	Worklist2 inwl(m), outwl(m);
 	Worklist2 *inwlptr = &inwl, *outwlptr = &outwl;
 	for(int i = 0; i < m; i ++) {
-		inwl.wl[i] = i;
+		inwl.h_queue[i] = i;
 	}
 	//initialize <<<((m - 1) / BLKSIZE + 1), BLKSIZE>>> (d_colors, m);
 
 	t.Start();
 	int nitems = m;
-	CUDA_SAFE_CALL(cudaMemcpy(inwl.dindex, &m, sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(inwl.dwl, inwl.wl, m * sizeof(int), cudaMemcpyHostToDevice));
-	//thrust::sequence(thrust::device, inwl.dwl, inwl.dwl + m);
+	inwl.set_index(m);
+	CUDA_SAFE_CALL(cudaMemcpy(inwl.d_queue, inwl.h_queue, m * sizeof(int), cudaMemcpyHostToDevice));
+	//thrust::sequence(thrust::device, inwl.d_queue, inwl.d_queue + m);
 	while (nitems > 0) {
 		iter ++;
 		int nblocks = (nitems - 1) / BLKSIZE + 1;

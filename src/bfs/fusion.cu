@@ -37,7 +37,7 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		__syncthreads();
 		if(owner == threadIdx.x) {
 			sh_vertex = vertex;
-			inwl.dwl[id] = -1;
+			inwl.d_queue[id] = -1;
 			owner = -1;
 			size = 0;
 		}
@@ -90,7 +90,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {
 			sh_vertex[warp_id] = vertex;
-			inwl.dwl[id] = -1;
+			inwl.d_queue[id] = -1;
 			owner[warp_id] = -1;
 			size = 0;
 		}

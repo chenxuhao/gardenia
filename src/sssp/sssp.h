@@ -31,6 +31,7 @@ bins.
 	algorithm." Journal of Algorithms, 49(1):114–152, 2003.
 */
 
-const DistT kDistInf = numeric_limits<DistT>::max()/2;
-void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist);
+//const DistT kDistInf = numeric_limits<DistT>::max()/2;
+#define kDistInf UINT_MAX
+void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, int delta);
 void SSSPVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist);

@@ -50,7 +50,7 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		__syncthreads();
 		if(owner == threadIdx.x) {
 			sh_vertex = vertex;
-			inwl.dwl[id] = -1;
+			inwl.d_queue[id] = -1;
 			owner = -1;
 			size = 0;
 		}
@@ -95,7 +95,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {
 			sh_vertex[warp_id] = vertex;
-			inwl.dwl[id] = -1;
+			inwl.d_queue[id] = -1;
 			owner[warp_id] = -1;
 			size = 0;
 		}
@@ -163,7 +163,7 @@ __global__ void insert(int source, Worklist2 inwl) {
 	return;
 }
 
-void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
+void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist, int delta) {
 	DistT zero = 0;
 	int iter = 0;
 	Timer t;

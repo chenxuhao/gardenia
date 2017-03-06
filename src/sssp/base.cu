@@ -32,10 +32,10 @@ __global__ void initialize(int m, DistT *dist) {
  * @param[in] d_in_queue        Device pointer of VertexId to the incoming frontier queue
  * @param[out]d_out_queue       Device pointer of VertexId to the outgoing frontier queue
  */
-__global__ void bellman_ford(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 inwl, Worklist2 outwl) {
+__global__ void bellman_ford(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 in_frontier, Worklist2 out_frontier) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
-	if(inwl.pop_id(tid, src)) {
+	if(in_frontier.pop_id(tid, src)) {
 		int row_begin = row_offsets[src];
 		int row_end = row_offsets[src + 1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
@@ -44,17 +44,17 @@ __global__ void bellman_ford(int m, int *row_offsets, int *column_indices, DistT
 			if (new_dist < dist[dst]) {
 				DistT old_dist = atomicMin(&dist[dst], new_dist);
 				if (new_dist < old_dist) { // update successfully
-					assert(outwl.push(dst));
+					assert(out_frontier.push(dst));
 				}
 			}
 		}
 	}
 }
 
-__global__ void insert(int source, Worklist2 inwl) {
+__global__ void insert(int source, Worklist2 in_frontier) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if(id == 0) {
-		inwl.push(source);
+		in_frontier.push(source);
 	}
 	return;
 }
@@ -68,7 +68,7 @@ __global__ void insert(int source, Worklist2 inwl) {
  * @param[in] h_weight          Host pointer of DistT to the edge weight queue
  * @param[out]h_dist            Host pointer of DistT to the distance queue
  */
-void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist) {
+void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist, int delta) {
 	DistT zero = 0;
 	int iter = 0;
 	Timer t;
@@ -90,24 +90,25 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
 	Worklist2 wl1(nnz * 2), wl2(nnz * 2);
-	Worklist2 *inwl = &wl1, *outwl = &wl2;
+	Worklist2 *in_frontier = &wl1, *out_frontier = &wl2;
 	int nitems = 1;
 	int max_blocks = maximum_residency(bellman_ford, nthreads, 0);
 	printf("Launching CUDA SSSP solver (%d CTAs/SM, %d threads/CTA) ...\n", max_blocks, nthreads);
 	t.Start();
-	insert<<<1, nthreads>>>(source, *inwl);
-	nitems = inwl->nitems();
+	insert<<<1, nthreads>>>(source, *in_frontier);
+	nitems = in_frontier->nitems();
 	do {
 		++ iter;
 		nblocks = (nitems - 1) / nthreads + 1;
-		//printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iter, nblocks, nthreads, nitems);
-		bellman_ford<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_weight, d_dist, *inwl, *outwl);
+		printf("iteration=%d, nblocks=%d, nthreads=%d, frontier_size=%d\n", iter, nblocks, nthreads, nitems);
+		//in_frontier->display_items();
+		bellman_ford<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_weight, d_dist, *in_frontier, *out_frontier);
 		CudaTest("solving failed");
-		nitems = outwl->nitems();
-		Worklist2 *tmp = inwl;
-		inwl = outwl;
-		outwl = tmp;
-		outwl->reset();
+		nitems = out_frontier->nitems();
+		Worklist2 *tmp = in_frontier;
+		in_frontier = out_frontier;
+		out_frontier = tmp;
+		out_frontier->reset();
 	} while (nitems > 0);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
