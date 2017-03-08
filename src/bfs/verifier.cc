@@ -5,7 +5,7 @@
 #include "timer.h"
 void BFSVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *depth_to_test) {
 	printf("Verifying...\n");
-	vector<int> depth(m, -1);
+	vector<int> depth(m, MYINFINITY);
 	vector<int> to_visit;
 	Timer t;
 	t.Start();
@@ -18,7 +18,7 @@ void BFSVerifier(int m, int source, int *row_offsets, int *column_indices, DistT
 		int row_end = row_offsets[src + 1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
-			if (depth[dst] == -1) {
+			if (depth[dst] == MYINFINITY) {
 				depth[dst] = depth[src] + 1;
 				to_visit.push_back(dst);
 			}

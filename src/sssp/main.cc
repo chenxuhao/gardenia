@@ -5,14 +5,21 @@
 
 int main(int argc, char *argv[]) {
 	printf("Single Source Shortest Path by Xuhao Chen\n");
+	int source = 0;
 	int delta = 1;
 	if (argc < 2) {
 		printf("Usage: %s <graph>\n", argv[0]);
 		exit(1);
-	} else if (argc> 2) delta = atoi(argv[2]);
+	} else if (argc> 2) {
+		source = atoi(argv[2]);
+		printf("Source vertex: %d\n", source);
+		if(argc > 3) {
+			delta = atoi(argv[3]);
+			printf("Delta: %d\n", delta);
+		}
+	}
 
 	// CSR data structures
-	int source = 0;
 	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	WeightT *h_weight = NULL;
 	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight);

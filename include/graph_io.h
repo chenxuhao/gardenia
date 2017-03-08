@@ -236,8 +236,9 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 	int dst, src, wt = 1;
 	for (int i = 0; i < nnz; i ++) {
 		getline(cfile, str);
-		sscanf(str.c_str(), "%d %d %d", &dst, &src, &wt);
-		if (wt < 0) wt = -wt;
+		int num = sscanf(str.c_str(), "%d %d %d", &dst, &src, &wt);
+		if (num == 2) wt = 1;
+		if (wt < 0) wt = -wt; // non-negtive weight
 		dst--;
 		src--;
 		Edge e1, e2;

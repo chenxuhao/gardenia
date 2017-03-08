@@ -20,10 +20,10 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp
 	for (int n=0; n < m; n++)
 		comp[n] = n;
 	bool change = true;
-	int num_iter = 0;
+	int iter = 0;
 	while (change) {
 		change = false;
-		num_iter++;
+		iter++;
 #pragma omp parallel for
 		for (int src = 0; src < m; src ++) {
 			int comp_src = comp[src];
@@ -46,6 +46,7 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp
 		}
 	}
 	t.Stop();
+	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", CC_VARIANT, t.Millisecs());
 	return;
 }

@@ -9,7 +9,7 @@
 typedef cub::BlockReduce<float, BLKSIZE> BlockReduce;
 
 __global__ void initialize(int m, ScoreT *cur_scores, ScoreT *next_scores, ScoreT init_score, ScoreT base_score) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		cur_scores[id] = init_score;
 		next_scores[id] = base_score;
@@ -17,7 +17,7 @@ __global__ void initialize(int m, ScoreT *cur_scores, ScoreT *next_scores, Score
 }
 
 __global__ void scatter(int m, int *row_offsets, int *column_indices, ScoreT *cur_scores, ScoreT *next_scores) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
 		if(src < m) {

@@ -27,9 +27,9 @@ void CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp) {
 		visited[source] = true;
 		for (auto it = frontier.begin(); it != frontier.end(); it++) {
 			int src = *it;
-			unsigned row_begin = row_offsets[src];
-			unsigned row_end = row_offsets[src + 1]; 
-			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
+			int row_begin = row_offsets[src];
+			int row_end = row_offsets[src + 1]; 
+			for (int offset = row_begin; offset < row_end; ++ offset) {
 				int dst = column_indices[offset];
 				if (comp[dst] != curr_label) {
 					printf("Wrong\n");

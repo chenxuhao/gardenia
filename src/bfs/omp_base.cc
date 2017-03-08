@@ -15,7 +15,7 @@ int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &depth,
 #pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
 	for (int src = 0; src < m; src ++) {
 		//if (parent[src] < 0) {
-		if (depth[src] < 0) {
+		if (depth[src] == MYINFINITY) { // not visited
 			int row_begin = row_offsets[src];
 			int row_end = row_offsets[src + 1];
 			for (int offset = row_begin; offset < row_end; offset ++) {
@@ -48,7 +48,7 @@ int64_t TDStep(int m, int *row_offsets, int *column_indices, vector<int> &depth,
 				int dst = column_indices[offset];
 				//int curr_val = parent[dst];
 				int curr_val = depth[dst];
-				if (curr_val < 0) {
+				if (curr_val == MYINFINITY) { // not visited
 					//if (compare_and_swap(parent[dst], curr_val, src)) {
 					if (compare_and_swap(depth[dst], curr_val, depth[src] + 1)) {
 						lqueue.push_back(dst);
@@ -104,7 +104,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	Timer t;
 	//vector<int> parent = InitParent(m, degree);
 	//parent[source] = source;
-	vector<int> depth(m, -1);
+	vector<int> depth(m, MYINFINITY);
 	depth[source] = 0;
 	SlidingQueue<int> queue(m);
 	queue.push_back(source);

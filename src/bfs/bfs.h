@@ -30,3 +30,4 @@ them in parent array as negative numbers. Thus the encoding of parent is:
 //void BFSSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, DistT *dist);
 void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *degree, DistT *dist);
 void BFSVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *dist);
+void write_solution(const char *fname, int m, DistT *dist);
