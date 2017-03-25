@@ -8,13 +8,13 @@ template <typename T>
 T maximum_relative_error(const T * A, const T * B, const size_t N) {
 	T max_error = 0;
 	T eps = std::sqrt( std::numeric_limits<T>::epsilon() );
-	for(size_t i = 0; i < N; i++)
-	{
+	for(size_t i = 0; i < N; i++) {
 		const T a = A[i];
 		const T b = B[i];
 		const T error = std::abs(a - b);
-		if (error != 0){
+		if (error != 0) {
 			max_error = std::max(max_error, error/(std::abs(a) + std::abs(b) + eps) );
+			//if (error > 0.0000001) printf("y_to_test[%ld] (%f) != y[%ld] (%f)\n", i, A[i], i, B[i]);
 		}
 	}
 	return max_error;
@@ -42,6 +42,7 @@ void SpmvVerifier(int num_rows, int *Ap, int *Aj, ValueType *Ax, ValueType *x, V
 
 	ValueType max_error = maximum_relative_error(test_y, y, num_rows);
 	printf("\t[max error %9f]\n", max_error);
+	//for(int i = 0; i < num_rows; i++) printf("test_y[%d] = %f, y[%d] = %f\n", i, test_y[i], i, y[i]);
 	if ( max_error > 5 * std::sqrt( std::numeric_limits<ValueType>::epsilon() ) )
 		printf("POSSIBLE FAILURE\n");
 	else

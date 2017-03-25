@@ -6,19 +6,29 @@
 int main(int argc, char *argv[]) {
 	printf("Breadth-first Search by Xuhao Chen\n");
 	int source = 0;
+	bool is_directed = true;
+	bool symmetrize = false;
 	if (argc < 2) {
-		printf("Usage: %s <graph>\n", argv[0]);
+		printf("Usage: %s <graph> [source_id] [is_directed(0/1)]\n", argv[0]);
 		exit(1);
-	} else if (argc> 2) source = atoi(argv[2]);
-	printf("Source vertex: %d\n", source);
+	} else if (argc> 2) {
+		source = atoi(argv[2]);
+		printf("Source vertex: %d\n", source);
+		if(argc>3) {
+			is_directed = atoi(argv[3]);
+			if(is_directed) printf("This is a directed graph\n");
+			else printf("This is an undirected graph\n");
+		}
+	}
+	if(!is_directed) symmetrize = true;
 
 	// CSR data structures
 	int m, nnz;//, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	WeightT *h_weight = NULL;
 	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
 	//read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
-	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false, false, false);
-	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true, false);
+	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, symmetrize, false, false);
+	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, symmetrize, true, false);
 
 	// distance array
 	DistT *h_dist = (DistT *) malloc(m * sizeof(DistT));

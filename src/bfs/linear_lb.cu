@@ -125,26 +125,26 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 	__shared__ BlockScan::TempStorage temp_storage;
 	__shared__ int gather_offsets[SCRATCHSIZE];
 	gather_offsets[threadIdx.x] = 0;
-	int neighborsize = 0;
-	int neighboroffset = 0;
+	int neighbor_size = 0;
+	int neighbor_offset = 0;
 	int scratch_offset = 0;
 	int total_edges = 0;
-	if(in_queue.pop_id(id, vertex)) {	  
+	if(in_queue.pop_id(id, vertex)) {
 		if(vertex != -1) {
-			neighboroffset = row_offsets[vertex];
-			neighborsize = row_offsets[vertex + 1] - neighboroffset;
+			neighbor_offset = row_offsets[vertex];
+			neighbor_size = row_offsets[vertex+1] - neighbor_offset;
 		}
 	}
-	BlockScan(temp_storage).ExclusiveSum(neighborsize, scratch_offset, total_edges);
+	BlockScan(temp_storage).ExclusiveSum(neighbor_size, scratch_offset, total_edges);
 	int done = 0;
-	int neighborsdone = 0;
+	int neighbors_done = 0;
 	while(total_edges > 0) {
 		__syncthreads();
 		int i;
-		for(i = 0; neighborsdone + i < neighborsize && (scratch_offset + i - done) < SCRATCHSIZE; i++) {
-			gather_offsets[scratch_offset + i - done] = neighboroffset + neighborsdone + i;
+		for(i = 0; neighbors_done + i < neighbor_size && (scratch_offset + i - done) < SCRATCHSIZE; i++) {
+			gather_offsets[scratch_offset + i - done] = neighbor_offset + neighbors_done + i;
 		}
-		neighborsdone += i;
+		neighbors_done += i;
 		scratch_offset += i;
 		__syncthreads();
 		//int ncnt = 0;
@@ -185,7 +185,6 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-
 	DistT * d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
@@ -193,7 +192,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	//initialize <<<nblocks, nthreads>>> (m, d_dist);
 	//CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
-	Worklist2 queue1(nnz * 2), queue2(nnz * 2);
+	Worklist2 queue1(nnz), queue2(nnz);
 	Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
 	int nitems = 1;
 	t.Start();
@@ -202,7 +201,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	do {
 		++ iter;
 		nblocks = (nitems + BLKSIZE - 1) / BLKSIZE; 
-		printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iter, nblocks, BLKSIZE, nitems);
+		//printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iter, nblocks, BLKSIZE, nitems);
 		bfs_kernel<<<nblocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_dist, *in_frontier, *out_frontier, iter);
 		CudaTest("solving failed");
 		nitems = out_frontier->nitems();

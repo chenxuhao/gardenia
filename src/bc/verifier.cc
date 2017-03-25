@@ -8,13 +8,13 @@
 // - uses vector for BFS queue
 // - regenerates farthest to closest traversal order from depths
 // - regenerates successors from depths
-void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test) {
+void BCVerifier(int m, int source, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test) {
+	printf("Verifying...\n");
 	vector<ScoreT> scores(m, 0);
 	//std::cout << setiosflags(ios::fixed);
 	Timer t;
 	t.Start();
 	for (int iter=0; iter < num_iters; iter++) {
-		int source = 0;
 		// BFS phase, only records depth & path_counts
 		vector<int> depths(m, -1);
 		depths[source] = 0;

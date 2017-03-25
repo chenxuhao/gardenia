@@ -3,7 +3,7 @@ CXXFLAGS+=-std=c++11
 SRC=main.cc
 OBJS=scalar.o verifier.o main.o
 
-all: $(OBJS) spmv_scalar
+all: $(OBJS) spmv_scalar spmv_vector spmv_omp
 
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(PARFLAG) $(INCLUDES) -c $<
@@ -17,6 +17,10 @@ spmv_omp: omp_base.o main.o verifier.o
 
 spmv_scalar: main.o scalar.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o scalar.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+spmv_vector: main.o vector.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o vector.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 spmv_lb:

@@ -1,6 +1,6 @@
 HOME=/home/cxh
 CUDA_HOME=/usr/local/cuda
-GARDINIA_ROOT=$(HOME)/gardinia
+GARDINIA_ROOT=$(HOME)/gardinia_code
 CC=gcc
 CXX=g++
 NVCC=$(CUDA_HOME)/bin/nvcc
@@ -10,7 +10,7 @@ CXXFLAGS = -O3 -Wall
 PARFLAG = -fopenmp
 #NVFLAGS=-g -arch=$(COMPUTECAPABILITY) #-Xptxas -v
 NVFLAGS=-O3 -arch=$(COMPUTECAPABILITY) #-Xptxas -v
-CUB_DIR=$(HOME)/cub-1.1.1
+CUB_DIR=$(HOME)/cub-1.6.4
 B40_DIR=$(HOME)/back40computing-read-only
 INCLUDES=-I$(CUDA_HOME)/include -I$(GARDINIA_ROOT)/include
 LIBS=-L$(CUDA_HOME)/lib64

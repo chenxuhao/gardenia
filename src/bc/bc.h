@@ -26,5 +26,5 @@ propagation phase.
 	International Symposium on Parallel & Distributed Processing (IPDPS), 2009.
 */
 
-void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *scores);
-void BCVerifier(int m, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test);
+void BCSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, ScoreT *scores);
+void BCVerifier(int m, int source, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test);

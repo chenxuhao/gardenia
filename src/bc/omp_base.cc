@@ -50,7 +50,7 @@ void PBFS(int m, int *row_offsets, int *column_indices, int source, vector<int> 
 	depth_index.push_back(queue.begin());
 }
 
-void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *scores) {
+void BCSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, ScoreT *scores) {
 	//omp_set_num_threads(12);
 	int num_threads = 1;
 	int num_iters = 1;
@@ -67,7 +67,6 @@ void BCSolver(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *sco
 
 	t.Start();
 	for (int iter = 0; iter < num_iters; iter++) {
-		int source = 0;
 		vector<int> path_counts(m, 0);
 		vector<int> depths(m, -1);
 		depth_index.resize(0);

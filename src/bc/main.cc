@@ -5,6 +5,7 @@
 
 int main(int argc, char *argv[]) {
 	printf("Betweenness Centrality by Xuhao Chen\n");
+	int source = 0;
 	if (argc < 2) {
 		printf("Usage: %s <graph>\n", argv[0]);
 		exit(1);
@@ -15,12 +16,12 @@ int main(int argc, char *argv[]) {
 
 	ScoreT *h_scores = (ScoreT *)malloc(m * sizeof(ScoreT));
 	for (int i = 0; i < m; i++) h_scores[i] = 0;
-	BCSolver(m, nnz, h_row_offsets, h_column_indices, h_scores);
-	BCVerifier(m, h_row_offsets, h_column_indices, 1, h_scores);
+	BCSolver(m, nnz, source, h_row_offsets, h_column_indices, h_scores);
+	BCVerifier(m, source, h_row_offsets, h_column_indices, 1, h_scores);
 
 	free(h_row_offsets);
 	free(h_column_indices);
 	free(h_degree);
-	if(h_weight) free(h_weight);
+	free(h_weight);
 	return 0;
 }

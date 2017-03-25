@@ -19,10 +19,10 @@ __global__ void initialize(int m, ScoreT *scores, int *path_counts, int *depths,
 }
 
 // Shortest path calculation by forward BFS
-__global__ void bc_forward(int *row_offsets, int *column_indices, int *path_counts, int *depths, int depth, Worklist2 inwl, Worklist2 outwl) {
+__global__ void bc_forward(int *row_offsets, int *column_indices, int *path_counts, int *depths, int depth, Worklist2 in_queue, Worklist2 outwl) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
-	if(inwl.pop_id(tid, src)) {
+	if(in_queue.pop_id(tid, src)) {
 		int row_begin = row_offsets[src];
 		int row_end = row_offsets[src + 1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
@@ -76,20 +76,20 @@ void bc_reverse_cpu(int num, int *row_offsets, int *column_indices, int start, i
 	}
 	return;
 }
-__global__ void insert(Worklist2 inwl, int src, int *path_counts, int *depths) {
+__global__ void insert(Worklist2 in_queue, int src, int *path_counts, int *depths) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if(id == 0) {
-		inwl.push(src);
+		in_queue.push(src);
 		path_counts[src] = 1;
 		depths[src] = 0;
 	}
 	return;
 }
 
-__global__ void push_frontier(Worklist2 inwl, int *queue, int queue_len) {
+__global__ void push_frontier(Worklist2 in_queue, int *queue, int queue_len) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
-	if(inwl.pop_id(tid, vertex)) {
+	if(in_queue.pop_id(tid, vertex)) {
 		queue[queue_len+tid] = vertex;
 	}
 }
@@ -101,8 +101,8 @@ __global__ void bc_normalize(int m, ScoreT *scores, ScoreT max_score) {
 	}
 }
 
-void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_scores) {
-	//print_device_info(0);
+void BCSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, ScoreT *h_scores) {
+	print_device_info(0);
 	Timer t;
 	int depth = 0;
 	vector<int> depth_index;
@@ -128,9 +128,8 @@ void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT 
 	//printf("Initializing data on device...\n");
 	initialize <<<nblocks, nthreads>>> (m, d_scores, d_path_counts, d_depths, d_deltas);
 
-	Worklist2 wl1(2*nnz), wl2(2*nnz);
+	Worklist2 wl1(nnz), wl2(nnz);
 	Worklist2 *inwl = &wl1, *outwl = &wl2;
-	int source = 0;
 	int nitems = 1;
 	int frontiers_len = 0;
 	int max_blocks = maximum_residency(bc_forward, nthreads, 0);
@@ -144,7 +143,7 @@ void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT 
 		push_frontier<<<nblocks, nthreads>>>(*inwl, d_frontiers, frontiers_len);
 		frontiers_len += nitems;
 		depth_index.push_back(frontiers_len);
-		//printf("Forward: depth=%d, frontire_size=%d\n", depth, nitems);
+		printf("Forward: depth=%d, frontire_size=%d\n", depth, nitems);
 		depth++;
 		bc_forward<<<nblocks, nthreads>>>(d_row_offsets, d_column_indices, d_path_counts, d_depths, depth, *inwl, *outwl);
 		CudaTest("solving kernel1 failed");
@@ -179,6 +178,7 @@ void BCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT 
 	bc_normalize<<<nblocks, nthreads>>>(m, d_scores, h_max_score);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
+	printf("\titerations = %d.\n", depth);
 	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(h_scores, d_scores, sizeof(ScoreT) * m, cudaMemcpyDeviceToHost));
 

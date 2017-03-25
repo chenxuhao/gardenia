@@ -5,31 +5,31 @@
 #include "timer.h"
 #include "bitmap.h"
 #include "sliding_queue.h"
+#include <string.h>
 #include "platform_atomics.h"
-#define BFS_VARIANT "openmp"
+#define BFS_VARIANT "openmp_topo"
 
-void bfs_step(int m, int *row_offsets, int *column_indices, vector<int> &depth, SlidingQueue<int> &queue) {
-#pragma omp parallel
-	{
-		QueueBuffer<int> lqueue(queue);
-#pragma omp for
-		for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
-			int src = *q_iter;
+void bfs_step(int m, int *row_offsets, int *column_indices, vector<int> &depth, bool *visited, bool *expanded, bool &changed) {
+#pragma omp parallel for
+	for (int src = 0; src < m; src ++) {
+		if(visited[src] && !expanded[src]) {
+			expanded[src] = true;
 			int row_begin = row_offsets[src];
 			int row_end = row_offsets[src + 1];
 			for (int offset = row_begin; offset < row_end; offset ++) {
 				int dst = column_indices[offset];
-				//int curr_val = parent[dst];
 				int curr_val = depth[dst];
 				if (curr_val == MYINFINITY) { // not visited
-					//if (compare_and_swap(parent[dst], curr_val, src)) {
 					if (compare_and_swap(depth[dst], curr_val, depth[src] + 1)) {
-						lqueue.push_back(dst);
+						changed = true;
 					}
 				}
 			}
 		}
-		lqueue.flush();
+	}
+#pragma omp parallel for
+	for (int src = 0; src < m; src ++) {
+		if(depth[src] < MYINFINITY && !visited[src]) visited[src] = true;
 	}
 }
 
@@ -44,17 +44,20 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	Timer t;
 	vector<int> depth(m, MYINFINITY);
 	depth[source] = 0;
-	SlidingQueue<int> queue(m);
-	queue.push_back(source);
-	queue.slide_window();
+	bool *visited = (bool *)malloc(m*sizeof(bool));
+	bool *expanded = (bool *)malloc(m*sizeof(bool));
+	memset(visited, 0, m * sizeof(bool));
+	memset(expanded, 0, m * sizeof(bool));
 	int iter = 0;
+	visited[source] = true;
+	bool changed;
 	t.Start();
-	while (!queue.empty()) {
+	do {
 		++ iter;
-		bfs_step(m, out_row_offsets, out_column_indices, depth, queue);
-		queue.slide_window();
-		//printf("iteration=%d, num_frontier=%ld\n", iter, queue.size());
-	}
+		changed = false;
+		bfs_step(m, out_row_offsets, out_column_indices, depth, visited, expanded, changed);
+		//printf("iteration=%d\n", iter);
+	} while(changed);
 	t.Stop();
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());

@@ -65,12 +65,15 @@ void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueType *h_Ax, Va
 	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueType), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
+	//for(int i = 0; i < num_rows; i++) printf("h_y[%d] = %f\n", i, h_y[i]);
 	int nthreads = 256;
 	int nblocks = (num_rows - 1) / nthreads + 1;
+	printf("Start solving (nthreads=%d, nblocks=%d) ...\n", nthreads, nblocks);
 
 	t.Start();
 	//bind_x(d_x);
 	spmv_csr_scalar_kernel <<<nblocks, nthreads>>> (num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);   
+	CudaTest("solving failed");
 	//unbind_x(d_x);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();

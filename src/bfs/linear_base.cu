@@ -54,6 +54,7 @@ __global__ void insert(int source, Worklist2 queue) {
 }
 
 void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
+	print_device_info(0);
 	DistT zero = 0;
 	int iter = 0;
 	Timer t;
@@ -73,7 +74,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	CUDA_SAFE_CALL(cudaBindTexture(0, column_indices, d_column_indices, nnz * sizeof(int)));
 #endif
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
-	Worklist2 queue1(nnz * 2), queue2(nnz * 2);
+	Worklist2 queue1(nnz), queue2(nnz);
 	Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
 	int nitems = 1;
 	t.Start();
@@ -82,7 +83,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	do {
 		++ iter;
 		nblocks = (nitems - 1) / nthreads + 1;
-		printf("iteration=%d, nblocks=%d, nthreads=%d, frontier_size=%d\n", iter, nblocks, nthreads, nitems);
+		//printf("iteration=%d, nblocks=%d, nthreads=%d, frontier_size=%d\n", iter, nblocks, nthreads, nitems);
 #ifdef TEXTURE
 		bfs_kernel <<<nblocks, nthreads>>> (m, d_dist, *in_frontier, *out_frontier);
 #else
