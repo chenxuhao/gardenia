@@ -10,9 +10,9 @@ int main(int argc, char *argv[]) {
 		printf("Usage: %s <graph>\n", argv[0]);
 		exit(1);
 	}
-	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
+	int m, n, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	WeightT *h_weight = NULL;
-	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
+	read_graph(argc, argv, m, n, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
 
 	ScoreT *h_scores = (ScoreT *)malloc(m * sizeof(ScoreT));
 	for (int i = 0; i < m; i++) h_scores[i] = 0;

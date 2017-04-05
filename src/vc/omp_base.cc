@@ -73,8 +73,7 @@ void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors
 	inwlptr = &inwl;
 	outwlptr = &outwl;
 	int *range = (int *)malloc(m * sizeof(int));
-	for (int j = 0; j < m; j++)
-		range[j] = j;
+	for (int j = 0; j < m; j++) range[j] = j;
 	Timer t;
 	t.Start();
 	inwl.pushRange((unsigned *)range, (unsigned)m);

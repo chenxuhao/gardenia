@@ -18,11 +18,11 @@ int main(int argc, char *argv[]) {
 	if(!is_directed) symmetrize = true;
 
 	// CSR data structures
-	int m, nnz;
+	int m, n, nnz;
 	WeightT *h_weight = NULL;
 	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
-	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, symmetrize, false, false);
-	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, symmetrize, true, false);
+	read_graph(argc, argv, m, n, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, symmetrize, false, false);
+	read_graph(argc, argv, m, n, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, symmetrize, true, false);
 	int *scc_root = (int *)malloc(m * sizeof(int));
 
 	SCCSolver(m, nnz, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, scc_root);

@@ -38,7 +38,8 @@ __global__ void top_down_kernel(int m, int *row_offsets, int *column_indices, in
 			int dst = column_indices[offset];
 			if ((depths[dst] == MYINFINITY) && (atomicCAS(&depths[dst], MYINFINITY, depths[src]+1)==MYINFINITY)) {
 				assert(out_queue.push(dst));
-				atomicAdd(scout_count, degree[dst]);
+				//atomicAdd(scout_count, degree[dst]);
+				scout_count[dst] = degree[dst];
 			}
 		}
 	}
@@ -95,12 +96,12 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_depths, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_depths, h_depths, m * sizeof(DistT), cudaMemcpyHostToDevice));
 
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scout_count, sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scout_count, m * sizeof(int)));
 	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_num_frontier, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&front, m * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&next, m * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemset(front, 0, m * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemset(next, 0, m * sizeof(int)));
+	//CUDA_SAFE_CALL(cudaMemset(front, 0, m * sizeof(int)));
+	//CUDA_SAFE_CALL(cudaMemset(next, 0, m * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(&d_depths[source], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
 	//h_num_frontier = 1;
 	
@@ -144,10 +145,12 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 			edges_to_check -= scout_count;
 			nitems = in_frontier->nitems();
 			nblocks = (nitems - 1) / nthreads + 1;
-			CUDA_SAFE_CALL(cudaMemcpy(d_scout_count, &zero, sizeof(int), cudaMemcpyHostToDevice));
+			//CUDA_SAFE_CALL(cudaMemcpy(d_scout_count, &zero, sizeof(int), cudaMemcpyHostToDevice));
+			thrust::fill(thrust::device, d_scout_count, d_scout_count + m, 0);
 			top_down_kernel <<<nblocks, nthreads>>> (m, d_out_row_offsets, d_out_column_indices, d_degree, d_depths, d_scout_count, *in_frontier, *out_frontier);
 			CudaTest("solving top_down failed");
-			CUDA_SAFE_CALL(cudaMemcpy(&scout_count, d_scout_count, sizeof(int), cudaMemcpyDeviceToHost));
+			scout_count = thrust::reduce(thrust::device, d_scout_count, d_scout_count + m, 0, thrust::plus<int>());
+			//CUDA_SAFE_CALL(cudaMemcpy(&scout_count, d_scout_count, sizeof(int), cudaMemcpyDeviceToHost));
 			nitems = out_frontier->nitems();
 			Worklist2 *tmp = in_frontier;
 			in_frontier = out_frontier;

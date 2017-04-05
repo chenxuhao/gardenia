@@ -8,12 +8,9 @@
 //#include <thrust/reduce.h>
 //#include <thrust/execution_policy.h>
 
-__global__ void initialize(int m, int *colors, bool *colored) {
+__global__ void initialize(int m, bool *colored) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	if (id < m) {
-		colors[id] = MAXCOLOR;
-		colored[id] = false;
-	}
+	if (id < m) colored[id] = false;
 }
 
 __global__ void first_fit(int m, int *row_offsets, int *column_indices, int *colors, bool *changed) {
@@ -73,8 +70,10 @@ void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_colors, colors, m * sizeof(int), cudaMemcpyHostToDevice));
+
 	int nblocks = (m - 1) / nthreads + 1;
-	initialize <<<nblocks, nthreads>>> (m, d_colors, d_colored);
+	initialize <<<nblocks, nthreads>>> (m, d_colored);
 	printf("Solving, nblocks=%d, nthreads=%d\n", nblocks, nthreads);
 	t.Start();	
 	do {

@@ -12,13 +12,6 @@
 #include "worklistc.h"
 typedef cub::BlockScan<int, BLKSIZE> BlockScan;
 
-__global__ void initialize(int m, int *colors) {
-	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	if (id < m) {
-		colors[id] = MAXCOLOR;
-	}   
-}
-
 __global__ void first_fit(int m, int *row_offsets, int *column_indices, Worklist2 inwl, int *colors) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;	
 	bool forbiddenColors[MAXCOLOR+1];
@@ -69,17 +62,12 @@ void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors
 	int num_colors = 0, iter = 0;
 	Timer t;
 	int *d_row_offsets, *d_column_indices, *d_colors;
-	for(int i = 0; i < m; i ++) {
-		colors[i] = MAXCOLOR;
-	}
-	
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_colors, m * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_colors, colors, m * sizeof(int), cudaMemcpyHostToDevice));
-
 	Worklist2 inwl(m), outwl(m);
 	Worklist2 *inwlptr = &inwl, *outwlptr = &outwl;
 	for(int i = 0; i < m; i ++) {

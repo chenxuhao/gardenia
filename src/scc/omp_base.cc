@@ -14,7 +14,7 @@ void SCCSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	num_threads = omp_get_num_threads();
 	}
 	printf("Launching %d threads...\n", num_threads);
-	int iter;
+	int iter = 0;
 	Timer t;
 	t.Start();
 

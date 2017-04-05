@@ -21,9 +21,13 @@ const float kDamp = 0.85;
 #define MYINFINITY	1000000000
 #define MAXNBLOCKS  (4*NBLOCKS)
 #define BLOCKSIZE   256
+#define BLOCK_SIZE  128
+#define WARP_SIZE   32
 #define MAXBLOCKSIZE    1024
 #define MAXSHARED   (48*1024)
 #define MAXSHAREDUINT   (MAXSHARED / 4)
 #define SHAREDPERTHREAD (MAXSHAREDUINT / MAXBLOCKSIZE)
+#define DIVIDE_INTO(x,y) ((x + y - 1)/y)
+#define MAX_THREADS (30 * 1024)
 
 #endif

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CUTIL_SUBSET_H
+#define CUTIL_SUBSET_H
 
 #  define CUDA_SAFE_CALL_NO_SYNC( call) {                                      \
     cudaError err = call;                                                      \
@@ -24,10 +25,8 @@ static __device__ unsigned get_smid(void) {
      return ret;
 }
 
-static unsigned CudaTest(const char *msg)
-{
+static unsigned CudaTest(const char *msg) {
 	cudaError_t e;
-
 	cudaThreadSynchronize();
 	if (cudaSuccess != (e = cudaGetLastError())) {
 		fprintf(stderr, "%s: %d\n", msg, e); 
@@ -69,7 +68,7 @@ inline int ConvertSMVer2Cores(int major, int minor) {
 	return -1;
 }
 
-void print_device_info(int device) {
+static void print_device_info(int device) {
 	int deviceCount = 0;
 	CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
 	CUDA_SAFE_CALL(cudaSetDevice(device));
@@ -79,4 +78,4 @@ void print_device_info(int device) {
 	fprintf(stdout, "Found %d devices, using device %d (%s), compute capability %d.%d, cores %d*%d.\n", 
 			deviceCount, device, deviceProp.name, deviceProp.major, deviceProp.minor, nSM, ConvertSMVer2Cores(deviceProp.major, deviceProp.minor));
 }
-
+#endif

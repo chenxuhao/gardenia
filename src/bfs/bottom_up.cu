@@ -12,12 +12,12 @@ __global__ void bottom_up_kernel(int m, int *row_offsets, int *column_indices, D
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src = tid;
 	if(src < m && depths[src] == MYINFINITY) { // not visited
-		//atomicAdd(num_frontier, 1);
 		int row_begin = row_offsets[src];
 		int row_end = row_offsets[src + 1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
 			if(front[dst]) { // if the parent is in the current frontier
+				//atomicAdd(frontier_size, 1);
 				depths[src] = depths[dst] + 1;
 				//depths[src] = depth;
 				next[src] = true; // put this vertex into the next frontier

@@ -205,9 +205,9 @@ int main(int argc, char *argv[]) {
 		printf("Usage: %s <graph>\n", argv[0]);
 		exit(1);
 	}
-	int m, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
+	int m, n, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	WeightT *h_weight = NULL;
-	read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
+	read_graph(argc, argv, m, n, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
 	print_device_info(0);
 	WeightT *d_weight;
 	int *d_row_offsets, *d_column_indices;

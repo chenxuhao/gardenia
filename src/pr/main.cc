@@ -9,11 +9,11 @@ int main(int argc, char *argv[]) {
 		printf("Usage: %s <graph>\n", argv[0]);
 		exit(1);
 	}
-	int m, nnz;//, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
+	int m, n, nnz;//, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	WeightT *h_weight = NULL;
 	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
-	read_graph(argc, argv, m, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false, false, false);
-	read_graph(argc, argv, m, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true, false);
+	read_graph(argc, argv, m, n, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, false, false, false);
+	read_graph(argc, argv, m, n, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, false, true, false);
 
 	ScoreT *h_scores = (ScoreT *) malloc(m * sizeof(ScoreT));
 	PRSolver(m, nnz, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, out_degree, h_scores);

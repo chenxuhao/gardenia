@@ -103,7 +103,7 @@ bool find_wcc(int m, int *d_row_offsets, int *d_column_indices, unsigned *d_colo
 				fprintf(fp1, "%d\n", i);
 		fclose(fp1);
 	}
-	printf("wcc_iteration=%d\n", iter);
+	//printf("wcc_iteration=%d\n", iter);
 	CUDA_SAFE_CALL(cudaFree(d_changed));
 	CUDA_SAFE_CALL(cudaFree(d_wcc));
 	return has_pivot;

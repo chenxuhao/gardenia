@@ -17,9 +17,7 @@ This CC implementation makes use of the Shiloach-Vishkin algorithm
 
 __global__ void initialize(int m, CompT *comp) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	if (tid < m) {
-		comp[tid] = tid;
-	}
+	if (tid < m) comp[tid] = tid;
 }
 
 __global__ void cc_kernel1(int m, int *row_offsets, int *column_indices, CompT *comp, bool *changed) {

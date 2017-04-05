@@ -17,8 +17,7 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp
 	Timer t;
 	t.Start();
 #pragma omp parallel for
-	for (int n=0; n < m; n++)
-		comp[n] = n;
+	for (int n=0; n < m; n++) comp[n] = n;
 	bool change = true;
 	int iter = 0;
 	while (change) {

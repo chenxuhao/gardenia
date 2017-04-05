@@ -6,11 +6,11 @@ CXX=g++
 NVCC=$(CUDA_HOME)/bin/nvcc
 COMPUTECAPABILITY=sm_20
 CXXFLAGS = -O3 -Wall
-#CXXFLAGS = -g
-PARFLAG = -fopenmp
-#NVFLAGS=-g -arch=$(COMPUTECAPABILITY) #-Xptxas -v
 NVFLAGS=-O3 -arch=$(COMPUTECAPABILITY) #-Xptxas -v
-CUB_DIR=$(HOME)/cub-1.6.4
+#CXXFLAGS = -g
+#NVFLAGS=-g -arch=$(COMPUTECAPABILITY) #-Xptxas -v
+PARFLAG = -fopenmp
+CUB_DIR=$(HOME)/cub-1.5.2
 B40_DIR=$(HOME)/back40computing-read-only
 INCLUDES=-I$(CUDA_HOME)/include -I$(GARDINIA_ROOT)/include
 LIBS=-L$(CUDA_HOME)/lib64

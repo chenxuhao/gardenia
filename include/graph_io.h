@@ -74,10 +74,10 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, WeightT
 	}
 	row_offsets[m] = count;
 	if (symmetrize) {
-		if(count == nnz)
-			printf("This graph is originally symmetric (undirected)\n");
-		else {
-			printf("This graph is directed, but we symmetrized it and now num_edges=%d\n", count);
+		if(count == nnz) {
+			printf("This graph is originally symmetric\n");
+		} else {
+			printf("This graph is symmetrized\n");
 			nnz = count;
 		}
 	} else {
@@ -116,7 +116,7 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, WeightT
 	}
 	/*
 	// print some neighbor lists
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 6; i++) {
 		int row_begin = row_offsets[i];
 		int row_end = row_offsets[i + 1];
 		cout << "src " << i << ": ";
@@ -124,7 +124,9 @@ void fill_data(int m, int &nnz, int *&row_offsets, int *&column_indices, WeightT
 			cout << column_indices[j] << "  ";
 		cout << endl;
 	}
-	*/
+	//*/
+	//for (int i = 0; i < 10; i++) cout << weight[i] << ", ";
+	//cout << endl;
 }
 
 // transfer R-MAT generated gr graph to CSR format
@@ -146,14 +148,14 @@ void gr2csr(char *gr, int &m, int &nnz, int *&row_offsets, int *&column_indices,
 	vector<Edge> neighbors;
 	for (int i = 0; i < m; i++)
 		vertices.push_back(neighbors);
-	int dst, src;
+	int src, dst;
 	for (int i = 0; i < nnz; i++) {
 		getline(cfile, str);
 		sscanf(str.c_str(), "%c %d %d", &c, &src, &dst);
 		if (c != 'a')
 			printf("line %d\n", __LINE__);
-		dst--;
 		src--;
+		dst--;
 		Edge e1, e2;
 		if(symmetrize) {
 			e2.dst = src; e2.wt = 1;
@@ -211,7 +213,7 @@ void graph2csr(char *graph, int &m, int &nnz, int *&row_offsets, int *&column_in
 }
 
 // transfer mtx graph to CSR format
-void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indices, WeightT *&weight, bool symmetrize, bool transpose, bool sorted, bool remove_selfloops, bool remove_redundents) {
+void mtx2csr(char *mtx, int &m, int &n, int &nnz, int *&row_offsets, int *&column_indices, WeightT *&weight, bool symmetrize, bool transpose, bool sorted, bool remove_selfloops, bool remove_redundents) {
 	printf("Reading (.mtx) input file %s\n", mtx);
 	std::ifstream cfile;
 	cfile.open(mtx);
@@ -223,35 +225,34 @@ void mtx2csr(char *mtx, int &m, int &nnz, int *&row_offsets, int *&column_indice
 		getline(cfile, str);
 		sscanf(str.c_str(), "%c", &c);
 	}
-	int n;
 	sscanf(str.c_str(), "%d %d %d", &m, &n, &nnz);
 	if (m != n) {
-		printf("error!\n");
-		exit(0);
+		printf("Warning, m(%d) != n(%d)\n", m, n);
 	}
 	vector<vector<Edge> > vertices;
 	vector<Edge> neighbors;
 	for (int i = 0; i < m; i ++)
 		vertices.push_back(neighbors);
-	int dst, src, wt = 1;
+	int dst, src;
+	WeightT wt = 1.0f;
 	for (int i = 0; i < nnz; i ++) {
 		getline(cfile, str);
-		int num = sscanf(str.c_str(), "%d %d %d", &dst, &src, &wt);
+		int num = sscanf(str.c_str(), "%d %d %f", &src, &dst, &wt);
 		if (num == 2) wt = 1;
 		if (wt < 0) wt = -wt; // non-negtive weight
-		dst--;
 		src--;
+		dst--;
 		Edge e1, e2;
 		if(symmetrize) {
-			e2.dst = src; e2.wt = (WeightT)wt;
+			e2.dst = src; e2.wt = wt;
 			vertices[dst].push_back(e2);
 			transpose = false;
 		}
 		if(!transpose) {
-			e1.dst = dst; e1.wt = (WeightT)wt;
+			e1.dst = dst; e1.wt = wt;
 			vertices[src].push_back(e1);
 		} else {
-			e1.dst = src; e1.wt = (WeightT)wt;
+			e1.dst = src; e1.wt = wt;
 			vertices[dst].push_back(e1);
 		}
 	}
@@ -276,10 +277,10 @@ void sort_neighbors(int m, int *row_offsets, int *&column_indices) {
 	}	
 }
 */
-void read_graph(int argc, char *argv[], int &m, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, WeightT *&weight, bool is_symmetrize=false, bool is_transpose=false, bool sorted=true, bool remove_selfloops=true, bool remove_redundents=true) {
-	if(is_symmetrize) printf("Requiring undirected graphs for this algorithm\n");
+void read_graph(int argc, char *argv[], int &m, int &n, int &nnz, int *&row_offsets, int *&column_indices, int *&degree, WeightT *&weight, bool is_symmetrize=false, bool is_transpose=false, bool sorted=true, bool remove_selfloops=true, bool remove_redundents=true) {
+	//if(is_symmetrize) printf("Requiring symmetric graphs for this algorithm\n");
 	if (strstr(argv[1], ".mtx"))
-		mtx2csr(argv[1], m, nnz, row_offsets, column_indices, weight, is_symmetrize, is_transpose, sorted, remove_selfloops, remove_redundents);
+		mtx2csr(argv[1], m, n, nnz, row_offsets, column_indices, weight, is_symmetrize, is_transpose, sorted, remove_selfloops, remove_redundents);
 	else if (strstr(argv[1], ".graph"))
 		graph2csr(argv[1], m, nnz, row_offsets, column_indices, weight, is_symmetrize, is_transpose, sorted, remove_selfloops, remove_redundents);
 	else if (strstr(argv[1], ".gr"))

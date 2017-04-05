@@ -176,6 +176,98 @@ __global__ void trim_kernel(int m, int *in_row_offsets, int *in_column_indices, 
 	}
 }
 
+__global__ void trim2_kernel(int m, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, unsigned *colors, unsigned char *status, int *scc_root) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int src = tid;
+	if (src < m && !is_removed(status[src])) {
+		unsigned nbr, num_neighbors = 0;
+		bool isActive = false;
+		// outgoing edges
+		int row_begin = out_row_offsets[src];
+		int row_end = out_row_offsets[src + 1];
+		unsigned c = colors[src];
+		for (int offset = row_begin; offset < row_end; offset ++) {
+			int dst = out_column_indices[offset];
+			if (src != dst && c == colors[dst] && !is_removed(status[dst])) {
+				num_neighbors++;
+				if (num_neighbors > 1) break;
+				nbr = dst;
+			}
+		}
+		if (num_neighbors == 1) {
+			num_neighbors = 0;
+			row_begin = out_row_offsets[nbr];
+			row_end = out_row_offsets[nbr + 1];
+			for (int offset = row_begin; offset < row_end; offset ++) {
+				int dst = out_column_indices[offset];
+				if (nbr != dst && c == colors[dst] && !is_removed(status[dst])) {
+					if (dst != src) {
+						isActive = true;
+						break;
+					}
+					num_neighbors++;
+				}
+			}
+			if (!isActive && num_neighbors == 1) {
+				if (src < nbr) {
+					status[src] = 20;
+					status[nbr] = 4;
+					scc_root[src] = src;
+					scc_root[nbr] = src;
+				} else {
+					status[src] = 4;
+					status[nbr] = 20;
+					scc_root[src] = nbr;
+					scc_root[nbr] = nbr;
+				}
+				return;
+			}	
+		}
+		num_neighbors = 0;
+		isActive = false;
+		// incoming edges
+		row_begin = in_row_offsets[src];
+		row_end = in_row_offsets[src + 1];
+		for (int offset = row_begin; offset < row_end; offset ++) {
+			int dst = in_column_indices[offset];
+			if (src != dst && c == colors[dst] && !is_removed(status[dst])) {
+				num_neighbors++;
+				if (num_neighbors > 1) break;
+				nbr = dst;
+			}
+		}
+		if (num_neighbors == 1) {
+			num_neighbors = 0;
+			row_begin = in_row_offsets[nbr];
+			row_end = in_row_offsets[nbr + 1];
+			for (int offset = row_begin; offset < row_end; offset ++) {
+				int dst = in_column_indices[offset];
+				if (nbr != dst && c == colors[dst] && !is_removed(status[dst])) {
+					if (dst != src) {
+						isActive = true;
+						break;
+					}
+					num_neighbors++;
+				}
+			}
+			if (!isActive && num_neighbors == 1) {
+				if (src < nbr) {
+					status[src] = 20;
+					status[nbr] = 4;
+					scc_root[src] = src;
+					scc_root[nbr] = src;
+				} else {
+					status[src] = 4;
+					status[nbr] = 20;
+					scc_root[src] = nbr;
+					scc_root[nbr] = nbr;
+				}
+				return;
+			}
+		}
+	}
+}
+
 __global__ void first_trim_kernel(int m, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, unsigned char *status, bool *changed) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src = tid;
@@ -250,11 +342,10 @@ __global__ void update_colors_kernel(int m, unsigned *colors, unsigned char *sta
 	}
 }	
 
-void update_colors(int m, unsigned *colors, unsigned char *status) {
-	int nthreads = BLKSIZE;
-	int nblocks = (m - 1) / nthreads + 1;
-	update_colors_kernel<<<nblocks, nthreads>>>(m, colors, status);
-	CudaTest("solving kernel update_colors failed");
+__global__ void find_removed_vertices_kernel(int m, unsigned char *status, int *mark) {
+	int src = blockIdx.x * blockDim.x + threadIdx.x;
+	if (src < m && is_removed(status[src]))
+		mark[src] = 1;
 }
 
 // find forward reachable set
@@ -364,6 +455,27 @@ bool update(int m, unsigned *colors, unsigned char *status, unsigned *locks, int
 	CudaTest("solving kernel update failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&h_has_pivot, d_has_pivot, sizeof(h_has_pivot), cudaMemcpyDeviceToHost));
 	return h_has_pivot;
+}
+
+void update_colors(int m, unsigned *colors, unsigned char *status) {
+	int nthreads = BLKSIZE;
+	int nblocks = (m - 1) / nthreads + 1;
+	update_colors_kernel<<<nblocks, nthreads>>>(m, colors, status);
+	CudaTest("solving kernel update_colors failed");
+}
+
+void trim2(int m, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, unsigned *colors, unsigned char *status, int *scc_root) {
+	int nthreads = BLKSIZE;
+	int nblocks = (m - 1) / nthreads + 1;
+	trim2_kernel<<<nblocks, nthreads>>>(m, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, colors, status, scc_root);
+	CudaTest("solving kernel trim2 failed");
+}
+
+void find_removed_vertices(int m, unsigned char *status, int *mark) {
+	int nthreads = BLKSIZE;
+	int nblocks = (m - 1) / nthreads + 1;
+	find_removed_vertices_kernel<<<nblocks, nthreads>>>(m, status, mark);
+	CudaTest("solving kernel update_colors failed");
 }
 
 void print_statistics(int m, int *scc_root, unsigned char *status) {

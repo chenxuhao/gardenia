@@ -19,7 +19,6 @@ void SCCSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_in_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_column_indices, nnz * sizeof(int)));
-	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_in_row_offsets, in_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_in_column_indices, in_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_out_row_offsets, out_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
@@ -31,7 +30,6 @@ void SCCSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int 
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_locks, (PIVOT_HASH_CONST+1) * sizeof(unsigned)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scc_root, m * sizeof(int)));
 	thrust::fill(thrust::device, d_colors, d_colors + m, INIT_COLOR);
-	//CUDA_SAFE_CALL(cudaMemcpy(d_colors, h_colors, m * sizeof(unsigned), cudaMemcpyHostToDevice));
 	thrust::sequence(thrust::device, d_scc_root, d_scc_root + m);
 
 	unsigned char *h_status = (unsigned char*)malloc(m * sizeof(unsigned char));
