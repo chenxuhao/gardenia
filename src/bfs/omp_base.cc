@@ -6,7 +6,7 @@
 #include "bitmap.h"
 #include "sliding_queue.h"
 #include "platform_atomics.h"
-#define BFS_VARIANT "openmp"
+#define BFS_VARIANT "omp_base"
 
 void bfs_step(int m, int *row_offsets, int *column_indices, vector<int> &depth, SlidingQueue<int> &queue) {
 #pragma omp parallel

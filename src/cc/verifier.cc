@@ -86,7 +86,7 @@ void CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp_test) 
 			*/
 		}   
 	}
-	printf("\truntime[serial] = %f ms.\n", t.Millisecs());
+	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
 
 	for (int n = 0; n < m; n ++) {
 		if (!visited[n]) {

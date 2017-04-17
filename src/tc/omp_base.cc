@@ -5,14 +5,12 @@
 #include "timer.h"
 #define TC_VARIANT "openmp"
 void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, int *total) {
-	printf("Launching OpenMP TC solver...\n");
-	//omp_set_num_threads(8);
 	int num_threads = 1;
 #pragma omp parallel
 	{
 		num_threads = omp_get_num_threads();
 	}
-	printf("Launching %d threads...\n", num_threads);
+	printf("Launching OpenMP TC solver (%d threads) ...\n", num_threads);
 	Timer t;
 	t.Start();
 	int total_num = 0;

@@ -38,7 +38,7 @@ void SpmvVerifier(int num_rows, int *Ap, int *Aj, ValueType *Ax, ValueType *x, V
 		y[i] = sum; 
 	}
 	t.Stop();
-	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
+	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
 
 	ValueType max_error = maximum_relative_error(test_y, y, num_rows);
 	printf("\t[max error %9f]\n", max_error);

@@ -123,7 +123,7 @@ void TCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *h_
 	t.Stop();
 	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(h_total, d_total, sizeof(int), cudaMemcpyDeviceToHost));
-	cout << *h_total << " triangles" << endl;
+	//cout << *h_total << " triangles" << endl;
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_total));

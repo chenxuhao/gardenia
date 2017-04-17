@@ -1,117 +1,149 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#include "sparse_formats.h"
-#include "texture.h"
-#include "kernels/spmv_common_device.cu.h"
+#include <stdio.h>
+#define SYMGS_VARIANT "vector"
+#include "symgs.h"
+#include "cuda_launch_config.hpp"
+#include "cutil_subset.h"
+#include "timer.h"
 
-//////////////////////////////////////////////////////////////////////////////
-// CSR SpMV kernels based on a vector model (one warp per row)
-//////////////////////////////////////////////////////////////////////////////
-//
-// spmv_csr_vector_device
-//   Each row of the CSR matrix is assigned to a warp.  The warp computes
-//   y[i] = A[i,:] * x, i.e. the dot product of the i-th row of A with 
-//   the x vector, in parallel.  This division of work implies that 
-//   the CSR index and data arrays (Aj and Ax) are accessed in a contiguous
-//   manner (but generally not aligned).  On GT200 these accesses are
-//   coalesced, unlike kernels based on the one-row-per-thread division of 
-//   work.  Since an entire 32-thread warp is assigned to each row, many 
-//   threads will remain idle when their row contains a small number 
-//   of elements.  This code relies on implicit synchronization among 
-//   threads in a warp.
-//
-// spmv_csr_vector_tex_device
-//   Same as spmv_csr_vector_tex_device, except that the texture cache is 
-//   used for accessing the x vector.
+template <unsigned VECTORS_PER_BLOCK, unsigned THREADS_PER_VECTOR>
+__global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueType * Ax, ValueType * x, ValueType * b) {
+	__shared__ volatile ValueType sdiags[VECTORS_PER_BLOCK];
+	__shared__ volatile ValueType sdata[VECTORS_PER_BLOCK * THREADS_PER_VECTOR + THREADS_PER_VECTOR / 2];  // padded to avoid reduction conditionals
+	__shared__ volatile IndexType ptrs[VECTORS_PER_BLOCK][2];
 
-template <typename IndexType, typename ValueType, unsigned int BLOCK_SIZE, bool UseCache>
-__global__ void
-spmv_csr_vector_kernel(const IndexType num_rows,
-                       const IndexType * Ap, 
-                       const IndexType * Aj, 
-                       const ValueType * Ax, 
-                       const ValueType * x, 
-                             ValueType * y)
-{
-    __shared__ ValueType sdata[BLOCK_SIZE + 16];                          // padded to avoid reduction ifs
-    __shared__ IndexType ptrs[BLOCK_SIZE/WARP_SIZE][2];
-    
-    const IndexType thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
-    const IndexType thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
-    const IndexType warp_id     = thread_id   / WARP_SIZE;                // global warp index
-    const IndexType warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
-    const IndexType num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
+	const IndexType THREADS_PER_BLOCK = VECTORS_PER_BLOCK * THREADS_PER_VECTOR;
 
-    for(IndexType row = warp_id; row < num_rows; row += num_warps){
-        // use two threads to fetch Ap[row] and Ap[row+1]
-        // this is considerably faster than the straightforward version
-        if(thread_lane < 2)
-            ptrs[warp_lane][thread_lane] = Ap[row + thread_lane];
-        const IndexType row_start = ptrs[warp_lane][0];                   //same as: row_start = Ap[row];
-        const IndexType row_end   = ptrs[warp_lane][1];                   //same as: row_end   = Ap[row+1];
+	const IndexType thread_id   = THREADS_PER_BLOCK * blockIdx.x + threadIdx.x;    // global thread index
+	const IndexType thread_lane = threadIdx.x & (THREADS_PER_VECTOR - 1);          // thread index within the vector
+	const IndexType vector_id   = thread_id   /  THREADS_PER_VECTOR;               // global vector index
+	const IndexType vector_lane = threadIdx.x /  THREADS_PER_VECTOR;               // vector index within the block
+	const IndexType num_vectors = VECTORS_PER_BLOCK * gridDim.x;                   // total number of active vectors
 
-        // compute local sum
-        ValueType sum = 0;
-        for(IndexType jj = row_start + thread_lane; jj < row_end; jj += WARP_SIZE)
-            sum += Ax[jj] * fetch_x<UseCache>(Aj[jj], x);
+	for(IndexType index = vector_id; index < num_rows; index += num_vectors)
+	{
+		if(thread_lane == 0) sdiags[vector_lane] = 0; //__syncthreads();
+		IndexType row = indices[index];
 
-        // reduce local sums to row sum (ASSUME: warpsize 32)
-        sdata[threadIdx.x] = sum;
-        sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x + 16]; EMUSYNC; 
-        sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  8]; EMUSYNC;
-        sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  4]; EMUSYNC;
-        sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  2]; EMUSYNC;
-        sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; EMUSYNC;
-       
-//// Alternative method (slightly slower)
-//        // compute local sum
-//        sdata[threadIdx.x] = 0;
-//        for(IndexType jj = row_start + thread_lane; jj < row_end; jj += WARP_SIZE)
-//            sdata[threadIdx.x] += Ax[jj] * fetch_x<UseCache>(Aj[jj], x);
-//
-//        // reduce local sums to row sum (ASSUME: warpsize 32)
-//        sdata[threadIdx.x] += sdata[threadIdx.x + 16]; EMUSYNC;
-//        sdata[threadIdx.x] += sdata[threadIdx.x +  8]; EMUSYNC;
-//        sdata[threadIdx.x] += sdata[threadIdx.x +  4]; EMUSYNC;
-//        sdata[threadIdx.x] += sdata[threadIdx.x +  2]; EMUSYNC;
-//        sdata[threadIdx.x] += sdata[threadIdx.x +  1]; EMUSYNC;
+		// use two threads to fetch Ap[row] and Ap[row+1]
+		// this is considerably faster than the straightforward version
+		if(thread_lane < 2)
+			ptrs[vector_lane][thread_lane] = Ap[row + thread_lane];
 
-        // first thread writes warp result
-        if (thread_lane == 0)
-            y[row] += sdata[threadIdx.x];
-    }
+		const IndexType row_start = ptrs[vector_lane][0];                   //same as: row_start = Ap[row];
+		const IndexType row_end   = ptrs[vector_lane][1];                   //same as: row_end   = Ap[row+1];
+
+		// initialize local sum
+		ValueType sum = 0;
+
+		if (THREADS_PER_VECTOR == 32 && row_end - row_start > 32)
+		{
+			// ensure aligned memory access to Aj and Ax
+			IndexType jj = row_start - (row_start & (THREADS_PER_VECTOR - 1)) + thread_lane;
+
+			// accumulate local sums
+			if(jj >= row_start && jj < row_end)
+			{
+				IndexType col = Aj[jj];
+				bool diag = row == col;
+				sum += diag ? 0 : Ax[jj] * x[col];
+				if(diag) sdiags[vector_lane] = Ax[jj];
+			}
+
+			// accumulate local sums
+			for(jj += THREADS_PER_VECTOR; jj < row_end; jj += THREADS_PER_VECTOR)
+			{
+				IndexType col = Aj[jj];
+				bool diag = row == col;
+				sum += diag ? 0 : Ax[jj] * x[col];
+				if(diag) sdiags[vector_lane] = Ax[jj];
+			}
+		}
+		else
+		{
+			// accumulate local sums
+			for(IndexType jj = row_start + thread_lane; jj < row_end; jj += THREADS_PER_VECTOR)
+			{
+				IndexType col = Aj[jj];
+				bool diag = row == col;
+				sum += diag ? 0 : Ax[jj] * x[col];
+				if(diag) sdiags[vector_lane] = Ax[jj];
+			}
+		}
+
+		// store local sum in shared memory
+		sdata[threadIdx.x] = sum; //__syncthreads();
+
+		// reduce local sums to row sum
+		if (THREADS_PER_VECTOR > 16) sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x + 16];// __syncthreads();
+		if (THREADS_PER_VECTOR >  8) sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  8];// __syncthreads();
+		if (THREADS_PER_VECTOR >  4) sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  4];// __syncthreads();
+		if (THREADS_PER_VECTOR >  2) sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  2];// __syncthreads();
+		if (THREADS_PER_VECTOR >  1) sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1];// __syncthreads();
+
+		// first thread writes the result
+		if (thread_lane == 0 && sdiags[vector_lane] != 0)
+			x[row] = (b[row] - sdata[threadIdx.x]) / sdiags[vector_lane];
+	}
 }
 
-template <typename IndexType, typename ValueType>
-void spmv_csr_vector_device(const csr_matrix<IndexType,ValueType>& d_csr, 
-                            const ValueType * d_x, 
-                                  ValueType * d_y)
-{
-    const unsigned int BLOCK_SIZE = 128;
-    const unsigned int WARPS_PER_BLOCK = BLOCK_SIZE / WARP_SIZE;
-    const unsigned int MAX_BLOCKS = MAX_THREADS / BLOCK_SIZE;
-    const unsigned int NUM_BLOCKS = std::min(MAX_BLOCKS, DIVIDE_INTO(d_csr.num_rows, WARPS_PER_BLOCK));
-    
-    spmv_csr_vector_kernel<IndexType, ValueType, BLOCK_SIZE, false> <<<NUM_BLOCKS, BLOCK_SIZE>>> 
-        (d_csr.num_rows, d_csr.Ap, d_csr.Aj, d_csr.Ax, d_x, d_y);	
+template <unsigned THREADS_PER_VECTOR>
+void gs_gpu(int *d_Ap, int *d_Aj, int *d_indices, ValueType *d_Ax, ValueType *d_x, ValueType *d_b, int row_start, int row_stop) {
+	int num_rows = row_stop - row_start;
+	const size_t THREADS_PER_BLOCK = 128;
+	const size_t VECTORS_PER_BLOCK = THREADS_PER_BLOCK / THREADS_PER_VECTOR;
 
+	//const size_t MAX_BLOCKS = maximum_residency(gs_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR>, THREADS_PER_BLOCK, 0);
+	const size_t NUM_BLOCKS = (num_rows - 1) / VECTORS_PER_BLOCK + 1;
+	//printf("Solving, num_rows=%d, nblocks=%ld, nthreads=%ld, vector_size=%d\n", num_rows, NUM_BLOCKS, THREADS_PER_BLOCK, THREADS_PER_VECTOR);
+	gs_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR> <<<NUM_BLOCKS, THREADS_PER_BLOCK>>>(num_rows, d_Ap, d_Aj, d_indices+row_start, d_Ax, d_x, d_b);
 }
 
-template <typename IndexType, typename ValueType>
-void spmv_csr_vector_tex_device(const csr_matrix<IndexType,ValueType>& d_csr, 
-                                const ValueType * d_x, 
-                                      ValueType * d_y)
-{
-    const unsigned int BLOCK_SIZE = 128;
-    const unsigned int WARPS_PER_BLOCK = BLOCK_SIZE / WARP_SIZE;
-    const unsigned int MAX_BLOCKS = MAX_THREADS / BLOCK_SIZE;
-    const unsigned int NUM_BLOCKS = std::min(MAX_BLOCKS, DIVIDE_INTO(d_csr.num_rows, WARPS_PER_BLOCK));
-    
-    bind_x(d_x);
-    
-    spmv_csr_vector_kernel<IndexType,ValueType, BLOCK_SIZE, true> <<<NUM_BLOCKS, BLOCK_SIZE>>> 
-        (d_csr.num_rows, d_csr.Ap, d_csr.Aj, d_csr.Ax, d_x, d_y);	
+void gauss_seidel(int num_rows, int nnz, int *d_Ap, int *d_Aj, int *d_indices, ValueType *d_Ax, ValueType *d_x, ValueType *d_b, int row_start, int row_stop, int row_step) {
+	int nnz_per_row = nnz / num_rows;
+	if (nnz_per_row <=  2) gs_gpu<2>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
+	else if (nnz_per_row <=  4) gs_gpu<4>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
+	else if (nnz_per_row <=  8) gs_gpu<8>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
+	else if (nnz_per_row <= 16) gs_gpu<16>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
+	else gs_gpu<32>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
+}
 
-    unbind_x(d_x);
+void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, ValueType *h_Ax, ValueType *h_x, ValueType *h_b, std::vector<int> color_offsets) {
+	print_device_info(0);
+	Timer t;
+	int *d_Ap, *d_Aj, *d_indices;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (num_rows + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_indices, sizeof(int) * num_rows));
+	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_indices, h_indices, num_rows * sizeof(int), cudaMemcpyHostToDevice));
+	ValueType *d_Ax, *d_x, *d_b;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueType) * nnz));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueType) * num_rows));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_b, sizeof(ValueType) * num_rows));
+	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueType), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_b, h_b, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
+
+	t.Start();
+	// Forward
+	for(size_t i = 0; i < color_offsets.size()-1; i++)
+		gauss_seidel(num_rows, nnz, d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, color_offsets[i], color_offsets[i+1], 1);
+	// Backward
+	for(size_t i = color_offsets.size()-1; i > 0; i--)
+		gauss_seidel(num_rows, nnz, d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, color_offsets[i-1], color_offsets[i], 1);
+	CUDA_SAFE_CALL(cudaDeviceSynchronize());
+	t.Stop();
+
+	printf("\truntime [%s] = %f ms.\n", SYMGS_VARIANT, t.Millisecs());
+	CUDA_SAFE_CALL(cudaMemcpy(h_x, d_x, sizeof(ValueType) * num_rows, cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaFree(d_Ap));
+	CUDA_SAFE_CALL(cudaFree(d_Aj));
+	CUDA_SAFE_CALL(cudaFree(d_indices));
+	CUDA_SAFE_CALL(cudaFree(d_Ax));
+	CUDA_SAFE_CALL(cudaFree(d_x));
+	CUDA_SAFE_CALL(cudaFree(d_b));
 }
 

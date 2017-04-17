@@ -1,6 +1,6 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
-#define COLOR_VARIANT "bitset"
+#define VC_VARIANT "linear_bitset"
 #include <cub/cub.cuh>
 #include "vc.h"
 #include "timer.h"
@@ -82,7 +82,7 @@ __global__ void conflict_resolve(int m, int *row_offsets, int *column_indices, W
 	if(conflicted) outwl.push(vertex);
 }
 
-void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
+int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
 	int num_colors = 0, iter = 0;
 	Timer t;
 	int *d_row_offsets, *d_column_indices, *d_colors;
@@ -125,11 +125,12 @@ void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors
 	#pragma omp parallel for reduction(max : num_colors)
 	for (int n = 0; n < m; n ++)
 		num_colors = max(num_colors, colors[n]);
-	
+	num_colors ++;
     printf("\titerations = %d.\n", iter);
-    printf("\truntime[%s] = %f ms, num_colors = %d.\n", COLOR_VARIANT, t.Millisecs(), num_colors);
+    printf("\truntime[%s] = %f ms, num_colors = %d.\n", VC_VARIANT, t.Millisecs(), num_colors);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_colors));
+	return num_colors;
 }
 

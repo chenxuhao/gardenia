@@ -6,7 +6,7 @@
 #include "bitmap.h"
 #include "sliding_queue.h"
 #include "platform_atomics.h"
-#define BFS_VARIANT "openmp"
+#define BFS_VARIANT "omp_beamer"
 
 //int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &parent, Bitmap &front, Bitmap &next) {
 int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &depth, Bitmap &front, Bitmap &next) {

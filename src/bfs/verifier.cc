@@ -25,7 +25,7 @@ void BFSVerifier(int m, int source, int *row_offsets, int *column_indices, DistT
 		}
 	}
 	t.Stop();
-	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
+	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
 
 	// Report any mismatches
 	bool all_ok = true;

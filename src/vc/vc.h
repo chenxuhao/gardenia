@@ -20,5 +20,5 @@ with implementation optimizations from Li et al. [1].
 */
 
 
-void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors);
+int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors);
 void VCVerifier(int m, int *row_offsets, int *column_indices, int *colors);

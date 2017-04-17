@@ -1,6 +1,6 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
-#define COLOR_VARIANT "topology"
+#define VC_VARIANT "topology"
 #include "vc.h"
 #include "timer.h"
 #include "cuda_launch_config.hpp"
@@ -40,7 +40,7 @@ __global__ void first_fit(int m, int *row_offsets, int *column_indices, int *col
 
 __global__ void conflict_resolve(int m, int *row_offsets, int *column_indices, int *colors, bool *colored) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	if (!colored[id]) {
+	if (id < m && !colored[id]) {
 		int row_begin = row_offsets[id];
 		int row_end = row_offsets[id + 1];
 		colored[id] = true;
@@ -55,7 +55,7 @@ __global__ void conflict_resolve(int m, int *row_offsets, int *column_indices, i
 	}
 }
 
-void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
+int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
 	int num_colors = 0, iter = 0;
 	Timer t;
 	int *d_row_offsets, *d_column_indices, *d_colors;
@@ -78,7 +78,7 @@ void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors
 	t.Start();	
 	do {
 		iter ++;
-		printf("iteration=%d\n", iter);
+		//printf("iteration=%d\n", iter);
 		h_changed = false;
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(bool), cudaMemcpyHostToDevice));
 		first_fit<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_colors, d_changed);
@@ -95,9 +95,9 @@ void VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors
 	#pragma omp parallel for reduction(max : num_colors)
 	for (int n = 0; n < m; n ++)
 		num_colors = max(num_colors, colors[n]);
-	
+	num_colors ++;	
 	printf("\titerations = %d.\n", iter);
-	printf("\truntime[%s] = %f ms, num_colors = %d.\n", COLOR_VARIANT, t.Millisecs(), num_colors);
+	printf("\truntime[%s] = %f ms, num_colors = %d.\n", VC_VARIANT, t.Millisecs(), num_colors);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_colors));

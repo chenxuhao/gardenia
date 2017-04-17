@@ -7,7 +7,7 @@
 #include "sliding_queue.h"
 #include <string.h>
 #include "platform_atomics.h"
-#define BFS_VARIANT "openmp_topo"
+#define BFS_VARIANT "omp_topo"
 
 void bfs_step(int m, int *row_offsets, int *column_indices, vector<int> &depth, bool *visited, bool *expanded, bool &changed) {
 #pragma omp parallel for

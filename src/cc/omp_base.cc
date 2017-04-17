@@ -6,14 +6,12 @@
 #define CC_VARIANT "openmp"
 
 void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp) {
-	printf("Launching OpenMP CC solver...\n");
-	//omp_set_num_threads(2);
 	int num_threads = 1;
 	#pragma omp parallel
 	{
 	num_threads = omp_get_num_threads();
 	}
-	printf("Launching %d threads...\n", num_threads);
+	printf("Launching OpenMP CC solver (%d threads) ...\n", num_threads);
 	Timer t;
 	t.Start();
 #pragma omp parallel for

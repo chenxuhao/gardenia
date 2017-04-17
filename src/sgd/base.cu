@@ -12,32 +12,48 @@ Author: Xuhao Chen
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 
-__global__ void calculate_delta(int num_users, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, LatentT *res_user_lv, LatentT *res_item_lv, ScoreT *total_error) {
+__global__ void calculate_delta(int m, int n, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT lambda, ScoreT step) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
-	if(src < num_users) {
+	if(src < m) {
 		int row_begin = row_offsets[src];
 		int row_end = row_offsets[src+1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
 			ScoreT estimate = 0;
 			for (int i = 0; i < K; i++) {
-				estimate += user_lv[src*K+i] * item_lv[dst*K+i];
+				estimate += user_lv[src+i*m] * item_lv[dst+i*n];
 			}
 			ScoreT delta = rating[offset] - estimate;
-			atomicAdd(total_error, fabs(delta));
 			for (int i = 0; i < K; i++) {
-				//res_user_lv[src*K+i] += user_lv[src*K+i] * delta;
-				//res_item_lv[dst*K+i] += item_lv[dst*K+i] * delta;
-				LatentT p_s = user_lv[src*K+i];
-				LatentT p_d = item_lv[dst*K+i];
-				user_lv[src*K+i] += step * (-lambda * p_s + p_d * delta);
-				item_lv[dst*K+i] += step * (-lambda * p_d + p_s * delta);
+				LatentT p_s = user_lv[src+i*m];
+				LatentT p_d = item_lv[dst+i*n];
+				user_lv[src+i*m] += step * (-lambda * p_s + p_d * delta);
+				item_lv[dst+i*n] += step * (-lambda * p_d + p_s * delta);
 			}
 		}
 	}
 }
 
-__global__ void update_lv(int m, LatentT *lv, LatentT *res_lv) {
+__global__ void compute_rmse(int m, int n, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT *total_error, ScoreT lambda, ScoreT step) {
+	int src = blockIdx.x * blockDim.x + threadIdx.x;
+	if(src < m) {
+		int row_begin = row_offsets[src];
+		int row_end = row_offsets[src+1];
+		ScoreT local_errors = 0;
+		for (int offset = row_begin; offset < row_end; ++ offset) {
+			int dst = column_indices[offset];
+			ScoreT estimate = 0;
+			for (int i = 0; i < K; i++) {
+				estimate += user_lv[src+i*m] * item_lv[dst+i*n];
+			}
+			ScoreT error = rating[offset] - estimate;
+			local_errors += error*error;
+		}
+		atomicAdd(total_error, local_errors);
+	}
+}
+
+__global__ void update_lv(int m, LatentT *lv, LatentT *res_lv, ScoreT lambda, ScoreT step) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m) {
 		for (int i = 0; i < K; i++) {
@@ -46,7 +62,7 @@ __global__ void update_lv(int m, LatentT *lv, LatentT *res_lv) {
 	}
 }
 
-void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_rating, LatentT *h_user_lv, LatentT *h_item_lv) {
+void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_rating, LatentT *h_user_lv, LatentT *h_item_lv, ScoreT lambda, ScoreT step) {
 	print_device_info(0);
 	Timer t;
 	int iter = 0;
@@ -64,8 +80,8 @@ void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h
 	ScoreT h_error, *d_error;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_user_lv, num_users * K * sizeof(LatentT)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_item_lv, num_items * K * sizeof(LatentT)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&res_user_lv, num_users * K * sizeof(LatentT)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&res_item_lv, num_items * K * sizeof(LatentT)));
+	//CUDA_SAFE_CALL(cudaMalloc((void **)&res_user_lv, num_users * K * sizeof(LatentT)));
+	//CUDA_SAFE_CALL(cudaMalloc((void **)&res_item_lv, num_items * K * sizeof(LatentT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_user_lv, h_user_lv, num_users * K * sizeof(LatentT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_item_lv, h_item_lv, num_items * K * sizeof(LatentT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_error, sizeof(ScoreT)));
@@ -82,16 +98,17 @@ void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h
 		CUDA_SAFE_CALL(cudaMemcpy(d_error, &h_error, sizeof(ScoreT), cudaMemcpyHostToDevice));
 		CUDA_SAFE_CALL(cudaMemset(res_user_lv, 0, num_users * K * sizeof(LatentT)));
 		CUDA_SAFE_CALL(cudaMemset(res_item_lv, 0, num_items * K * sizeof(LatentT)));
-		calculate_delta<<<nblocks, nthreads>>>(num_users, d_row_offsets, d_column_indices, d_rating, d_user_lv, d_item_lv, res_user_lv, res_item_lv, d_error);
+		calculate_delta<<<nblocks, nthreads>>>(num_users, num_items, d_row_offsets, d_column_indices, d_rating, d_user_lv, d_item_lv, lambda, step);
 		CudaTest("solving kernel calculate_delta failed");
 		//update_lv<<<nblocks, nthreads>>>(num_users, d_user_lv, res_item_lv);
 		//update_lv<<<nblocks, nthreads>>>(num_items, d_item_lv, res_user_lv);
-		CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
-		CUDA_SAFE_CALL(cudaMemcpy(h_user_lv, d_user_lv, num_users * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
-		CUDA_SAFE_CALL(cudaMemcpy(h_item_lv, d_item_lv, num_items * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
+		//compute_rmse<<<nblocks, nthreads>>>(num_users, num_items, d_row_offsets, d_column_indices, d_rating, d_user_lv, d_item_lv, d_error, lambda, step);
+		//CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
+		printf("iteration=%d, error=%f\n", iter, sqrt(h_error/nnz));
+		//CUDA_SAFE_CALL(cudaMemcpy(h_user_lv, d_user_lv, num_users * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
+		//CUDA_SAFE_CALL(cudaMemcpy(h_item_lv, d_item_lv, num_items * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
 		//print_latent_vector(num_users, num_items, h_user_lv, h_item_lv);
-		printf("iteration=%d, error=%f\n", iter, h_error);
-	} while (iter < max_iters || h_error < epsilon);
+	} while (iter < max_iters || h_error > epsilon);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 	printf("\titerations = %d.\n", iter);

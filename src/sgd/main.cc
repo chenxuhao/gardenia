@@ -2,6 +2,8 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "sgd.h"
 #include "graph_io.h"
+static ScoreT lambda = 0.05; // regularization_factor
+static ScoreT step = 0.002; // learning_rate
 
 int main(int argc, char *argv[]) {
 	printf("Stochastic Gradient Descent by Xuhao Chen\n");
@@ -9,6 +11,9 @@ int main(int argc, char *argv[]) {
 		printf("Usage: %s <graph>\n", argv[0]);
 		exit(1);
 	}
+	if (argc > 2) lambda = atof(argv[2]);
+	if (argc > 3) step = atof(argv[3]);
+	printf("regularization_factor=%f, learning_rate=%f\n", lambda, step);
 	int m, n, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	WeightT *h_weight = NULL;
 	read_graph(argc, argv, m, n, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false, false, false, false, false);
@@ -33,8 +38,8 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < n * K; i++) h_item_lv[i] = init_item_lv[i];
 
 	for (int i = 0; i < nnz; i++) h_rating[i] = (ScoreT)h_weight[i];
-	//SGDSolver(m, n, nnz, h_row_offsets, h_column_indices, h_rating, h_user_lv, h_item_lv);
-	SGDVerifier(m, n, nnz, h_row_offsets, h_column_indices, h_rating, init_user_lv, init_item_lv);
+	SGDSolver(m, n, nnz, h_row_offsets, h_column_indices, h_rating, h_user_lv, h_item_lv, lambda, step);
+	SGDVerifier(m, n, nnz, h_row_offsets, h_column_indices, h_rating, init_user_lv, init_item_lv, lambda, step);
 
 	free(h_row_offsets);
 	free(h_column_indices);

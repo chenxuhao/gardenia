@@ -4,7 +4,7 @@
 #include "timer.h"
 // Compares with simple serial implementation that uses std::set_intersection
 void TCVerifier(int m, int *row_offsets, int *column_indices, int test_total) {
-	printf("Verifying... ");
+	printf("Verifying...\n");
 	int total = 0;
 	vector<int> intersection;
 	intersection.reserve(m);
@@ -27,7 +27,7 @@ void TCVerifier(int m, int *row_offsets, int *column_indices, int test_total) {
 		}
 	}
 	t.Stop();
-	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
+	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
 
 	total = total / 6;  // each triangle was counted 6 times
 	if(total == test_total) printf("Correct\n");

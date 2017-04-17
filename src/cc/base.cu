@@ -78,7 +78,7 @@ void CCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, CompT *
 		++ iter;
 		h_changed = false;
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(h_changed), cudaMemcpyHostToDevice));
-		printf("iteration=%d\n", iter);
+		//printf("iteration=%d\n", iter);
 		cc_kernel1<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_comp, d_changed);
 		CudaTest("solving kernel1 failed");
 		cc_kernel2<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_comp);

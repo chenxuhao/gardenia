@@ -23,6 +23,7 @@ int first_fit(int m, int *row_offsets, int *column_indices, int *colors) {
 }
 
 void VCVerifier(int m, int *row_offsets, int *column_indices, int *colors_test) {
+	printf("Verifying...\n");
 	bool correct = true;
 	int *colors = (int *)malloc(m * sizeof(int));
 	for (int i = 0; i < m; i ++) colors[i] = MAXCOLOR;
@@ -39,11 +40,9 @@ void VCVerifier(int m, int *row_offsets, int *column_indices, int *colors_test) 
 			}
 		}
 	}
-	printf("\truntime[serial] = %f ms, num_colors = %d.\n", t.Millisecs(), num_colors);
-	if (correct)
-		printf("Correct\n");
-	else
-		printf("Wrong\n");
+	printf("\truntime [serial] = %f ms, num_colors = %d.\n", t.Millisecs(), num_colors);
+	if (correct) printf("Correct\n");
+	else printf("Wrong\n");
 }
 
 void write_solution(int m, char *fname, int *colors) {

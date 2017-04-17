@@ -15,7 +15,27 @@ void shuffle(int n, int *a) {
 	}
 }
 
-void SGDVerifier(int m, int n, int nnz, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv) {
+// calculate RMSE
+ScoreT compute_rmse(int m, int nnz, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv) {
+	ScoreT total_error = 0;
+	for(int src = 0; src < m; src ++) {
+		int row_begin = row_offsets[src];
+		int row_end = row_offsets[src+1]; 
+		for (int offset = row_begin; offset < row_end; ++ offset) {
+			int dst = column_indices[offset];
+			ScoreT estimate = 0;
+			for (int i = 0; i < K; i++) {
+				estimate += user_lv[src*K+i] * item_lv[dst*K+i];
+			}
+			ScoreT error = rating[offset] - estimate;
+			total_error += error * error;
+		}
+	}
+	total_error = sqrt(total_error/nnz);
+	return total_error;
+}
+
+void SGDVerifier(int m, int n, int nnz, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT lambda, ScoreT step) {
 	printf("Verifying...\n");
 	int iter = 0;
 	ScoreT total_error;
@@ -26,8 +46,7 @@ void SGDVerifier(int m, int n, int nnz, int *row_offsets, int *column_indices, S
 	t.Start();
 	do {
 		iter ++;
-		// Update
-		shuffle(m, vertices);
+		//shuffle(m, vertices);
 		//printf("vertices[ ");
 		//for(int i = 0; i < m; i ++) printf("%d ", vertices[i]);
 		//printf("]\n");
@@ -50,22 +69,8 @@ void SGDVerifier(int m, int n, int nnz, int *row_offsets, int *column_indices, S
 				}
 			}
 		}
-		// RMSE
-		total_error = 0;
-		for(int src = 0; src < m; src ++) {
-			int row_begin = row_offsets[src];
-			int row_end = row_offsets[src+1]; 
-			for (int offset = row_begin; offset < row_end; ++ offset) {
-				int dst = column_indices[offset];
-				ScoreT estimate = 0;
-				for (int i = 0; i < K; i++) {
-					estimate += user_lv[src*K+i] * item_lv[dst*K+i];
-				}
-				ScoreT error = rating[offset] - estimate;
-				total_error += error * error;
-			}
-		}
-		printf("Iteration=%d: RMSE error = %f per edge\n", iter, sqrt(total_error/nnz));
+		total_error = compute_rmse(m, nnz, row_offsets, column_indices, rating, user_lv, item_lv);
+		printf("Iteration=%d: RMSE error = %f per edge\n", iter, total_error);
 	} while (iter < max_iters || total_error < epsilon);
 	t.Stop();
 	printf("\truntime [verify] = %f ms.\n", t.Millisecs());

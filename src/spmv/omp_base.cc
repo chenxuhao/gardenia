@@ -3,19 +3,17 @@
 #include "spmv.h"
 #include <omp.h>
 #include "timer.h"
-#define TC_VARIANT "openmp"
+#define SPMV_VARIANT "omp_base"
 void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueType *Ax, ValueType *x, ValueType *y) {
-	printf("Launching OpenMP TC solver...\n");
-	//omp_set_num_threads(8);
 	int num_threads = 1;
 #pragma omp parallel
 	{
 		num_threads = omp_get_num_threads();
 	}
-	printf("Launching %d threads...\n", num_threads);
+	printf("Launching OpenMP SpMV solver (%d threads) ...\n", num_threads);
 	Timer t;
 	t.Start();
-#pragma omp parallel for //reduction(+ : sum) schedule(dynamic, 64)
+#pragma omp parallel for
 	for (int i = 0; i < num_rows; i++){
 		int row_begin = Ap[i];
 		int row_end   = Ap[i+1];
@@ -27,6 +25,6 @@ void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueType *Ax, ValueTyp
 		y[i] = sum; 
 	}
 	t.Stop();
-	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, t.Millisecs());
+	printf("\truntime [%s] = %f ms.\n", SPMV_VARIANT, t.Millisecs());
 	return;
 }
