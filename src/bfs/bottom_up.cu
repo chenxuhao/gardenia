@@ -28,16 +28,8 @@ __global__ void bottom_up_kernel(int m, int *row_offsets, int *column_indices, D
 }
 
 void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *h_degree, DistT *h_depths) {
-	print_device_info(0);
+	//print_device_info(0);
 	DistT zero = 0;
-	bool *d_changed, h_changed;
-	bool *front, *next;
-	//int *d_num_frontier, h_num_frontier;
-	Timer t;
-	int iter = 0;
-	const int nthreads = 256;
-	int nblocks = (m - 1) / nthreads + 1;
-
 	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
@@ -46,20 +38,24 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	DistT * d_depths;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_depths, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_depths, h_depths, m * sizeof(DistT), cudaMemcpyHostToDevice));
-
+	CUDA_SAFE_CALL(cudaMemcpy(&d_depths[source], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
+	bool *d_changed, h_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
+	//int *d_num_frontier;
 	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_num_frontier, sizeof(int)));
+	bool *front, *next;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&front, m * sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&next, m * sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMemset(front, 0, m * sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMemset(next, 0, m * sizeof(bool)));
-	CUDA_SAFE_CALL(cudaMemcpy(&d_depths[source], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
-	//h_num_frontier = 1;
 	thrust::fill(thrust::device, front + source, front + source + 1, 1); // set the source vertex
 
-	int max_blocks = 6;
-	max_blocks = maximum_residency(bottom_up_kernel, nthreads, 0);
-	printf("Solving, max_blocks=%d, nblocks=%d, nthreads=%d\n", max_blocks, nblocks, nthreads);
+	int iter = 0;
+	int nthreads = BLOCK_SIZE;
+	int nblocks = (m - 1) / nthreads + 1;
+	//int h_num_frontier = 1;
+
+	Timer t;
 	t.Start();
 	do {
 		++ iter;
@@ -75,7 +71,6 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 		thrust::fill(thrust::device, next, next + m, 0);
 		CUDA_SAFE_CALL(cudaMemcpy(&h_changed, d_changed, sizeof(bool), cudaMemcpyDeviceToHost));
 		//CUDA_SAFE_CALL(cudaMemcpy(&h_num_frontier, d_num_frontier, sizeof(int), cudaMemcpyDeviceToHost));
-		//printf("iteration=%d\n", iter);
 		//printf("iteration=%d, num_frontier=%d\n", iter, h_num_frontier);
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());

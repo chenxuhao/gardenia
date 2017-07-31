@@ -138,7 +138,7 @@ __global__ void update_kernel(int m, unsigned *colors, bool *mark, bool *fw_visi
 
 // find forward reachable set
 void fw_reach(int m, int *out_row_offsets, int *out_column_indices, unsigned *colors, bool *mark, bool *fw_visited, bool *fw_expanded) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_changed, *d_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
@@ -154,7 +154,7 @@ void fw_reach(int m, int *out_row_offsets, int *out_column_indices, unsigned *co
 
 // find backward reachable set
 void bw_reach(int m, int *in_row_offsets, int *in_column_indices, unsigned *colors, bool *mark, bool *bw_visited, bool *bw_expanded) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_changed, *d_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
@@ -169,7 +169,7 @@ void bw_reach(int m, int *in_row_offsets, int *in_column_indices, unsigned *colo
 }
 
 void iterative_trim(int m, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, unsigned *colors, bool *mark, bool *is_trimmed) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	//printf("triming, nblocks=%d, nthreads=%d\n", nblocks, nthreads);
 	bool h_changed, *d_changed;
@@ -194,7 +194,7 @@ void iterative_trim(int m, int *in_row_offsets, int *in_column_indices, int *out
 }
 /*
 bool pivot_gen(int m, unsigned *colors, bool *mark, bool *fw_visited, bool *bw_visited, bool *is_pivot, unsigned *locks) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_has_pivot, *d_has_pivot;
 	h_has_pivot = false;
@@ -208,14 +208,14 @@ bool pivot_gen(int m, unsigned *colors, bool *mark, bool *fw_visited, bool *bw_v
 }
 
 void update_colors(int m, unsigned *colors, bool *mark, bool *fw_visited, bool *bw_visited, bool *fw_expanded, bool *bw_expanded, bool *is_pivot) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	update_colors_kernel<<<nblocks, nthreads>>>(m, colors, mark, fw_visited, bw_visited, fw_expanded, bw_expanded, is_pivot);
 	CudaTest("solving kernel update_colors failed");
 }
 //*/
 bool update(int m, unsigned *colors, bool *mark, bool *fw_visited, bool *bw_visited, bool *fw_expanded, bool *bw_expanded, bool *is_pivot, unsigned *locks) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_has_pivot, *d_has_pivot;
 	//int h_scc_size = 0, *d_scc_size;

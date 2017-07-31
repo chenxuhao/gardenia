@@ -20,22 +20,6 @@
 //   Same as spmv_csr_scalar_device, except x is accessed via texture cache.
 //
 
-/*
-texture<float,1> tex_x;
-void bind_x(const float * x)
-{   CUDA_SAFE_CALL(cudaBindTexture(NULL, tex_x, x));   }
-void unbind_x(const float * x)
-{   CUDA_SAFE_CALL(cudaUnbindTexture(tex_x)); }
-
-template <bool UseCache>
-__inline__ __device__ float fetch_x(const int& i, const float * x)
-{
-    if (UseCache)
-        return tex1Dfetch(tex_x, i);
-    else
-        return x[i];
-}
-*/
 __global__ void spmv_csr_scalar_kernel(const int num_rows, const int * Ap,  const int * Aj,
 		const ValueType * Ax, const ValueType * x, ValueType * y) {
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -44,15 +28,14 @@ __global__ void spmv_csr_scalar_kernel(const int num_rows, const int * Ap,  cons
 		int row_begin = Ap[row];
 		int row_end = Ap[row+1];
 		for (int offset = row_begin; offset < row_end; offset ++){
-			sum += Ax[offset] * x[Aj[offset]]; //fetch_x<UseCache>(Aj[jj], x);
+			sum += Ax[offset] * x[Aj[offset]];
 		}
 		y[row] = sum;
 	}
 }
 
 void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueType *h_Ax, ValueType *h_x, ValueType *h_y) { 
-	print_device_info(0);
-	Timer t;
+	//print_device_info(0);
 	int *d_Ap, *d_Aj;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (num_rows + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(int)));
@@ -65,16 +48,14 @@ void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueType *h_Ax, Va
 	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueType), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
-	//for(int i = 0; i < num_rows; i++) printf("h_y[%d] = %f\n", i, h_y[i]);
-	int nthreads = 256;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (num_rows - 1) / nthreads + 1;
-	printf("Start solving (nthreads=%d, nblocks=%d) ...\n", nthreads, nblocks);
+	printf("Launching CUDA SpMV solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
 
+	Timer t;
 	t.Start();
-	//bind_x(d_x);
 	spmv_csr_scalar_kernel <<<nblocks, nthreads>>> (num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);   
 	CudaTest("solving failed");
-	//unbind_x(d_x);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 

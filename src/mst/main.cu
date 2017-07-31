@@ -243,7 +243,7 @@ int main(int argc, char *argv[]) {
 	CUDA_SAFE_CALL(cudaMalloc(&gedgecount, sizeof(unsigned) * 1));
 	CUDA_SAFE_CALL(cudaMemcpy(gedgecount, &edgecount, sizeof(unsigned) * 1, cudaMemcpyHostToDevice));
 
-	int nthreads = 256;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	int nSM = 13;
 	//const size_t max_blocks = maximum_residency(dfindcompmintwo, nthreads, 0);

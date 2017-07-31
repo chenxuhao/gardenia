@@ -1,31 +1,53 @@
 include ../common.mk
-CXXFLAGS+=-std=c++11
 SRC=main.cc
-OBJS=scalar.o verifier.o main.o
+OBJS=base.o tex.o warp.o vector.o omp_base.o verifier.o main.o
+all: $(OBJS) spmv_vector spmv_omp_base spmv_ocl_base
 
-all: $(OBJS) spmv_scalar spmv_vector spmv_omp
+%.o: %.cpp
+	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -march=core-avx2 -c $<
 
 %.o: %.cc
-	$(CXX) $(CXXFLAGS) $(PARFLAG) $(INCLUDES) -c $<
+	#$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
 
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
-spmv_omp: omp_base.o main.o verifier.o
+spmv_omp_base: omp_base.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
-spmv_scalar: main.o scalar.o verifier.o
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o scalar.o verifier.o -o $@ $(LIBS)
+spmv_omp_base_sim: omp_base.o main.o verifier.o
+	$(CXX) $(SIMFLAGS) $(INCLUDES) main.o omp_base.o verifier.o $(M5OP) -o $@ -lgomp
+	mv $@ $(BIN)
+
+spmv_ocl_base: ocl_base.o main.o verifier.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o ocl_base.o verifier.o -o $@ -lOpenCL
+	mv $@ $(BIN)
+
+spmv_omp_simd: omp_simd.o main.o verifier.o
+	$(ICPC) $(ICPCFLAGS) $(INCLUDES) main.o omp_simd.o verifier.o -o $@
+	mv $@ $(BIN)
+
+spmv_base: main.o base.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+spmv_tex: main.o tex.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o tex.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+spmv_warp: main.o warp.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o warp.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 spmv_vector: main.o vector.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o vector.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-spmv_lb:
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o -o $@ $(LIBS)
+spmv_omp_target: main.o omp_target.o verifier.o
+	$(ICPC) $(CXXFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 clean:
-	rm *.o
+	rm $(OBJS)

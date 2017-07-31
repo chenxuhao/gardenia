@@ -4,10 +4,11 @@
 #ifndef SLIDING_QUEUE_H_
 #define SLIDING_QUEUE_H_
 
-#include <algorithm>
-
+#include <iostream>
 #include "platform_atomics.h"
-
+#ifdef SIM
+#include "sim.h"
+#endif
 
 /*
 GAP Benchmark Suite
@@ -34,6 +35,12 @@ class SlidingQueue {
  public:
   explicit SlidingQueue(size_t shared_size) {
     shared = new T[shared_size];
+#ifdef SIM
+	T* baseVisitAddress = shared;
+	T* endVisitAddress = &shared[shared_size];
+	set_addr_bounds(0,(uint64_t)baseVisitAddress,(uint64_t)endVisitAddress,8);
+	std::cout << "Worklist address from" << baseVisitAddress << "to" << endVisitAddress << std::endl;
+#endif
     reset();
   }
 
@@ -103,7 +110,11 @@ class QueueBuffer {
   void flush() {
     T *shared_queue = sq.shared;
     size_t copy_start = fetch_and_add(sq.shared_in, in);
-    std::copy(local_queue, local_queue+in, shared_queue+copy_start);
+    //std::copy(local_queue, local_queue+in, shared_queue+copy_start);
+	T *first = local_queue;
+	T *last = local_queue + in;
+	T *d_first = shared_queue + copy_start;
+	while (first != last) *d_first++ = *first++;
     in = 0;
   }
 };

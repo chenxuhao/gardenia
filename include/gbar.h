@@ -1,5 +1,5 @@
 #pragma once
-//#include <cub/cub.cuh>
+#include <cub/cub.cuh>
 #include "cutil_subset.h"
 
 // Manages device storage needed for implementing a global software barrier between CTAs in a single grid
@@ -10,6 +10,12 @@ class GlobalBarrier {
 	protected :
 		// Counters in global device memory
 		SyncFlag* d_sync;
+
+		__device__ __forceinline__ SyncFlag LoadCG(SyncFlag* d_ptr) const {
+			SyncFlag retval;
+			retval = cub::ThreadLoad<cub::LOAD_CG>(d_ptr);
+			return retval;
+		}
 
 	public:
 		GlobalBarrier() : d_sync(NULL) {}
@@ -32,7 +38,8 @@ class GlobalBarrier {
 
 				// Wait for everyone else to report in
 				for (int peer_block = threadIdx.x; peer_block < gridDim.x; peer_block += blockDim.x) {
-					while (d_sync[peer_block] == 0) {
+					//while (d_sync[peer_block] == 0) {
+					while (LoadCG(d_sync + peer_block) == 0) {
 						__threadfence_block();
 					}
 				}
@@ -48,7 +55,8 @@ class GlobalBarrier {
 					d_vol_sync[blockIdx.x] = 1;
 
 					// Wait for acknowledgement
-					while (d_sync[blockIdx.x] == 1) {
+					//while (d_sync[blockIdx.x] == 1) {
+					while (LoadCG(d_sync + blockIdx.x) == 1) {
 						__threadfence_block();
 					}
 				}

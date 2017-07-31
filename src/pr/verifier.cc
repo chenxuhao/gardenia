@@ -4,30 +4,60 @@
 //   error < target_error
 #include "pr.h"
 #include "timer.h"
-void PRVerifier(int m, int *row_offsets, int *column_indices, int *degree, float *scores, double target_error) {
+//#include <vector>
+#include <stdlib.h>
+
+void PRVerifier(int m, IndexType *in_row_offsets, IndexType *in_column_indices, IndexType *out_row_offsets, IndexType *out_column_indices, int *degree, ScoreT *scores_to_test, double target_error) {
 	printf("Verifying...\n");
-	const float base_score = (1.0f - kDamp) / m;
-	float *incomming_sums = (float *)malloc(m * sizeof(float));
-	for(int i = 0; i < m; i ++) incomming_sums[i] = 0;
-	double error = 0;
+	const ScoreT base_score = (1.0f - kDamp) / m;
+	const ScoreT init_score = 1.0f / m;
+	ScoreT *scores = (ScoreT *) malloc(m * sizeof(ScoreT));
+	for (int i = 0; i < m; i ++) scores[i] = init_score;
+	ScoreT *outgoing_contrib = (ScoreT *) malloc(m * sizeof(ScoreT));
+	//for (int i = 0; i < m; i ++) outgoing_contrib[i] = 0;
+	int iter;
 	Timer t;
 	t.Start();
+	for (iter = 0; iter < MAX_ITER; iter ++) {
+		double error = 0;
+		for (int n = 0; n < m; n ++)
+			outgoing_contrib[n] = scores[n] / degree[n];
+		for (int src = 0; src < m; src ++) {
+			ScoreT incoming_total = 0;
+			const IndexType row_begin = in_row_offsets[src];
+			const IndexType row_end = in_row_offsets[src + 1];
+			for (IndexType offset = row_begin; offset < row_end; offset ++) {
+				IndexType dst = in_column_indices[offset];
+				incoming_total += outgoing_contrib[dst];
+			}
+			ScoreT old_score = scores[src];
+			scores[src] = base_score + kDamp * incoming_total;
+			error += fabs(scores[src] - old_score);
+		}   
+		printf(" %2d    %lf\n", iter+1, error);
+		if (error < EPSILON) break;
+	}
+	t.Stop();
+	printf("\titerations = %d.\n", iter+1);
+	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
+	
+	ScoreT *incomming_sums = (ScoreT *)malloc(m * sizeof(ScoreT));
+	for(int i = 0; i < m; i ++) incomming_sums[i] = 0;
+	double error = 0;
 	for (int src = 0; src < m; src ++) {
-		float outgoing_contrib = scores[src] / degree[src];
-		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
-		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int dst = column_indices[offset];
+		ScoreT outgoing_contrib = scores_to_test[src] / degree[src];
+		const IndexType row_begin = out_row_offsets[src];
+		const IndexType row_end = out_row_offsets[src + 1];
+		for (IndexType offset = row_begin; offset < row_end; ++ offset) {
+			IndexType dst = out_column_indices[offset];
 			incomming_sums[dst] += outgoing_contrib;
 		}
 	}
 	for (int i = 0; i < m; i ++) {
-		float new_score = base_score + kDamp * incomming_sums[i];
-		error += fabs(new_score - scores[i]);
+		ScoreT new_score = base_score + kDamp * incomming_sums[i];
+		error += fabs(new_score - scores_to_test[i]);
 		incomming_sums[i] = 0;
 	}
-	t.Stop();
-	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
 	if (error < target_error) printf("Correct\n");
 	else printf("Total Error: %f\n", error);
 }

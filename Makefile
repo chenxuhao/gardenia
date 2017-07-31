@@ -10,12 +10,12 @@ all:
 	cd src/bfs; make
 	cd src/cc; make
 	cd src/pr; make
-	cd src/sgd; make
 	cd src/spmv; make
 	cd src/sssp; make
+	cd src/vc; make
 	cd src/symgs; make
 	cd src/tc; make
-	cd src/vc; make
+	cd src/sgd; make
 
 .PHONY: clean
 clean:

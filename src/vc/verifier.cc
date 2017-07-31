@@ -2,6 +2,9 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "vc.h"
 #include "timer.h"
+#include <vector>
+#include <stdlib.h>
+
 int first_fit(int m, int *row_offsets, int *column_indices, int *colors) {
 	int max_color = 0;
 	std::vector<int> mark(m, -1);

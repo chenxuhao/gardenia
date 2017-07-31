@@ -4,12 +4,10 @@
 #ifndef BITMAP_H_
 #define BITMAP_H_
 
-#include <algorithm>
-#include <cinttypes>
-
+//#include <algorithm>
+//#include <cinttypes>
 #include "platform_atomics.h"
-
-
+typedef unsigned long uint64_t;
 /*
 GAP Benchmark Suite
 Class:  Bitmap
@@ -33,7 +31,9 @@ class Bitmap {
   }
 
   void reset() {
-    std::fill(start_, end_, 0);
+    //std::fill(start_, end_, 0);
+	uint64_t *ptr = start_;
+	for(; ptr != end_; ++ ptr) *ptr = 0;
   }
 
   void set_bit(size_t pos) {
@@ -53,8 +53,14 @@ class Bitmap {
   }
 
   void swap(Bitmap &other) {
-    std::swap(start_, other.start_);
-    std::swap(end_, other.end_);
+    //std::swap(start_, other.start_);
+    //std::swap(end_, other.end_);
+	uint64_t *temp = start_;
+	start_ = other.start_;
+	other.start_ = temp;
+	temp = end_;
+	end_ = other.end_;
+	other.end_ = temp;
   }
 
  private:

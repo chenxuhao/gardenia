@@ -2,17 +2,19 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "bfs.h"
 #include <omp.h>
+#include <vector>
 #include "timer.h"
 #include "bitmap.h"
 #include "sliding_queue.h"
 #include "platform_atomics.h"
 #define BFS_VARIANT "omp_beamer"
+typedef long int64_t;
 
 //int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &parent, Bitmap &front, Bitmap &next) {
 int64_t BUStep(int m, int *row_offsets, int *column_indices, vector<int> &depth, Bitmap &front, Bitmap &next) {
 	int64_t awake_count = 0;
 	next.reset();
-#pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
+	#pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
 	for (int src = 0; src < m; src ++) {
 		//if (parent[src] < 0) {
 		if (depth[src] < 0) { // not visited
@@ -40,7 +42,7 @@ int64_t TDStep(int m, int *row_offsets, int *column_indices, vector<int> &depth,
 	{
 		QueueBuffer<int> lqueue(queue);
 #pragma omp for reduction(+ : scout_count)
-		for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+		for (int *q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
 			int src = *q_iter;
 			int row_begin = row_offsets[src];
 			int row_end = row_offsets[src + 1];
@@ -64,7 +66,7 @@ int64_t TDStep(int m, int *row_offsets, int *column_indices, vector<int> &depth,
 
 void QueueToBitmap(const SlidingQueue<int> &queue, Bitmap &bm) {
 #pragma omp parallel for
-	for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+	for (int *q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
 		int u = *q_iter;
 		bm.set_bit_atomic(u);
 	}

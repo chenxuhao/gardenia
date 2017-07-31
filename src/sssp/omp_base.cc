@@ -2,6 +2,7 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "sssp.h"
 #include <omp.h>
+#include <vector>
 #include "timer.h"
 #include "platform_atomics.h"
 #define SSSP_VARIANT "openmp"
@@ -28,7 +29,7 @@ void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indice
 	frontier[0] = source;
 	//printf("kDistInf=%d\n", kDistInf);
 	t.Start();
-#pragma omp parallel
+	#pragma omp parallel
 	{
 		vector<vector<int> > local_bins(0);
 		int iter = 0;
@@ -39,7 +40,7 @@ void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indice
 			size_t &next_frontier_tail = frontier_tails[(iter+1)&1];
 			//#pragma omp single
 			//printf("\titer = %d, frontier_size = %ld.\n", iter, curr_frontier_tail);
-#pragma omp for nowait schedule(dynamic, 64)
+			#pragma omp for nowait schedule(dynamic, 64)
 			for (size_t i = 0; i < curr_frontier_tail; i ++) {
 				int src = frontier[i];
 				if (dist[src] >= delta * static_cast<DistT>(curr_bin_index)) {
@@ -72,13 +73,13 @@ void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indice
 			}
 			for (size_t i = curr_bin_index; i < local_bins.size(); i ++) {
 				if (!local_bins[i].empty()) {
-#pragma omp critical
+					#pragma omp critical
 					next_bin_index = min(next_bin_index, i);
 					break;
 				}
 			}
-#pragma omp barrier
-#pragma omp single nowait
+			#pragma omp barrier
+			#pragma omp single nowait
 			{
 				curr_bin_index = kDistInf;
 				curr_frontier_tail = 0;
@@ -91,7 +92,7 @@ void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indice
 				local_bins[next_bin_index].resize(0);
 			}
 			iter++;
-#pragma omp barrier
+			#pragma omp barrier
 		}
 	}
 	t.Stop();

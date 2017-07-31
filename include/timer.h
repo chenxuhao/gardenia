@@ -31,15 +31,15 @@ class Timer {
   }
 
   double Seconds() const {
-    return elapsed_time_.tv_sec + elapsed_time_.tv_usec/1e6;
+    return elapsed_time_.tv_sec + (double)elapsed_time_.tv_usec/1e6;
   }
 
   double Millisecs() const {
-    return 1000*elapsed_time_.tv_sec + elapsed_time_.tv_usec/1000;
+    return 1000*elapsed_time_.tv_sec + (double)elapsed_time_.tv_usec/1000;
   }
 
   double Microsecs() const {
-    return 1e6*elapsed_time_.tv_sec + elapsed_time_.tv_usec;
+    return 1e6*elapsed_time_.tv_sec + (double)elapsed_time_.tv_usec;
   }
 
  private:

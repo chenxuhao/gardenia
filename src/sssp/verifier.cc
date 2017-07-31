@@ -41,7 +41,7 @@ void SSSPVerifier(int m, int source, int *row_offsets, int *column_indices, Dist
 	bool all_ok = true;
 	for (int n = 0; n < m; n ++) {
 		if (dist_to_test[n] != oracle_dist[n]) {
-			std::cout << n << ": " << dist_to_test[n] << " != " << oracle_dist[n] << std::endl;
+			//std::cout << n << ": " << dist_to_test[n] << " != " << oracle_dist[n] << std::endl;
 			all_ok = false;
 		}
 	}

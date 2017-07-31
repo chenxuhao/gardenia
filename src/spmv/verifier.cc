@@ -3,6 +3,7 @@
 #include "spmv.h"
 #include <limits>
 #include <cmath>
+#include <algorithm>
 #include "timer.h"
 template <typename T>
 T maximum_relative_error(const T * A, const T * B, const size_t N) {
@@ -20,19 +21,26 @@ T maximum_relative_error(const T * A, const T * B, const size_t N) {
 	return max_error;
 }
 
-void SpmvVerifier(int num_rows, int *Ap, int *Aj, ValueType *Ax, ValueType *x, ValueType *test_y, ValueType *y_host) {
+void SpmvVerifier(int num_rows, int nnz, IndexType *h_Ap, IndexType *h_Aj, ValueType *h_Ax, ValueType *h_x, ValueType *h_y, ValueType *test_y) {
 	printf("Verifying...\n");
+	IndexType *Ap = (IndexType *)malloc((num_rows+1) * sizeof(IndexType));
+	for(int i = 0; i < num_rows + 1; i ++) Ap[i] = h_Ap[i];
+	IndexType *Aj = (IndexType *)malloc(nnz * sizeof(IndexType));
+	for(int i = 0; i < nnz; i ++) Aj[i] = h_Aj[i];
+	ValueType *Ax = (ValueType *)malloc(nnz * sizeof(ValueType));
+	for(int i = 0; i < nnz; i ++) Ax[i] = h_Ax[i];
+	ValueType *x = (ValueType *)malloc(num_rows * sizeof(ValueType));
+	for(int i = 0; i < num_rows; i ++) x[i] = h_x[i];
 	ValueType *y = (ValueType *)malloc(num_rows * sizeof(ValueType));
-	for(int i = 0; i < num_rows; i++)
-		y[i] = y_host[i];
+	for(int i = 0; i < num_rows; i ++) y[i] = h_y[i];
 	Timer t;
 	t.Start();
 	for (int i = 0; i < num_rows; i++){
-		int row_begin = Ap[i];
-		int row_end   = Ap[i+1];
+		const IndexType row_begin = Ap[i];
+		const IndexType row_end   = Ap[i+1];
 		ValueType sum = y[i];
-		for (int jj = row_begin; jj < row_end; jj++) {
-			const int j = Aj[jj];  //column index
+		for (IndexType jj = row_begin; jj < row_end; jj++) {
+			const IndexType j = Aj[jj];  //column index
 			sum += x[j] * Ax[jj];
 		}
 		y[i] = sum; 

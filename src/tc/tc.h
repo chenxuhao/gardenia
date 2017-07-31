@@ -2,7 +2,7 @@
 // Contact: Xuhao Chen <cxh@illinois.edu>
 #include "common.h"
 /*
-GARDINIA Benchmark Suite
+GARDENIA Benchmark Suite
 Kernel: Triangle Counting (TC)
 Author: Xuhao Chen
 
@@ -27,7 +27,11 @@ Another optimization this implementation has is to relabel the vertices by
 degree. This is beneficial if the average degree is high enough and if the
 degree distribution is sufficiently non-uniform. To decide whether or not
 to relabel the graph, we use the heuristic in WorthRelabelling.
+
+tc_omp : one thread per vertex using OpenMP
+tc_base: one thread per vertex using CUDA
+tc_warp: one warp per vertex using CUDA
 */
 
-void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, int *total);
-void TCVerifier(int m, int *row_offsets, int *column_indices, int test_total);
+void TCSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices, int *degree, int *total);
+void TCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, int test_total);

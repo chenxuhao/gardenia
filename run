@@ -1,8 +1,102 @@
 #!/bin/bash
-HOME=/home/cxh/benchmarks
-DATA=$(HOME)/datasets/Hamrle3.mtx
-./bfs_wlw $(DATA)
-./sssp_wlw $(DATA)
-./pr $(DATA)
-./color_base $(DATA)
-./bc -i ../datasets/test6.graph
+# bfs bc sssp cc tc pr scc are similar
+# spmv symgs vc are similar
+# sgd is special
+
+# bfs usage: ./bfs_omp_beamer <graph> [source_id] [is_directed(0/1)]
+./bin/bfs_omp_beamer ~/datasets/web-Google.mtx 0 1
+./bin/bfs_omp_beamer ~/datasets/soc-LiveJournal1.mtx 0 1
+./bin/bfs_linear_lb ~/datasets/road_central.mtx 0 0
+./bin/bfs_linear_lb ~/datasets/hollywood-2009.mtx 0 0
+./bin/bfs_linear_lb ~/datasets/wikipedia-20070206.mtx 0 0
+./bin/bfs_topo_base ~/datasets/soc-twitter-2010.mtx 0 0
+#./bin/bfs_linear_lb ~/datasets/web-wikipedia2009.mtx 0 0
+#./bin/bfs_linear_lb ~/datasets/soc-flickr-growth.mtx
+#./bin/bfs_linear_lb ~/datasets/indochina-2004.mtx 123456
+
+# bc usage: ./bc_omp <graph> [source_id] [is_directed(0/1)]
+./bin/bc_omp ~/datasets/web-Google.mtx 0 1
+./bin/bc_omp ~/datasets/soc-LiveJournal1.mtx 0 1
+./bin/bc_linear_lb ~/datasets/road_central.mtx 0 0
+./bin/bc_linear_lb ~/datasets/hollywood-2009.mtx 0 0
+./bin/bc_linear_lb ~/datasets/wikipedia-20070206.mtx 0 0
+./bin/bc_linear_lb ~/datasets/soc-twitter-2010.mtx 0 0
+#./bin/bc_linear_lb ~/datasets/soc-orkut.mtx 0 0
+#./bin/bc_linear_lb ~/datasets/soc-flickr-growth.mtx
+
+# sssp usage: ./sssp_omp <graph> [source] [is_directed(0/1)] [delta]
+# currently 'delta' is only used for sssp_omp
+./bin/sssp_omp ~/datasets/web-Google.mtx 0 1 5
+./bin/sssp_linear_lb ~/datasets/soc-LiveJournal1.mtx 0 1
+./bin/sssp_linear_lb ~/datasets/road_central.mtx 0 0
+./bin/sssp_linear_lb ~/datasets/hollywood-2009.mtx 0 0
+./bin/sssp_linear_lb ~/datasets/wikipedia-20070206.mtx 0 1
+./bin/sssp_linear_lb ~/datasets/soc-twitter-2010.mtx 0 0
+#./bin/sssp_linear_lb ~/datasets/soc-flickr-growth.mtx 0 1
+#./bin/sssp_linear_lb ~/datasets/soc-orkut.mtx 0 0
+#./bin/sssp_omp ~/datasets/europe_osm.mtx 0 0 5
+#./bin/sssp_linear_lb ~/datasets/road_usa.mtx 0 0
+#./bin/sssp_omp ~/datasets/roadNet-CA.mtx 0 0 5
+
+# for cc, any dataset is symmetrized by default,
+# so no need to consider if it is directed or not.
+# cc usage: ./cc_omp <graph>
+./bin/cc_omp ~/datasets/soc-LiveJournal1.mtx
+./bin/cc_warp ~/datasets/web-wikipedia2009.mtx
+./bin/cc_warp ~/datasets/soc-orkut.mtx
+./bin/cc_base ~/datasets/rgg_n_2_20_s0.mtx
+./bin/cc_base ~/datasets/delaunay_n20.mtx
+./bin/cc_warp ~/datasets/hollywood-2009.mtx
+#./bin/cc_base ~/datasets/soc-twitter-2010.mtx
+
+# tc usage: ./tc_omp <graph>
+./bin/tc_omp ~/datasets/soc-LiveJournal1.mtx
+./bin/tc_warp ~/datasets/web-wikipedia2009.mtx
+./bin/tc_warp ~/datasets/soc-pokec.mtx
+./bin/tc_warp ~/datasets/rgg_n_2_20_s0.mtx
+./bin/tc_base ~/datasets/delaunay_n20.mtx
+#./bin/tc_warp ~/datasets/roadNet-CA.mtx
+
+# pr usage: ./pr_omp <graph> [is_directed(0/1)]
+./bin/pr_omp ~/datasets/soc-LiveJournal1.mtx
+./bin/pr_gather ~/datasets/web-wikipedia2009.mtx 0
+./bin/pr_gather_warp ~/datasets/soc-pokec 0
+./bin/pr_gather_warp ~/datasets/rgg_n_2_20_s0.mtx 0
+./bin/pr_gather_warp ~/datasets/delaunay_n20.mtx 0
+./bin/pr_gather_warp ~/datasets/wikipedia-20070206.mtx
+./bin/pr_gather_warp ~/datasets/hollywood-2009.mtx 0
+./bin/pr_gather_warp ~/datasets/soc-twitter-2010.mtx 0
+#./bin/pr_gather ~/datasets/web-uk-2002-all.mtx 0
+#./bin/pr_gather_warp ~/datasets/kron_g500-logn20.mtx 0
+
+# sgd usage: ./sgd_omp <graph> [lambda(0.05)] [step(0.003)] [max_iter(1)]
+./bin/sgd_vector ~/datasets/jester_ratings.mtx 0.05 0.003
+./bin/sgd_vector ~/datasets/ratings.mtx 0.05 0.01
+./bin/sgd_omp ~/datasets/netflix_mm.mtx 0.05 0.003
+./bin/sgd_omp ~/datasets/amazon-ratings.mtx 0.05 0.003
+./bin/sgd_omp ~/datasets/stackexchange-stackoverflow.mtx 0.05 0.003
+
+# spmv usage: ./spmv_omp <graph> [is_directed(0/1)]
+./bin/spmv_omp ~/datasets/thermal2.mtx 0
+./bin/spmv_omp ~/datasets/nlpkkt160.mtx 0
+./bin/spmv_vector ~/datasets/ldoor.mtx 0
+./bin/spmv_vector ~/datasets/af_shell3.mtx 0
+./bin/spmv_omp ~/datasets/cage15.mtx 1
+
+# symgs usage: ./symgs_omp <graph>
+# we use only undirected graph, and symmetrize them by default
+./bin/symgs_warp ~/datasets/thermal2.mtx
+./bin/symgs_vector ~/datasets/nlpkkt160.mtx
+./bin/symgs_vector ~/datasets/ldoor.mtx
+./bin/symgs_omp ~/datasets/af_shell3.mtx
+./bin/symgs_vector ~/datasets/cage15.mtx
+#./bin/symgs_omp ~/datasets/offshore.mtx
+#./bin/symgs_vector ~/datasets/pwtk.mtx
+
+# vc usage: ./vc_omp <graph>
+./bin/vc_linear_bitset ~/datasets/thermal2.mtx
+./bin/vc_omp ~/datasets/nlpkkt160.mtx
+./bin/vc_linear_bitset ~/datasets/web-wikipedia2009.mtx
+./bin/vc_linear_bitset ~/datasets/delaunay_n20.mtx
+./bin/vc_linear_bitset ~/datasets/roadNet-CA.mtx
+

@@ -3,7 +3,7 @@
 #include "common.h"
 
 /*
-GARDINIA Benchmark Suite
+GARDENIA Benchmark Suite
 Kernel: Breadth-First Search (BFS)
 Author: Xuhao Chen
 
@@ -25,9 +25,21 @@ them in parent array as negative numbers. Thus the encoding of parent is:
     Breadth-First Search." International Conference on High Performance
     Computing, Networking, Storage and Analysis (SC), Salt Lake City, Utah,
     November 2012.
+
+bfs_omp_base: naive OpenMP implementation, one thread per vertex
+bfs_omp_beamer: Beamer's OpenMP implementation, one thread per vertex, using the Direction-Optimizing approach
+bfs_topo_base: topology-driven GPU implementation, one thread per vertex using CUDA
+bfs_topo_vector: topology-driven GPU implementation, one warp per vertex using CUDA
+bfs_topo_lb: topology-driven GPU implementation, one thread per edge using CUDA
+bfs_linear_base: data-driven GPU implementation, one thread per vertex using CUDA
+bfs_linear_lb: data-driven GPU implementation, one thread per edge using CUDA
+bfs_bu: one thread per vertex using CUDA, using Beamer's bottom-up approach using CUDA
+bfs_afree: topology-driven GPU implementation, atomic free, one thread per vertex using CUDA
+bfs_fusion: data-driven GPU implementation with kernel fusion, one thread per edge using CUDA
+bfs_hybrid: one thread per vertex using CUDA, using Beamer's Direction-Optimizing approach using CUDA
 */
 
 //void BFSSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, DistT *dist);
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *degree, DistT *dist);
-void BFSVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *dist);
+void BFSSolver(int m, int nnz, int source, IndexType *in_row_offsets, IndexType *in_column_indices, IndexType *out_row_offsets, IndexType *out_column_indices, int *degree, DistT *dist);
+void BFSVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, DistT *dist);
 void write_solution(const char *fname, int m, DistT *dist);

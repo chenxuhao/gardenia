@@ -43,7 +43,7 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 	DistT zero = 0;
 	int iteration = 0;
 	Timer t;
-	int nthreads = 256;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	//initialize <<<nblocks, nthreads>>> (m, d_dist);
 	//CudaTest("initializing failed");

@@ -1,0 +1,134 @@
+Running GARDENIA Benchmarks on gem5
+
+Xuhao Chen
+Department of Computer Science
+National University of Defense Technology
+
+Abstract: This technical report describes the steps that we took to compile GARDENIA 1.0 [1] for the x86 architecture to run on gem5 [2]. gem5 is a full system multiprocessor simulator that is capable of booting a full Linux system. This report covers installing gem5 on Ubuntu 14.04, adding gem5 intrinsics to the GARDENIA infrastructure, compiling the benchmarks, and the creation of gem5 execution scripts. Along with this technical report we are distributing a disk image containing pre-compiled statically linked x86 binaries for all of GARDENIA benchmarks that can be used with gem5. Using the disk image removes the need to compile the benchmarks.
+
+1. Install gem5 on Ubuntu 14.04
+First, we need to install gem5 dependencies:
+# sudo apt-get install scons swig python-dev m4 libprotobuf-dev python-protobuf protobuf-compiler libgoogle-perftools-dev
+
+Then build gem5 using the scons tool:
+# scons build/X86/gem5.opt -j4
+
+Run the test (hello world) program to check if installed successfully:
+# build/X86/gem5.opt configs/example/se.py -c tests/test-progs/hello/bin/x86/linux/hello --cpu-type=DerivO3CPU --caches --l2cache
+
+2. Adding gem5 intrinsics
+Since we are interested in measuring the performance of just the parallel portion of the benchmark, Region of Interest (ROI), we added support to the hooks package to make M5 pseudo calls to dump the statistics at the entry and exit of the ROI. Additionally, we have added support to take a checkpoint at the beginning of the ROI. This checkpoint can later be used to simulate just the ROI in detailed mode.
+
+Take "cc" as a example. 
+# vim ~/gardenia_code/src/cc/omp_base.cc
+
+Include the header file:
+#ifdef SIM
+#include "sim.h"
+#endif
+
+Add the following function call to the beginning of solver function:
+#ifdef SIM
+	omp_set_num_threads(4);
+	map_m5_mem();
+#endif
+	
+Add the following function call to the beginning of ROI:
+#ifdef SIM
+m5_checkpoint(0,0);
+#endif
+
+Add the following function call to the end of ROI:
+#ifdef SIM
+m5_dumpreset_stats(0,0);
+#endif
+
+3. Compiling the benchmarks
+when compiling benchmarks, make sure you add the following compiler options:
+-static 
+
+Take "cc" as a example. 
+# cd ~/gardenia_code/src/cc/
+# vim Makefile
+Modify like this:
+from
+%.o: %.cc
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+	#$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
+to
+%.o: %.cc
+	#$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
+
+Then build the benchmark:
+# make cc_omp_base_sim
+
+You will find the binary in:
+~/gardenia_code/bin/cc_omp_base_sim
+
+4. Creating gem5 execution scripts
+vim /home/cxh/gem5-configs/run_cc_google.rcS
+
+  1 #!/bin/sh
+  2 echo "Starting ..."
+  3 cd /gardenia
+  4 #/sbin/m5 dumpstats
+  5 #/sbin/m5 resetstats
+  6 ./bin/cc_omp_base_sim datasets/web-Google.mtx
+  7 echo "Done :D"
+  8 /sbin/m5 exit
+
+5. Preparing disk image
+Download the image file
+# wget http://www.cs.utexas.edu/~parsec_m5/x86root-parsec.img.bz2
+
+Put the disk image in ~/m5-dist/x86-system/disks/ and mount the disk image to modify it:
+# sudo mount -o loop,offset=32256 ~/m5-dist/x86-system/disks/x86root-parsec.img ~/m5-dist/x86-system/disks/tmp
+
+Transfer files to the disk:
+# sudo cp ~/gardenia_code/bin/cc_omp_base_sim /gardenia/bin
+# sudo cp ~/datasets/web-Google.mtx /gardenia/datasets
+
+Unmount the disk:
+# sudo umount ~/m5-dist/x86-system/disks/tmp
+
+6. Running benchmarks on gem5
+Download linux kernel binary:
+# wget http://www.cs.utexas.edu/~parsec_m5/x86_64-vmlinux-2.6.28.4-smp
+
+Modify $GEM5_HOME/configs/common/SysPath.py, set x86-system path
+path = [ '/dist/m5/system', '~/m5-dist/x86-system' ]
+
+Modify configs/common/Benchmarks.py
+return env.get('LINUX_IMAGE', disk('x86root-parsec.img'))
+
+Modify configs/common/FSConfig.py
+self.kernel = binary('x86_64-vmlinux-2.6.28.4-smp')
+
+Download linux-bigswap2.img, and put in x86-system/disks
+# wget http://www.m5sim.org/dist/current/m5_system_2.0b3.tar.bz2
+
+Modify gem5/src/arch/X86/cpuid.cc to fix a "kernel panic" bug:
+from
+result = CpuidResult(0x00020f51, 0x00000805, 0xe7dbfbff, 0x04000209);
+to
+result = CpuidResult(0x00020f51, 0x00000805, 0xe7dbfbff, 0x00000209);
+
+src/mem/packet_queue.cc to fix "Packet queue %s has grown beyond 100 packets" problem
+if (transmitList.size() > 10000)
+
+Run for a first time to create a checkpoint:
+# mkdir /home/cxh/gem5-ckpt/x86-fs-cc-google
+# build/X86/gem5.opt configs/example/fs.py --script=/home/cxh/gem5-configs/run_cc_google.rcS --checkpoint-dir=/home/cxh/gem5-ckpt/x86-fs-cc-google --num-cpus=4 --mem-size=4GB
+Open another terminal to see the progress
+# ./util/term/m5term 3456
+The checkpoint is kept in /home/cxh/gem5-ckpt/x86-fs-cc-google
+
+Run for the second time to restore from the checkpoint:
+# build/X86/gem5.opt --outdir=/home/cxh/out/x86-fs-cc-google configs/example/fs.py --script=/home/cxh/gem5-configs/run_cc_google.rcS --checkpoint-dir=/home/cxh/gem5-ckpt/x86-fs-cc-google --num-cpus=4 --mem-size=4GB -r 1 --caches --l2cache --cpu-type=DerivO3CPU
+
+The statistics are in /home/cxh/out/x86-fs-cc-google
+
+References
+[1] Z. Xu, Y. Zhang, J. Shen, and X. Chen. The GARDENIA benchmark suite: Characterization and architectural implications. Computer Architecture Letters, pages 72–81, 2018.
+[2] N. L. Binkert, R. G. Dreslinski, L. R. Hsu, K. T. Lim, A. G. Saidi, and S. K. Reinhardt. The M5 Simulator: Modeling Networked Systems. In IEEE Micro, pages 52–60, July/August 2006.

@@ -1,11 +1,12 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include <iostream>
+#include <vector>
 #include "bfs.h"
 #include "timer.h"
-void BFSVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *depth_to_test) {
+void BFSVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, DistT *depth_to_test) {
 	printf("Verifying...\n");
-	vector<int> depth(m, MYINFINITY);
+	vector<DistT> depth(m, MYINFINITY);
 	vector<int> to_visit;
 	Timer t;
 	t.Start();
@@ -14,10 +15,10 @@ void BFSVerifier(int m, int source, int *row_offsets, int *column_indices, DistT
 	to_visit.push_back(source);
 	for (std::vector<int>::iterator it = to_visit.begin(); it != to_visit.end(); it++) {
 		int src = *it;
-		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1]; 
-		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int dst = column_indices[offset];
+		const IndexType row_begin = row_offsets[src];
+		const IndexType row_end = row_offsets[src + 1]; 
+		for (IndexType offset = row_begin; offset < row_end; ++ offset) {
+			IndexType dst = column_indices[offset];
 			if (depth[dst] == MYINFINITY) {
 				depth[dst] = depth[src] + 1;
 				to_visit.push_back(dst);
@@ -31,14 +32,14 @@ void BFSVerifier(int m, int source, int *row_offsets, int *column_indices, DistT
 	bool all_ok = true;
 	for (int n = 0; n < m; n ++) {
 		if (depth_to_test[n] != depth[n]) {
-			std::cout << n << ": " << depth_to_test[n] << " != " << depth[n] << std::endl;
+			//std::cout << n << ": " << depth_to_test[n] << " != " << depth[n] << std::endl;
 			all_ok = false;
 		}
 	}
 	if(all_ok) printf("Correct\n");
 	else printf("Wrong\n");
 }
-
+/*
 void write_solution(const char *fname, int m, DistT *dist) {
 	assert(dist != NULL);
 	printf("Writing solution to %s\n", fname);
@@ -49,4 +50,4 @@ void write_solution(const char *fname, int m, DistT *dist) {
 	}
 	fprintf(f, "]");
 }
-
+*/

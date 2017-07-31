@@ -158,8 +158,8 @@ __global__ void compact_queue_combo(unsigned* valid1, unsigned *valid2, int *bin
  * @param[out]d_far_queue       Device pointer of VertexId to the far frontier queue
  */
  #define NUM_LOCAL_BINS 1
- #define LOCAL_BINS_SIZE BLKSIZE
-// typedef cub::BlockScan<int, BLKSIZE> BlockScan;
+ #define LOCAL_BINS_SIZE BLOCK_SIZE
+// typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
 __global__ void delta_stepping(int m, int delta, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 in_queue, Worklist2 near_queue, Worklist2 far_queue) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	//__shared__ int local_bins[NUM_LOCAL_BINS][LOCAL_BINS_SIZE];
@@ -227,7 +227,7 @@ __global__ void delta_stepping(int m, int delta, int *row_offsets, int *column_i
 void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist, int delta) {
 	DistT zero = 0;
 	int step = 0, iter = 0;
-	int nthreads = 256;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	//initialize <<<nblocks, nthreads>>> (m, d_dist);
 	//CudaTest("initializing failed");

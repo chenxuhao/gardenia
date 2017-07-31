@@ -2,7 +2,7 @@
 // Contact: Xuhao Chen <cxh@illinois.edu>
 #include "common.h"
 /*
-GARDINIA Benchmark Suite
+GARDENIA Benchmark Suite
 Kernel: Vertex Coloring (VC)
 Author: Xuhao Chen 
 
@@ -17,8 +17,14 @@ with implementation optimizations from Li et al. [1].
 
 [2] A. H. Gebremedhin and F. Manne, “Scalable parallel graph coloring algorithms,” 
 	Concurrency: Practice and Experience, 2000
-*/
 
+vc_omp: OpenMP implementation, one thread per vertex
+vc_topo_base: topology-driven GPU implementation, one thread per vertex using CUDA
+vc_topo_bitset: topology-driven GPU implementation using bitset operations, one thread per vertex using CUDA
+vc_linear_base: data-driven GPU implementation, one thread per vertex using CUDA
+vc_linear_bitset: data-driven GPU implementation using bitset operations, one thread per vertex using CUDA
+*
+*/
 
 int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors);
 void VCVerifier(int m, int *row_offsets, int *column_indices, int *colors);

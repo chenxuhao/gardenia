@@ -2,7 +2,7 @@
 // Contact: Xuhao Chen <cxh@illinois.edu>
 #include "common.h"
 /*
-GARDINIA Benchmark Suite
+GARDENIA Benchmark Suite
 Kernel: Betweenness Centrality (BC)
 Author: Xuhao Chen
 
@@ -24,6 +24,12 @@ propagation phase.
 	Chavarria-Miranda. "A faster parallel algorithm and efficient multithreaded
 	implementations for evaluating betweenness centrality on massive datasets."
 	International Symposium on Parallel & Distributed Processing (IPDPS), 2009.
+
+bc_omp: OpenMP implementation, one thread per vertex
+bc_topo_base: topology-driven GPU implementation, one thread per vertex using CUDA
+bc_topo_lb: topology-driven GPU implementation, one thread per edge using CUDA
+bc_linear_base: data-driven GPU implementation, one thread per vertex using CUDA
+bc_linear_lb: data-driven GPU implementation, one thread per edge using CUDA
 */
 
 void BCSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, ScoreT *scores);

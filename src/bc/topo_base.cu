@@ -1,10 +1,11 @@
 // Copyright (c) 2016, Xuhao Chen
-#define BC_VARIANT "topo"
+#define BC_VARIANT "topo_base"
 #include "bc.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include "worklistc.h"
 #include "timer.h"
+#include <vector>
 #include <thrust/extrema.h>
 #include <thrust/execution_policy.h>
 
@@ -88,52 +89,46 @@ __global__ void bc_normalize(int m, ScoreT *scores, ScoreT max_score) {
 }
 
 void BCSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, ScoreT *h_scores) {
-	print_device_info(0);
-	Timer t;
+	//print_device_info(0);
 	int zero = 0;
-	int depth = 0;
-	vector<int> depth_index;
 	int *d_row_offsets, *d_column_indices;
-	ScoreT *d_scores, *d_deltas;
-	int *d_path_counts, *d_depths, *d_frontiers;
-	bool *d_changed, h_changed, *d_visited, *d_expanded;
-	int *d_nitems, h_nitems = 1;
-
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	ScoreT *d_scores, *d_deltas;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scores, sizeof(ScoreT) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_deltas, sizeof(ScoreT) * m));
+	int *d_path_counts, *d_depths, *d_frontiers;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_path_counts, sizeof(int) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_depths, sizeof(int) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_frontiers, sizeof(int) * (m+1)));
-
+	bool *d_changed, h_changed, *d_visited, *d_expanded;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_nitems, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_visited, m * sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_expanded, m * sizeof(bool)));
-	CUDA_SAFE_CALL(cudaDeviceSynchronize());
+	int *d_nitems, h_nitems = 1;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_nitems, sizeof(int)));
 
-	//printf("Copy data to device...\n");
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-
-	int nthreads = 256;
+	int depth = 0;
+	vector<int> depth_index;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
-	//printf("Initializing data on device...\n");
 	initialize <<<nblocks, nthreads>>> (m, source, d_scores, d_path_counts, d_depths, d_deltas, d_visited, d_expanded);
 	CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_frontiers[0], &source, sizeof(int), cudaMemcpyHostToDevice));
-
+	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	int frontiers_len = 0;
 	int max_blocks = maximum_residency(bc_forward, nthreads, 0);
 	depth_index.push_back(0);
 	printf("Launching CUDA BC solver (%d CTAs/SM, %d threads/CTA) ...\n", max_blocks, nthreads);
-	t.Start();
 
+	Timer t;
+	t.Start();
 	do {
 		depth++;
 		h_changed = false;
-		printf("iteration=%d, frontire_size=%d\n", depth, h_nitems);
+		//printf("iteration=%d, frontire_size=%d\n", depth, h_nitems);
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(bool), cudaMemcpyHostToDevice));
 		CUDA_SAFE_CALL(cudaMemcpy(d_nitems, &zero, sizeof(int), cudaMemcpyHostToDevice));
 		frontiers_len += h_nitems;
@@ -146,18 +141,18 @@ void BCSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indi
 		CUDA_SAFE_CALL(cudaMemcpy(&h_nitems, d_nitems, sizeof(int), cudaMemcpyDeviceToHost));
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	printf("\nDone Forward BFS, starting back propagation (dependency accumulation)\n");
+	//printf("\nDone Forward BFS, starting back propagation (dependency accumulation)\n");
 	for (int d = depth_index.size() - 2; d >= 0; d--) {
 		h_nitems = depth_index[d+1] - depth_index[d];
-		thrust::sort(thrust::device, d_frontiers+depth_index[d], d_frontiers+depth_index[d+1]);
+		//thrust::sort(thrust::device, d_frontiers+depth_index[d], d_frontiers+depth_index[d+1]);
 		nblocks = (h_nitems - 1) / nthreads + 1;
-		printf("Reverse: depth=%d, frontier_size=%d\n", d, h_nitems);
+		//printf("Reverse: depth=%d, frontier_size=%d\n", d, h_nitems);
 		bc_reverse<<<nblocks, nthreads>>>(h_nitems, d_row_offsets, d_column_indices, depth_index[d], d_frontiers, d_scores, d_path_counts, d_depths, d, d_deltas);
 		CudaTest("solving kernel2 failed");
 	}
 	
 	//CUDA_SAFE_CALL(cudaMemcpy(h_scores, d_scores, sizeof(ScoreT) * m, cudaMemcpyDeviceToHost));
-	printf("\nStart calculating the maximum score\n");
+	//printf("\nStart calculating the maximum score\n");
 	ScoreT *d_max_score;
 	d_max_score = thrust::max_element(thrust::device, d_scores, d_scores + m);
 	ScoreT h_max_score;
@@ -165,7 +160,7 @@ void BCSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indi
 	//h_max_score = *max_element(h_scores, h_scores+m);
 	//for (int n = 0; n < m; n ++) h_scores[n] = h_scores[n] / h_max_score;
 	//std::cout << "max_score = " << h_max_score << "\n";
-	printf("\nStart normalizing scores\n");
+	//printf("\nStart normalizing scores\n");
 	nthreads = 512;
 	nblocks = (m - 1) / nthreads + 1;
 	bc_normalize<<<nblocks, nthreads>>>(m, d_scores, h_max_score);

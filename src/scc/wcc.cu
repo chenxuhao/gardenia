@@ -62,7 +62,7 @@ bool find_wcc(int m, int *d_row_offsets, int *d_column_indices, unsigned *d_colo
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_min_color, sizeof(unsigned)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_min_color, &min_color, sizeof(unsigned), cudaMemcpyHostToDevice));
-	int nthreads = 256;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool has_pivot = false;
 	bool *d_has_pivot;

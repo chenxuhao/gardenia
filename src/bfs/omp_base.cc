@@ -6,19 +6,23 @@
 #include "bitmap.h"
 #include "sliding_queue.h"
 #include "platform_atomics.h"
+#ifdef SIM
+#include "sim.h"
+#endif
+
 #define BFS_VARIANT "omp_base"
 
-void bfs_step(int m, int *row_offsets, int *column_indices, vector<int> &depth, SlidingQueue<int> &queue) {
+void bfs_step(int m, IndexType *row_offsets, IndexType *column_indices, DistT *depth, SlidingQueue<IndexType> &queue) {
 #pragma omp parallel
 	{
-		QueueBuffer<int> lqueue(queue);
+		QueueBuffer<IndexType> lqueue(queue);
 #pragma omp for
-		for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
-			int src = *q_iter;
-			int row_begin = row_offsets[src];
-			int row_end = row_offsets[src + 1];
-			for (int offset = row_begin; offset < row_end; offset ++) {
-				int dst = column_indices[offset];
+		for (IndexType *q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+			IndexType src = *q_iter;
+			const IndexType row_begin = row_offsets[src];
+			const IndexType row_end = row_offsets[src + 1];
+			for (IndexType offset = row_begin; offset < row_end; offset ++) {
+				IndexType dst = column_indices[offset];
 				//int curr_val = parent[dst];
 				int curr_val = depth[dst];
 				if (curr_val == MYINFINITY) { // not visited
@@ -33,28 +37,44 @@ void bfs_step(int m, int *row_offsets, int *column_indices, vector<int> &depth, 
 	}
 }
 
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *degree, DistT *dist) {
+void BFSSolver(int m, int nnz, int source, IndexType *in_row_offsets, IndexType *in_column_indices, IndexType *out_row_offsets, IndexType *out_column_indices, int *degree, DistT *dist) {
 	//omp_set_num_threads(12);
 	int num_threads = 1;
+#ifdef SIM
+	omp_set_num_threads(4);
+	map_m5_mem();
+#endif
 	#pragma omp parallel
 	{
 	num_threads = omp_get_num_threads();
 	}
 	printf("Launching OpenMP BFS solver (%d threads) ...\n", num_threads);
-	Timer t;
-	vector<int> depth(m, MYINFINITY);
+	DistT *depth = (DistT *)malloc(m * sizeof(DistT));
+	for(int i = 0; i < m; i ++) depth[i] = MYINFINITY;
 	depth[source] = 0;
-	SlidingQueue<int> queue(m);
+	int iter = 0;
+	Timer t;
+	t.Start();
+#ifdef SIM
+	m5_checkpoint(0,0);
+	SlidingQueue<IndexType> queue(m);
 	queue.push_back(source);
 	queue.slide_window();
-	int iter = 0;
-	t.Start();
+	set_addr_bounds(1,(uint64_t)out_row_offsets,(uint64_t)&out_row_offsets[m+1],4);
+	set_addr_bounds(2,(uint64_t)out_column_indices,(uint64_t)&out_column_indices[nnz],8);
+	set_addr_bounds(3,(uint64_t)depth,(uint64_t)&depth[m],8);
+	printf("Begin of ROI\n");
+#endif
 	while (!queue.empty()) {
 		++ iter;
+		printf("iteration=%d, num_frontier=%ld\n", iter, queue.size());
 		bfs_step(m, out_row_offsets, out_column_indices, depth, queue);
 		queue.slide_window();
-		//printf("iteration=%d, num_frontier=%ld\n", iter, queue.size());
 	}
+#ifdef SIM
+	printf("End of ROI\n");
+	m5_dumpreset_stats(0,0);
+#endif
 	t.Stop();
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());

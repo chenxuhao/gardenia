@@ -2,7 +2,7 @@
 // Contact: Xuhao Chen <cxh@illinois.edu>
 #include "common.h"
 /*
-GARDINIA Benchmark Suite
+GARDENIA Benchmark Suite
 Kernel: Single-source Shortest Paths (SSSP)
 Author: Xuhao Chen
 
@@ -29,9 +29,15 @@ bins.
 
 [1] Ulrich Meyer and Peter Sanders. "δ-stepping: a parallelizable shortest path
 	algorithm." Journal of Algorithms, 49(1):114–152, 2003.
+
+sssp_omp: OpenMP implementation using delta-stepping algorithm, one thread per vertex
+sssp_topo_base: topology-driven GPU implementation, one thread per vertex using CUDA
+sssp_topo_lb: topology-driven GPU implementation, one thread per edge using CUDA
+sssp_linear_base: data-driven GPU implementation, one thread per vertex using CUDA
+sssp_linear_lb: data-driven GPU implementation, one thread per edge using CUDA
 */
 
 //const DistT kDistInf = numeric_limits<DistT>::max()/2;
-#define kDistInf UINT_MAX
+#define kDistInf UINT_MAX/2
 void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, int delta);
 void SSSPVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist);

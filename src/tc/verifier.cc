@@ -2,8 +2,11 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "tc.h"
 #include "timer.h"
+#include <vector>
+#include <algorithm>
+
 // Compares with simple serial implementation that uses std::set_intersection
-void TCVerifier(int m, int *row_offsets, int *column_indices, int test_total) {
+void TCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, int test_total) {
 	printf("Verifying...\n");
 	int total = 0;
 	vector<int> intersection;
@@ -11,12 +14,12 @@ void TCVerifier(int m, int *row_offsets, int *column_indices, int test_total) {
 	Timer t;
 	t.Start();
 	for (int src = 0; src < m; src ++) {
-		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
-		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int dst = column_indices[offset];
-			int row_begin_dst = row_offsets[dst];
-			int row_end_dst = row_offsets[dst + 1];
+		IndexType row_begin = row_offsets[src];
+		IndexType row_end = row_offsets[src + 1];
+		for (IndexType offset = row_begin; offset < row_end; ++ offset) {
+			IndexType dst = column_indices[offset];
+			IndexType row_begin_dst = row_offsets[dst];
+			IndexType row_end_dst = row_offsets[dst + 1];
 			std::vector<int>::iterator new_end = set_intersection(column_indices + row_begin,
 					column_indices + row_end,
 					column_indices + row_begin_dst,

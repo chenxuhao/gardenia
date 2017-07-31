@@ -1,9 +1,12 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 SRC=main.cc
-OBJS=omp_base.o base.o topo.o bitset.o main.o verifier.o
+OBJS=omp_base.o topo_base.o topo_bitset.o topo_warp.o linear_base.o linear_bitset.o linear_warp.o main.o verifier.o
 
-all: $(OBJS) vc_base vc_bitset vc_topo vc_omp
+all: $(OBJS) vc_linear_bitset vc_linear_warp vc_topo_bitset vc_topo_warp vc_omp_base
+
+%.o: %.cpp
+	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
 
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(PARFLAG) $(INCLUDES) -c $<
@@ -11,20 +14,36 @@ all: $(OBJS) vc_base vc_bitset vc_topo vc_omp
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
-vc_omp: omp_base.o main.o verifier.o
+vc_omp_base: omp_base.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
-vc_topo: main.o topo.o verifier.o
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo.o verifier.o -o $@
+vc_omp_target: main.o omp_target.o verifier.o
+	$(ICPC) $(ICPCFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-vc_base: main.o base.o verifier.o
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o verifier.o -o $@
+vc_topo_base: main.o topo_base.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo_base.o verifier.o -o $@
 	mv $@ $(BIN)
 
-vc_bitset: main.o bitset.o verifier.o
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o bitset.o verifier.o -o $@
+vc_topo_bitset: main.o topo_bitset.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo_bitset.o verifier.o -o $@
+	mv $@ $(BIN)
+
+vc_topo_warp: main.o topo_warp.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo_warp.o verifier.o -o $@
+	mv $@ $(BIN)
+
+vc_linear_base: main.o linear_base.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear_base.o verifier.o -o $@
+	mv $@ $(BIN)
+
+vc_linear_bitset: main.o linear_bitset.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear_bitset.o verifier.o -o $@
+	mv $@ $(BIN)
+
+vc_linear_warp: main.o linear_warp.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear_warp.o verifier.o -o $@
 	mv $@ $(BIN)
 
 clean:

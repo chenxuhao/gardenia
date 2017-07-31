@@ -25,7 +25,8 @@ int main(int argc, char *argv[]) {
 	// CSR data structures
 	int m, n, nnz;//, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
 	WeightT *h_weight = NULL;
-	int *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices, *in_degree, *out_degree;
+	IndexType *in_row_offsets, *out_row_offsets, *in_column_indices, *out_column_indices;
+	int *in_degree, *out_degree;
 	//read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, false);
 	read_graph(argc, argv, m, n, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, symmetrize, false, false);
 	read_graph(argc, argv, m, n, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, symmetrize, true, false);
@@ -36,9 +37,9 @@ int main(int argc, char *argv[]) {
 
 	BFSSolver(m, nnz, source, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, out_degree, h_dist);
 	//BFSSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, h_dist);
+#ifndef SIM
 	BFSVerifier(m, source, out_row_offsets, out_column_indices, h_dist);
 	//write_solution("bfs-out.txt", m, h_dist);
-
 	//free(h_row_offsets);
 	//free(h_column_indices);
 	//free(h_degree);
@@ -50,5 +51,6 @@ int main(int argc, char *argv[]) {
 	free(out_degree);
 	free(h_weight);
 	free(h_dist);
+#endif
 	return 0;
 }

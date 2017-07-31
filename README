@@ -1,6 +1,6 @@
 Copyright 2016 Xuhao Chen, National University of Defense Technology
 Gardinia: Graph Analytics Repository for Designing Next-generation Accelerators
-Link: https://github.com/chenxuhao/gardinia
+Link: https://github.com/chenxuhao/gardenia
 The code infrastructure is ported from GAPBS by Scott Beamer at the University of California 
 and Lonstargpu by the ISS group at the University of Texas.
 To run the benchmarks on a simulator, please find the revised GPGPU-Sim version here:

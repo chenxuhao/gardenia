@@ -2,11 +2,13 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "bc.h"
 #include <omp.h>
+#include <vector>
+//#include <algorithm>
 #include "timer.h"
 #include "bitmap.h"
 #include "sliding_queue.h"
 #include "platform_atomics.h"
-#define BC_VARIANT "openmp"
+#define BC_VARIANT "omp_base"
 
 void PBFS(int m, int *row_offsets, int *column_indices, int source, vector<int> &path_counts,  vector<int> &depths,
 	Bitmap &succ, vector<SlidingQueue<int>::iterator> &depth_index, SlidingQueue<int> &queue) {
@@ -16,16 +18,16 @@ void PBFS(int m, int *row_offsets, int *column_indices, int source, vector<int> 
 	depth_index.push_back(queue.begin());
 	queue.slide_window();
 	//const int* g_out_start = row_offsets[0];
-#pragma omp parallel
+	#pragma omp parallel
 	{
 		int depth = 0;
 		QueueBuffer<int> lqueue(queue);
 		while (!queue.empty()) {
-#pragma omp single
+			#pragma omp single
 			depth_index.push_back(queue.begin());
 			depth++;
-#pragma omp for schedule(dynamic, 64)
-			for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+			#pragma omp for schedule(dynamic, 64)
+			for (int *q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
 				int src = *q_iter;
 				int row_begin = row_offsets[src];
 				int row_end = row_offsets[src + 1];
@@ -42,8 +44,8 @@ void PBFS(int m, int *row_offsets, int *column_indices, int source, vector<int> 
 				}
 			}
 			lqueue.flush();
-#pragma omp barrier
-#pragma omp single
+			#pragma omp barrier
+			#pragma omp single
 			queue.slide_window();
 		}
 	}
@@ -73,10 +75,11 @@ void BCSolver(int m, int nnz, int source, int *row_offsets, int *column_indices,
 		queue.reset();
 		succ.reset();
 		PBFS(m, row_offsets, column_indices, source, path_counts, depths, succ, depth_index, queue);
+		//printf("depth_index_size = %ld\n", depth_index.size());
 		vector<ScoreT> deltas(m, 0);
 		for (int d = depth_index.size()-2; d >= 0; d --) {
 			#pragma omp parallel for schedule(dynamic, 64)
-			for (auto it = depth_index[d]; it < depth_index[d+1]; it++) {
+			for (int *it = depth_index[d]; it < depth_index[d+1]; it++) {
 				int src = *it;
 				int row_begin = row_offsets[src];
 				int row_end = row_offsets[src + 1];
@@ -93,7 +96,6 @@ void BCSolver(int m, int nnz, int source, int *row_offsets, int *column_indices,
 			}
 		}
 	}
-
 	// Normalize scores
 	ScoreT biggest_score = 0;
 	#pragma omp parallel for reduction(max : biggest_score)
@@ -103,6 +105,7 @@ void BCSolver(int m, int nnz, int source, int *row_offsets, int *column_indices,
 	for (int n = 0; n < m; n ++)
 		scores[n] = scores[n] / biggest_score;
 	t.Stop();
+
 	printf("\truntime [%s] = %f ms.\n", BC_VARIANT, t.Millisecs());
 	return;
 }

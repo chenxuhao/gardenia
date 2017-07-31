@@ -2,10 +2,12 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "bfs.h"
 #include <omp.h>
+#include <vector>
+#include <string.h>
+#include <stdlib.h>
 #include "timer.h"
 #include "bitmap.h"
 #include "sliding_queue.h"
-#include <string.h>
 #include "platform_atomics.h"
 #define BFS_VARIANT "omp_topo"
 

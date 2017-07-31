@@ -9,6 +9,7 @@
 #include <vector>
 #include <iostream>
 #include <string.h>
+#include <stdlib.h>
 #include "platform_atomics.h"
 #define MINCAPACITY	65535
 #define MAXOVERFLOWS	1

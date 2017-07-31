@@ -1,6 +1,6 @@
 // Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
-#define BFS_VARIANT "linear"
+// Author: Xuhao Chen <cxh@illinois.edu>
+#define BFS_VARIANT "linear_lb"
 #include "bfs.h"
 #include "worklistc.h"
 #include "cuda_launch_config.hpp"
@@ -8,14 +8,17 @@
 #include <cub/cub.cuh>
 #include "timer.h"
 
-__global__ void initialize(DistT *dist, unsigned int m) {
-	unsigned int id = blockIdx.x * blockDim.x + threadIdx.x;
-	if (id < m) {
-		dist[id] = MYINFINITY;
+typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
+
+__device__ __forceinline__ void process_edge(int depth, int edge, int *column_indices, DistT *dist, Worklist2 &out_queue) {
+	int dst = column_indices[edge];
+	if (dist[dst] > depth) {
+		//atomicMin(&dist[dst], depth);
+		dist[dst] = depth;
+		out_queue.push(dst);
 	}
 }
 
-typedef cub::BlockScan<int, BLKSIZE> BlockScan;
 __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 &in_queue, Worklist2 &out_queue, int depth) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
@@ -27,7 +30,7 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		size = row_offsets[vertex + 1] - row_offsets[vertex];
 	}
 	while(true) {
-		if(size > BLKSIZE)
+		if(size > BLOCK_SIZE)
 			owner = threadIdx.x;
 		__syncthreads();
 		if(owner == -1)
@@ -45,19 +48,21 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		int neighbor_size = row_end - row_begin;
 		int num = ((neighbor_size + blockDim.x - 1) / blockDim.x) * blockDim.x;
 		for(int i = threadIdx.x; i < num; i += blockDim.x) {
-			//int ncnt = 0;
-			int dst = 0;
 			int edge = row_begin + i;
+			//int dst = 0;
+			//int ncnt = 0;
 			if(i < neighbor_size) {
+				process_edge(depth, edge, column_indices, dist, out_queue);
+				/*
 				dst = column_indices[edge];
 				assert(dst < m);
 				if(dist[dst] == MYINFINITY) {
 					dist[dst] = depth;
-					out_queue.push(dst);
-					//ncnt = 1;
+					ncnt = 1;
 				}
+				*/
 			}
-			//out_queue.push_1item<BlockScan>(ncnt, dst, BLKSIZE);
+			//out_queue.push_1item<BlockScan>(ncnt, dst, BLOCK_SIZE);
 		}
 	}
 }
@@ -68,9 +73,6 @@ __device__ __forceinline__ unsigned LaneId() {
 	return ret;
 }
 
-#define WARP_SIZE 32
-#define LOG_WARP_SIZE 5
-#define NUM_WARPS (BLKSIZE / WARP_SIZE)
 __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 &in_queue, Worklist2 &out_queue, int depth) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
@@ -100,28 +102,30 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 		int num = ((neighbor_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 		for(int i = lane_id; i < num; i+= WARP_SIZE) {
 			//int ncnt = 0;
-			int dst = 0;
+			//int dst = 0;
 			int edge = row_begin + i;
 			if(i < neighbor_size) {
+				process_edge(depth, edge, column_indices, dist, out_queue);
+				/*
 				dst = column_indices[edge];
 				assert(dst < m);
 				if(dist[dst] == MYINFINITY) {
 					dist[dst] = depth;
-					out_queue.push(dst);
-					//ncnt = 1;
+					ncnt = 1;
 				}
+				*/
 			}
-			//out_queue.push_1item<BlockScan>(ncnt, dst, BLKSIZE);
+			//out_queue.push_1item<BlockScan>(ncnt, dst, BLOCK_SIZE);
 		}
 	}
 }
 
 __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 in_queue, Worklist2 out_queue, int depth) {
-	//expandByCta(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
-	//expandByWarp(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+	expandByCta(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
+	expandByWarp(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
-	const int SCRATCHSIZE = BLKSIZE;
+	const int SCRATCHSIZE = BLOCK_SIZE;
 	__shared__ BlockScan::TempStorage temp_storage;
 	__shared__ int gather_offsets[SCRATCHSIZE];
 	gather_offsets[threadIdx.x] = 0;
@@ -148,38 +152,34 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 		scratch_offset += i;
 		__syncthreads();
 		//int ncnt = 0;
-		int dst = 0;
+		//int dst = 0;
 		int edge = gather_offsets[threadIdx.x];
 		if(threadIdx.x < total_edges) {
+			process_edge(depth, edge, column_indices, dist, out_queue);
+			/*
 			dst = column_indices[edge];
 			assert(dst < m);
 			if(dist[dst] == MYINFINITY) {
 				dist[dst] = depth;
-				//ncnt = 1;
-				out_queue.push(dst);
+				ncnt = 1;
 			}
+			*/
 		}
-		//out_queue.push_1item<BlockScan>(ncnt, dst, BLKSIZE);
-		total_edges -= BLKSIZE;
-		done += BLKSIZE;
+		//out_queue.push_1item<BlockScan>(ncnt, dst, BLOCK_SIZE);
+		total_edges -= BLOCK_SIZE;
+		done += BLOCK_SIZE;
 	}
 }
 
 __global__ void insert(int source, Worklist2 in_queue) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
-	if(id == 0) {
-		in_queue.push(source);
-	}
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if(id == 0) in_queue.push(source);
 	return;
 }
 
 void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
+	//print_device_info(0);
 	DistT zero = 0;
-	int iter = 0;
-	Timer t;
-	int nthreads = BLKSIZE;
-	int nblocks = (m - 1) / nthreads + 1;
-
 	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
@@ -188,21 +188,25 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	DistT * d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
-
-	//initialize <<<nblocks, nthreads>>> (m, d_dist);
-	//CudaTest("initializing failed");
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaDeviceSynchronize());
+
 	Worklist2 queue1(nnz), queue2(nnz);
 	Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
+	int iter = 0;
 	int nitems = 1;
+	int nthreads = BLOCK_SIZE;
+	int nblocks = (m - 1) / nthreads + 1;
+	printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", nthreads);
+
+	Timer t;
 	t.Start();
-	insert<<<1, BLKSIZE>>>(source, *in_frontier);
+	insert<<<1, nthreads>>>(source, *in_frontier);
 	nitems = in_frontier->nitems();
 	do {
 		++ iter;
-		nblocks = (nitems + BLKSIZE - 1) / BLKSIZE; 
-		//printf("iteration=%d, nblocks=%d, nthreads=%d, wlsz=%d\n", iter, nblocks, BLKSIZE, nitems);
-		bfs_kernel<<<nblocks, BLKSIZE>>>(m, d_row_offsets, d_column_indices, d_dist, *in_frontier, *out_frontier, iter);
+		nblocks = (nitems + nthreads - 1) / nthreads; 
+		bfs_kernel<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_dist, *in_frontier, *out_frontier, iter);
 		CudaTest("solving failed");
 		nitems = out_frontier->nitems();
 		Worklist2 *tmp = in_frontier;
@@ -212,9 +216,9 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	} while(nitems > 0);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
+
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
-
 	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));

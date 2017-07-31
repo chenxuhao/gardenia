@@ -4,7 +4,6 @@
 #ifndef PLATFORM_ATOMICS_H_
 #define PLATFORM_ATOMICS_H_
 
-
 /*
 GAP Benchmark Suite
 File:   Platform Atomics
@@ -38,7 +37,11 @@ Wrappers for compiler intrinsics for atomic memory operations (AMOs)
     // http://docs.oracle.com/cd/E19253-01/816-5168/6mbb3hr06/index.html
 
     #include <atomic.h>
-    #include <cinttypes>
+    //#include <cinttypes>
+	typedef int int32_t;
+	typedef unsigned uint32_t;
+	typedef long long int64_t;
+	typedef unsigned long long uint64_t;
 
     int32_t fetch_and_add(int32_t &x, int32_t inc) {
       return atomic_add_32_nv((volatile uint32_t*) &x, inc) - inc;

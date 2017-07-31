@@ -3,19 +3,20 @@
 #include "symgs.h"
 #include <omp.h>
 #include "timer.h"
-#define SYMGS_VARIANT "openmp"
+#define SYMGS_VARIANT "omp_base"
 
-void gauss_seidel(int *Ap, int *Aj, int *indices, ValueType *Ax, ValueType *x, ValueType *b, int row_start, int row_stop, int row_step) {
+void gauss_seidel(IndexType *Ap, IndexType *Aj, int *indices, ValueType *Ax, ValueType *x, ValueType *b, int row_start, int row_stop, int row_step) {
 	//printf("Solving, num_rows=%d\n", row_stop-row_start);
 	#pragma omp parallel for
 	for (int i = row_start; i < row_stop; i += row_step) {
 		int inew = indices[i];
-		int row_begin = Ap[inew];
-		int row_end = Ap[inew+1];
+		IndexType row_begin = Ap[inew];
+		IndexType row_end = Ap[inew+1];
 		ValueType rsum = 0;
 		ValueType diag = 0;
-		for (int jj = row_begin; jj < row_end; jj++) {
-			const int j = Aj[jj];  //column index
+		#pragma ivdep
+		for (IndexType jj = row_begin; jj < row_end; jj++) {
+			const IndexType j = Aj[jj];  //column index
 			if (inew == j) diag = Ax[jj];
 			else rsum += x[j] * Ax[jj];
 		}
@@ -23,7 +24,7 @@ void gauss_seidel(int *Ap, int *Aj, int *indices, ValueType *Ax, ValueType *x, V
 	}
 }
 
-void SymGSSolver(int num_rows, int nnz, int *Ap, int *Aj, int *indices, ValueType *Ax, ValueType *x, ValueType *b, std::vector<int> color_offsets) {
+void SymGSSolver(int num_rows, int nnz, IndexType *Ap, IndexType *Aj, int *indices, ValueType *Ax, ValueType *x, ValueType *b, std::vector<int> color_offsets) {
 	int num_threads = 1;
 #pragma omp parallel
 	{

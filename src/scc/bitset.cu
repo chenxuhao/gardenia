@@ -32,11 +32,11 @@ __global__ void fwd_step(int m, int *row_offsets, int *column_indices, unsigned 
 
 __global__ void fwd_step_lb(int m, int *row_offsets, int *column_indices, unsigned char *status, int *scc_root, bool *changed) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	typedef cub::BlockScan<int, BLKSIZE> BlockScan;
-	const int SCRATCHSIZE = BLKSIZE;
+	typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
+	const int SCRATCHSIZE = BLOCK_SIZE;
 	__shared__ BlockScan::TempStorage temp_storage;
 	__shared__ int gather_offsets[SCRATCHSIZE];
-	__shared__ unsigned srcsrc[BLKSIZE];
+	__shared__ unsigned srcsrc[BLOCK_SIZE];
 	gather_offsets[threadIdx.x] = 0;
 	int neighbor_size = 0;
 	int neighbor_offset = 0;
@@ -72,8 +72,8 @@ __global__ void fwd_step_lb(int m, int *row_offsets, int *column_indices, unsign
 				scc_root[dst] = scc_root[src];
 			}
 		}
-		total_edges -= BLKSIZE;
-		done += BLKSIZE;
+		total_edges -= BLOCK_SIZE;
+		done += BLOCK_SIZE;
 	}
 }
 
@@ -99,8 +99,8 @@ __global__ void bwd_step(int m, int *row_offsets, int *column_indices, unsigned 
 
 __global__ void bwd_step_lb(int m, int *row_offsets, int *column_indices, unsigned char *status, bool *changed) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	typedef cub::BlockScan<int, BLKSIZE> BlockScan;
-	const int SCRATCHSIZE = BLKSIZE;
+	typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
+	const int SCRATCHSIZE = BLOCK_SIZE;
 	__shared__ BlockScan::TempStorage temp_storage;
 	__shared__ int gather_offsets[SCRATCHSIZE];
 	gather_offsets[threadIdx.x] = 0;
@@ -135,8 +135,8 @@ __global__ void bwd_step_lb(int m, int *row_offsets, int *column_indices, unsign
 				set_bwd_visited(&status[dst]);
 			}
 		}
-		total_edges -= BLKSIZE;
-		done += BLKSIZE;
+		total_edges -= BLOCK_SIZE;
+		done += BLOCK_SIZE;
 	}
 }
 
@@ -350,7 +350,7 @@ __global__ void find_removed_vertices_kernel(int m, unsigned char *status, int *
 
 // find forward reachable set
 void fwd_reach(int m, int *out_row_offsets, int *out_column_indices, unsigned *colors, unsigned char *status, int *scc_root) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_changed, *d_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
@@ -365,7 +365,7 @@ void fwd_reach(int m, int *out_row_offsets, int *out_column_indices, unsigned *c
 }
 
 void fwd_reach_lb(int m, int *out_row_offsets, int *out_column_indices, unsigned char *status, int *scc_root) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_changed, *d_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
@@ -381,7 +381,7 @@ void fwd_reach_lb(int m, int *out_row_offsets, int *out_column_indices, unsigned
 
 // find backward reachable set
 void bwd_reach(int m, int *in_row_offsets, int *in_column_indices, unsigned *colors, unsigned char *status) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_changed, *d_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
@@ -396,7 +396,7 @@ void bwd_reach(int m, int *in_row_offsets, int *in_column_indices, unsigned *col
 }
 
 void bwd_reach_lb(int m, int *in_row_offsets, int *in_column_indices, unsigned char *status) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_changed, *d_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
@@ -411,7 +411,7 @@ void bwd_reach_lb(int m, int *in_row_offsets, int *in_column_indices, unsigned c
 }
 
 void iterative_trim(int m, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, unsigned *colors, unsigned char *status, int *scc_root) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_changed, *d_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
@@ -428,7 +428,7 @@ void iterative_trim(int m, int *in_row_offsets, int *in_column_indices, int *out
 }
 
 void first_trim(int m, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, unsigned char *status) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_changed, *d_changed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
@@ -445,7 +445,7 @@ void first_trim(int m, int *in_row_offsets, int *in_column_indices, int *out_row
 }
 
 bool update(int m, unsigned *colors, unsigned char *status, unsigned *locks, int *scc_root) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	bool h_has_pivot, *d_has_pivot;
 	h_has_pivot = false;
@@ -458,21 +458,21 @@ bool update(int m, unsigned *colors, unsigned char *status, unsigned *locks, int
 }
 
 void update_colors(int m, unsigned *colors, unsigned char *status) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	update_colors_kernel<<<nblocks, nthreads>>>(m, colors, status);
 	CudaTest("solving kernel update_colors failed");
 }
 
 void trim2(int m, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, unsigned *colors, unsigned char *status, int *scc_root) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	trim2_kernel<<<nblocks, nthreads>>>(m, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, colors, status, scc_root);
 	CudaTest("solving kernel trim2 failed");
 }
 
 void find_removed_vertices(int m, unsigned char *status, int *mark) {
-	int nthreads = BLKSIZE;
+	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	find_removed_vertices_kernel<<<nblocks, nthreads>>>(m, status, mark);
 	CudaTest("solving kernel update_colors failed");

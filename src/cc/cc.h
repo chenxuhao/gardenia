@@ -2,7 +2,7 @@
 // Contact: Xuhao Chen <cxh@illinois.edu>
 #include "common.h"
 /*
-GARDINIA Benchmark Suite
+GARDENIA Benchmark Suite
 Kernel: Connected Components (CC)
 Author: Xuhao Chen 
 
@@ -17,7 +17,11 @@ implementation optimizations from Bader et al. [1].
 
 [2] Yossi Shiloach and Uzi Vishkin. "An o(logn) parallel connectivity algorithm"
     Journal of Algorithms, 3(1):57–67, 1982.
+
+cc_omp : one thread per vertex using OpenMP
+cc_base: one thread per vertex using CUDA
+cc_warp: one warp per vertex using CUDA
 */
 
-void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp);
-void CCVerifier(int m, int *row_offsets, int *column_indices, CompT *comp);
+void CCSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices, CompT *comp);
+void CCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, CompT *comp);

@@ -7,7 +7,6 @@
 #define DELTA 0.00000001
 #define EPSILON 0.01
 #define MAX_ITER 19
-#define BLKSIZE 128
 
 __global__ void initialize(float *cur_pagerank, float *next_pagerank, unsigned m) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -17,12 +16,12 @@ __global__ void initialize(float *cur_pagerank, float *next_pagerank, unsigned m
 	}
 }
 
-typedef cub::BlockScan<int, BLKSIZE> BlockScan;
+typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
 __global__ void update_neighbors(int m, int *row_offsets, int *column_indices, float *cur_pagerank, float *next_pagerank) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	__shared__ BlockScan::TempStorage temp_storage;
-	__shared__ int gather_offsets[BLKSIZE];
-	__shared__ int src_id[BLKSIZE];
+	__shared__ int gather_offsets[BLOCK_SIZE];
+	__shared__ int src_id[BLOCK_SIZE];
 
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	for (int id = tid; total_inputs > 0; id += blockDim.x * gridDim.x, total_inputs--) {
@@ -43,7 +42,7 @@ __global__ void update_neighbors(int m, int *row_offsets, int *column_indices, f
 		while (total_edges > 0) {
 			__syncthreads();
 			int i;
-			for(i = 0; neighborsdone + i < degree && (scratch_offset + i - done) < BLKSIZE; i++) {
+			for(i = 0; neighborsdone + i < degree && (scratch_offset + i - done) < BLOCK_SIZE; i++) {
 				gather_offsets[scratch_offset + i - done] = neighboroffset + neighborsdone + i;
 				src_id[i] = src;
 			}
@@ -58,15 +57,15 @@ __global__ void update_neighbors(int m, int *row_offsets, int *column_indices, f
 				//next_pagerank[dst] += value;
 				atomicAdd(&next_pagerank[dst], value);
 			}
-			total_edges -= BLKSIZE;
-			done += BLKSIZE;
+			total_edges -= BLOCK_SIZE;
+			done += BLOCK_SIZE;
 		}
 	}
 }
 
 __global__ void self_update(int m, int *row_offsets, int *column_indices, float *cur_pagerank, float *next_pagerank, float *diff) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
-	typedef cub::BlockReduce<float, 256> BlockReduce;
+	typedef cub::BlockReduce<float, BLOCK_SIZE> BlockReduce;
 	__shared__ typename BlockReduce::TempStorage temp_storage;
 	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	float local_diff = 0;
@@ -88,7 +87,7 @@ void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree
 	float *d_cur_pagerank, *d_next_pagerank;
 	double starttime, endtime, runtime;
 	int iteration = 0;
-	const int nthreads = 256;
+	const int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_cur_pagerank, m * sizeof(float)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_next_pagerank, m * sizeof(float)));

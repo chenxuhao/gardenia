@@ -4,7 +4,7 @@
 #define SCC_H
 #include "common.h"
 /*
-GARDINIA Benchmark Suite
+GARDENIA Benchmark Suite
 Kernel: Strongly Connected Components (SCC)
 Author: Xuhao Chen 
 
