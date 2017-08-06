@@ -1,7 +1,7 @@
 include ../common.mk
 CXXFLAGS+=-std=c++11
 SRC=main.cc
-OBJS=base.o tex.o warp.o vector.o omp_base.o verifier.o main.o
+OBJS=vector.o omp_base.o verifier.o main.o
 
 all: $(OBJS) symgs_omp_base symgs_vector
 

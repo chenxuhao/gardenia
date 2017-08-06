@@ -28,8 +28,10 @@ int main(int argc, char *argv[]) {
 	if(!is_directed) symmetrize = true;
 
 	// CSR data structures
-	int m, n, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	float *h_weight = NULL;
+	int m, n, nnz;
+	IndexType *h_row_offsets = NULL, *h_column_indices = NULL;
+	int *h_degree = NULL;
+	ValueType *h_weight = NULL;
 	read_graph(argc, argv, m, n, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, symmetrize);
 	//readMatrix(argv[1], &m, &n, &h_row_offsets, &h_column_indices, &h_weight);
 
@@ -39,12 +41,13 @@ int main(int argc, char *argv[]) {
 	for(int i = 0; i < m; i ++) h_dist[i] = kDistInf;
 
 	SSSPSolver(m, nnz, source, h_row_offsets, h_column_indices, h_wt, h_dist, delta);
+#ifndef SIM
 	SSSPVerifier(m, source, h_row_offsets, h_column_indices, h_wt, h_dist);
-
 	free(h_row_offsets);
 	free(h_column_indices);
 	free(h_weight);
 	free(h_dist);
 	if(h_degree) free(h_degree);
+#endif
 	return 0;
 }

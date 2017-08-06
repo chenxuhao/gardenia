@@ -1,14 +1,17 @@
 include ../common.mk
 SRC=main.cc
-OBJS=base.o tex.o warp.o vector.o omp_base.o verifier.o main.o
-all: $(OBJS) spmv_vector spmv_omp_base spmv_ocl_base
+OBJS=vector.o omp_base.o verifier.o main.o
+all: $(OBJS) spmv_vector spmv_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -march=core-avx2 -c $<
 
+ifeq ($(HOST),X86)
 %.o: %.cc
-	#$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+else
 	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
+endif
 
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<

@@ -1,16 +1,20 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 SRC=main.cc
-OBJS=base.o warp.o fusion.o omp_base.o verifier.o main.o
+OBJS=base.o warp.o omp_base.o verifier.o main.o
 
-all: $(OBJS) cc_base cc_warp cc_omp_base cc_ocl_base
+all: $(OBJS) cc_base cc_warp cc_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
 
+ifeq ($(HOST),X86)
 %.o: %.cc
-	#$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+else
+%.o: %.cc
 	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
+endif
 
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<

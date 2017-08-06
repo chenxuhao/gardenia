@@ -2,16 +2,24 @@ include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 ICPCFLAGS+=-std=c++98
 CXXFLAGS+=-std=c++11
+SIMFLAGS+=-std=c++11
 SRC=main.cc
-OBJS=omp_base.o linear_base.o linear_lb.o topo_base.o topo_lb.o main.o verifier.o
+#OBJS=omp_base.o linear_base.o linear_lb.o topo_base.o topo_lb.o main.o verifier.o
+OBJS=omp_base.o linear_lb.o main.o verifier.o
 
-all: $(OBJS) bc_linear_base bc_linear_lb bc_topo_base bc_topo_lb bc_omp_base
+#all: $(OBJS) bc_linear_base bc_linear_lb bc_topo_base bc_topo_lb bc_omp_base
+all: $(OBJS) bc_linear_lb bc_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
 
+ifeq ($(HOST),X86)
 %.o: %.cc
-	$(CXX) $(CXXFLAGS) $(PARFLAG) $(INCLUDES) -c $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+else
+%.o: %.cc
+	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
+endif
 
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
@@ -22,6 +30,10 @@ bc_omp_base: omp_base.o main.o verifier.o
 
 bc_omp_target: main.o omp_target.o verifier.o
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+bc_omp_base_sim: omp_base.o main.o verifier.o
+	$(CXX) $(SIMFLAGS) $(INCLUDES) main.o omp_base.o verifier.o $(M5OP) -o $@ -lgomp
 	mv $@ $(BIN)
 
 bc_linear_base: linear_base.o main.o verifier.o

@@ -32,5 +32,5 @@ bc_linear_base: data-driven GPU implementation, one thread per vertex using CUDA
 bc_linear_lb: data-driven GPU implementation, one thread per edge using CUDA
 */
 
-void BCSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, ScoreT *scores);
-void BCVerifier(int m, int source, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test);
+void BCSolver(int m, int nnz, int source, IndexType *row_offsets, IndexType *column_indices, ScoreT *scores);
+void BCVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, int num_iters, ScoreT *scores_to_test);

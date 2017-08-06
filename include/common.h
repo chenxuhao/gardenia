@@ -10,7 +10,7 @@
 #include <climits>
 #include <math.h>
 using namespace std;
-#define LONG_TYPES
+//#define LONG_TYPES
 #ifndef LONG_TYPES
 typedef float ScoreT;
 typedef float WeightT;

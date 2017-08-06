@@ -26,9 +26,9 @@ void SpmvSolver(int num_rows, int nnz, IndexType *Ap, IndexType *Aj, ValueType *
 	m5_checkpoint(0,0);
 	set_addr_bounds(1,(uint64_t)Ap,(uint64_t)&Ap[num_rows+1],4);
 	set_addr_bounds(2,(uint64_t)Aj,(uint64_t)&Aj[nnz],8);
-	//set_addr_bounds(2,(uint64_t)Ax,(uint64_t)&Ax[nnz],8);
 	set_addr_bounds(3,(uint64_t)x,(uint64_t)&x[num_rows],8);
 	//set_addr_bounds(1,(uint64_t)y,(uint64_t)&y[num_rows],4);
+	set_addr_bounds(5,(uint64_t)Ax,(uint64_t)&Ax[nnz],8);
 	printf("Begin of ROI\n");
 #endif
 

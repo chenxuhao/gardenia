@@ -5,10 +5,14 @@ GARDENIA_ROOT=$(HOME)/gardenia_code
 CUB_DIR=$(HOME)/cub-1.6.4
 B40_DIR=$(HOME)/back40computing-read-only
 BIN=$(GARDENIA_ROOT)/bin
-#CC=gcc
-#CXX=g++
+HOST=X86
+ifeq ($(HOST),X86)
+CC=gcc
+CXX=g++
+else 
 CC=aarch64-linux-gnu-gcc
 CXX=aarch64-linux-gnu-g++
+endif
 ICC=$(ICC_HOME)/icc
 ICPC=$(ICC_HOME)/icpc
 NVCC=$(CUDA_HOME)/bin/nvcc

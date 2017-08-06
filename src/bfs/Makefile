@@ -3,16 +3,22 @@ INCLUDES+=-I $(CUB_DIR)
 ICPCFLAGS+=-std=c++98
 B40C_INC=-I $(B40_DIR) -I $(B40_DIR)/test
 SRC=main.cc
-OBJS= topo_base.o linear_base.o topo_vector.o linear_vector.o topo_lb.o linear_lb.o bottom_up.o hybrid_base.o hybrid_lb.o main.o verifier.o omp_base.o omp_beamer.o omp_topo.o
+#OBJS= topo_base.o linear_base.o topo_vector.o linear_vector.o topo_lb.o linear_lb.o bottom_up.o hybrid_base.o hybrid_lb.o main.o verifier.o omp_base.o omp_beamer.o omp_topo.o
+OBJS= linear_lb.o main.o verifier.o omp_base.o omp_beamer.o
 
-all: $(OBJS) bfs_linear_base bfs_linear_lb bfs_topo_base bfs_topo_lb bfs_omp_beamer bfs_omp_base bfs_hybrid_lb
+#all: $(OBJS) bfs_linear_base bfs_linear_lb bfs_topo_base bfs_topo_lb bfs_omp_beamer bfs_omp_base bfs_hybrid_lb
+all: $(OBJS) bfs_linear_lb bfs_omp_beamer bfs_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
 
+ifeq ($(HOST),X86)
 %.o: %.cc
-	#$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+else
+%.o: %.cc
 	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
+endif
 
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<

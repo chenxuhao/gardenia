@@ -39,5 +39,5 @@ sssp_linear_lb: data-driven GPU implementation, one thread per edge using CUDA
 
 //const DistT kDistInf = numeric_limits<DistT>::max()/2;
 #define kDistInf UINT_MAX/2
-void SSSPSolver(int m, int nnz, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, int delta);
-void SSSPVerifier(int m, int source, int *row_offsets, int *column_indices, DistT *weight, DistT *dist);
+void SSSPSolver(int m, int nnz, int source, IndexType *row_offsets, IndexType *column_indices, DistT *weight, DistT *dist, int delta);
+void SSSPVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, DistT *weight, DistT *dist);

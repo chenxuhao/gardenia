@@ -66,7 +66,7 @@ bool check_almost_equal(const T * A, const T * B, const int N) {
 // - uses vector for BFS queue
 // - regenerates farthest to closest traversal order from depths
 // - regenerates successors from depths
-void BCVerifier(int m, int source, int *row_offsets, int *column_indices, int num_iters, ScoreT *scores_to_test) {
+void BCVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, int num_iters, ScoreT *scores_to_test) {
 	printf("Verifying...\n");
 	vector<ScoreT> scores(m, 0);
 	//std::cout << setiosflags(ios::fixed);
@@ -78,15 +78,15 @@ void BCVerifier(int m, int source, int *row_offsets, int *column_indices, int nu
 		depths[source] = 0;
 		vector<int> path_counts(m, 0);
 		path_counts[source] = 1;
-		vector<int> to_visit;
+		vector<IndexType> to_visit;
 		to_visit.reserve(m);
 		to_visit.push_back(source);
-		for (vector<int>::iterator it = to_visit.begin(); it != to_visit.end(); it++) {
-			int src = *it;
-			int row_begin = row_offsets[src];
-			int row_end = row_offsets[src + 1];
-			for (int offset = row_begin; offset < row_end; offset ++) {
-				int dst = column_indices[offset];
+		for (vector<IndexType>::iterator it = to_visit.begin(); it != to_visit.end(); it++) {
+			IndexType src = *it;
+			IndexType row_begin = row_offsets[src];
+			IndexType row_end = row_offsets[src + 1];
+			for (IndexType offset = row_begin; offset < row_end; offset ++) {
+				IndexType dst = column_indices[offset];
 				if (depths[dst] == -1) {
 					depths[dst] = depths[src] + 1;
 					to_visit.push_back(dst);
@@ -109,10 +109,10 @@ void BCVerifier(int m, int source, int *row_offsets, int *column_indices, int nu
 		for (int depth = static_cast<int>(verts_at_depth.size()) - 1; depth >= 0; depth --) {
 			for (unsigned id = 0; id < verts_at_depth[depth].size(); id ++) {
 				int src = verts_at_depth[depth][id];
-				int row_begin = row_offsets[src];
-				int row_end = row_offsets[src + 1];
-				for (int offset = row_begin; offset < row_end; offset ++) {
-					int dst = column_indices[offset];
+				IndexType row_begin = row_offsets[src];
+				IndexType row_end = row_offsets[src + 1];
+				for (IndexType offset = row_begin; offset < row_end; offset ++) {
+					IndexType dst = column_indices[offset];
 					if (depths[dst] == depths[src] + 1) {
 						deltas[src] += static_cast<ScoreT>(path_counts[src]) /
 							static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);

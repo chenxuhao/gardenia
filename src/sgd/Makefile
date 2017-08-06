@@ -1,6 +1,6 @@
 include ../common.mk
 SRC=main.cc
-OBJS=base.o omp_base.o main.o verifier.o
+OBJS=base.o vector.o omp_base.o main.o verifier.o
 CXXFLAGS+=-std=c++11
 NVFLAGS+=-std=c++11
 

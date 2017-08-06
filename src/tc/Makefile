@@ -2,14 +2,18 @@ include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 SRC=main.cc
 OBJS=omp_base.o base.o warp.o main.o verifier.o
-all: $(OBJS) tc_base tc_warp tc_omp_base tc_ocl_base
+all: $(OBJS) tc_base tc_warp tc_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
 
+ifeq ($(HOST),X86)
 %.o: %.cc
-	#$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
+else
+%.o: %.cc
 	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
+endif
 
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
