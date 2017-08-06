@@ -74,7 +74,9 @@ void BCSolver(int m, int nnz, int source, IndexType *row_offsets, IndexType *col
 	t.Start();
 #ifdef SIM
 	m5_checkpoint(0,0);
+#endif
 	SlidingQueue<IndexType> queue(m);
+#ifdef SIM
 	set_addr_bounds(1,(uint64_t)row_offsets,(uint64_t)&row_offsets[m+1],4);
 	set_addr_bounds(2,(uint64_t)column_indices,(uint64_t)&column_indices[nnz],8);
 	set_addr_bounds(3,(uint64_t)scores,(uint64_t)&scores[m],8);

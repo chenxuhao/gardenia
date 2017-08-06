@@ -2,6 +2,7 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "pr.h"
 #include <omp.h>
+#include <stdlib.h>
 #include "timer.h"
 #ifdef SIM
 #include "sim.h"

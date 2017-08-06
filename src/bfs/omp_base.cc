@@ -2,6 +2,7 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "bfs.h"
 #include <omp.h>
+#include <stdlib.h>
 #include "timer.h"
 #include "bitmap.h"
 #include "sliding_queue.h"
@@ -57,9 +58,11 @@ void BFSSolver(int m, int nnz, int source, IndexType *in_row_offsets, IndexType 
 	t.Start();
 #ifdef SIM
 	m5_checkpoint(0,0);
+#endif
 	SlidingQueue<IndexType> queue(m);
 	queue.push_back(source);
 	queue.slide_window();
+#ifdef SIM
 	set_addr_bounds(1,(uint64_t)out_row_offsets,(uint64_t)&out_row_offsets[m+1],4);
 	set_addr_bounds(2,(uint64_t)out_column_indices,(uint64_t)&out_column_indices[nnz],8);
 	set_addr_bounds(3,(uint64_t)depth,(uint64_t)&depth[m],8);
