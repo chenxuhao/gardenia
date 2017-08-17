@@ -23,6 +23,7 @@ int main(int argc, char *argv[]) {
 	int *in_degree, *out_degree;
 	read_graph(argc, argv, m, n, nnz, out_row_offsets, out_column_indices, out_degree, h_weight, symmetrize, false, false);
 	read_graph(argc, argv, m, n, nnz, in_row_offsets, in_column_indices, in_degree, h_weight, symmetrize, true, false);
+	//print_degree(m, in_degree, out_degree);
 
 	ScoreT *h_scores = (ScoreT *) malloc(m * sizeof(ScoreT));
 	const ScoreT init_score = 1.0f / m;

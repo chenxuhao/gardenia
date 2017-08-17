@@ -21,7 +21,7 @@ CXXFLAGS=-O3 -Wall -fopenmp
 ICPCFLAGS=-O3 -Wall -openmp
 #SIMFLAGS=-O3 -Wall -DSIM -fopenmp -static -L/home/cxh/m5threads/ -lpthread
 SIMFLAGS=-flto -fwhole-program -O3 -Wall -DSIM -fopenmp -static
-M5OP=~/gem5-ics/util/m5/m5op_arm_A64.S
+M5OP=$(HOME)/gem5-ics/util/m5/m5op_arm_A64.S
 #NVFLAGS=-g -arch=$(COMPUTECAPABILITY) #-Xptxas -v
 NVFLAGS=-O3 -arch=$(COMPUTECAPABILITY) -Wno-deprecated-gpu-targets#-Xptxas -v
 #NVFLAGS+=-cudart shared

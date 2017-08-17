@@ -2,7 +2,6 @@
 *.DS_Store
 *.log
 *.out
-*.pdf
 *.o
 *.d
 *.swp

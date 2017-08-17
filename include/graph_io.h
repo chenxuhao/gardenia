@@ -301,3 +301,20 @@ void read_graph(int argc, char *argv[], int &m, int &n, int &nnz, IndexType *&ro
 	printf(" Done\n");
 }
 
+void print_degree(int m, int *in_degree, int *out_degree) {
+	if(in_degree != NULL) {
+		FILE *fp = fopen("in_degree.txt", "w");
+		fprintf(fp,"%d\n", m);
+		for(int i = 0; i < m; i ++)
+			fprintf(fp,"%d ", in_degree[i]);
+		fclose(fp);
+	}
+	if(out_degree != NULL) {
+		FILE *fp = fopen("out_degree.txt", "w");
+		fprintf(fp,"%d\n", m);
+		for(int i = 0; i < m; i ++)
+			fprintf(fp,"%d ", out_degree[i]);
+		fclose(fp);
+	}
+}
+

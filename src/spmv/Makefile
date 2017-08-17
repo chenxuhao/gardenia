@@ -10,6 +10,7 @@ ifeq ($(HOST),X86)
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
 else
+%.o: %.cc
 	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
 endif
 
