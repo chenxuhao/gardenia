@@ -29,9 +29,9 @@ int main(int argc, char *argv[]) {
 
 	// CSR data structures
 	int m, n, nnz;
-	IndexType *h_row_offsets = NULL, *h_column_indices = NULL;
+	IndexT *h_row_offsets = NULL, *h_column_indices = NULL;
 	int *h_degree = NULL;
-	ValueType *h_weight = NULL;
+	WeightT *h_weight = NULL;
 	read_graph(argc, argv, m, n, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, symmetrize);
 	//readMatrix(argv[1], &m, &n, &h_row_offsets, &h_column_indices, &h_weight);
 

@@ -25,5 +25,5 @@ spmv_warp: one warp per row (vertex) using CUDA
 spmv_vector: one vector per row (vertex) using CUDA
 */
 
-void SpmvSolver(int m, int nnz, IndexType *Ap, IndexType *Aj, ValueType *Ax, ValueType *x, ValueType *y);
-void SpmvVerifier(int m, int nnz, IndexType *Ap, IndexType *Aj, ValueType *Ax, ValueType *x, ValueType *y, ValueType *test_y);
+void SpmvSolver(int m, int nnz, IndexT *Ap, IndexT *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degree);
+void SpmvVerifier(int m, int nnz, IndexT *Ap, IndexT *Aj, ValueT *Ax, ValueT *x, ValueT *y, ValueT *test_y);

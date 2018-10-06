@@ -75,6 +75,10 @@ bfs_hybrid_base: hybrid_base.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o hybrid_base.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
+bfs_hybrid_vector: hybrid_vector.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o hybrid_vector.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
 bfs_hybrid_lb: hybrid_lb.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o hybrid_lb.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)

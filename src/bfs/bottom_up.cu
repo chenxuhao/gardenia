@@ -10,24 +10,23 @@
 
 __global__ void bottom_up_kernel(int m, int *row_offsets, int *column_indices, DistT *depths, bool *changed, bool *front, bool *next, int depth) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	int src = tid;
-	if(src < m && depths[src] == MYINFINITY) { // not visited
-		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
+	int dst = tid;
+	if(dst < m && depths[dst] == MYINFINITY) { // not visited
+		int row_begin = row_offsets[dst];
+		int row_end = row_offsets[dst + 1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int dst = column_indices[offset];
-			if(front[dst]) { // if the parent is in the current frontier
-				//atomicAdd(frontier_size, 1);
-				depths[src] = depths[dst] + 1;
-				//depths[src] = depth;
-				next[src] = true; // put this vertex into the next frontier
+			int src = column_indices[offset];
+			if(front[src]) { // if the parent is in the current frontier
+				//depths[dst] = depths[src] + 1;
+				depths[dst] = depth;
+				next[dst] = true; // put this vertex into the next frontier
 				*changed = true;
 			}
 		}
 	}
 }
 
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *h_degree, DistT *h_depths) {
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *in_degree, int *h_degree, DistT *h_depths) {
 	//print_device_info(0);
 	DistT zero = 0;
 	int *d_row_offsets, *d_column_indices;

@@ -4,17 +4,10 @@
 #include <omp.h>
 #include <stdlib.h>
 #include "timer.h"
-#ifdef SIM
-#include "sim.h"
-#endif
 #define PR_VARIANT "omp_base"
 
-void PRSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices, IndexType *out_row_offsets, IndexType *out_column_indices, int *degree, ScoreT *scores) {
+void PRSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degree, ScoreT *scores) {
 	int num_threads = 1;
-#ifdef SIM
-	omp_set_num_threads(4);
-	map_m5_mem();
-#endif
 	#pragma omp parallel
 	{
 	num_threads = omp_get_num_threads();
@@ -25,14 +18,6 @@ void PRSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices,
 	int iter;
 	Timer t;
 	t.Start();
-#ifdef SIM
-	m5_checkpoint(0,0);
-	set_addr_bounds(1,(uint64_t)row_offsets,(uint64_t)&row_offsets[m+1],4);
-	set_addr_bounds(2,(uint64_t)column_indices,(uint64_t)&column_indices[nnz],8);
-	//set_addr_bounds(1,(uint64_t)scores,(uint64_t)&scores[m],8);
-	set_addr_bounds(3,(uint64_t)outgoing_contrib,(uint64_t)&outgoing_contrib[m],8);
-	printf("Begin of ROI\n");
-#endif
 	for (iter = 0; iter < MAX_ITER; iter ++) {
 		double error = 0;
 		#pragma omp parallel for
@@ -41,11 +26,10 @@ void PRSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices,
 		#pragma omp parallel for reduction(+ : error) schedule(dynamic, 64)
 		for (int src = 0; src < m; src ++) {
 			ScoreT incoming_total = 0;
-			const IndexType row_begin = row_offsets[src];
-			const IndexType row_end = row_offsets[src + 1];
-			//#pragma omp simd reduction(+ : incoming_total)
-			for (IndexType offset = row_begin; offset < row_end; offset ++) {
-				IndexType dst = column_indices[offset];
+			const IndexT row_begin = row_offsets[src];
+			const IndexT row_end = row_offsets[src+1];
+			for (IndexT offset = row_begin; offset < row_end; offset ++) {
+				IndexT dst = column_indices[offset];
 				incoming_total += outgoing_contrib[dst];
 			}
 			ScoreT old_score = scores[src];
@@ -55,10 +39,6 @@ void PRSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices,
 		printf(" %2d    %lf\n", iter+1, error);
 		if (error < EPSILON) break;
 	}
-#ifdef SIM
-	printf("End of ROI\n");
-	m5_dumpreset_stats(0,0);
-#endif
 	t.Stop();
 	printf("\titerations = %d.\n", iter+1);
 	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());

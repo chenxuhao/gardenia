@@ -8,53 +8,124 @@
 #include "cutil_subset.h"
 #include "worklistc.h"
 #include "timer.h"
-#define WARP_BU
+#include <cub/cub.cuh>
+#define LB_BU
+
+typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
+
+__device__ __forceinline__ void process_edge(int dst, int depth, int edge, int *column_indices, DistT *depths, int *front, int *next, bool *changed) {
+	int src = column_indices[edge];
+	if (front[src] == 1) {
+		depths[dst] = depth;
+		next[dst] = 1;
+		*changed = true;
+	}
+}
 
 __global__ void bottom_up_base(int m, int *row_offsets, int *column_indices, DistT *depths, int *front, int *next, int depth) {
-	int src = blockIdx.x * blockDim.x + threadIdx.x;
-	if(src < m && depths[src] == MYINFINITY) { // not visited
-		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
+	int dst = blockIdx.x * blockDim.x + threadIdx.x;
+	if(dst < m && depths[dst] == MYINFINITY) { // not visited
+		int row_begin = row_offsets[dst];
+		int row_end = row_offsets[dst+1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int dst = column_indices[offset];
-			if(front[dst] == 1) { // if the parent is in the current frontier
-				//depths[src] = depths[dst] + 1;
-				depths[src] = depth;
-				next[src] = 1; // put this vertex into the next frontier
+			int src = column_indices[offset];
+			if (front[src] == 1) {
+				depths[dst] = depth;
+				next[dst] = 1;
 				break;
 			}
 		}
 	}
 }
 
-__global__ void bottom_up_warp(int m, int *row_offsets, int *column_indices, DistT *depths, int *front, int *next, int depth) {
-	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
+__device__ __forceinline__ unsigned LaneId() {
+	unsigned ret;
+	asm("mov.u32 %0, %laneid;" : "=r"(ret));
+	return ret;
+}
 
-	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
-	const int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
-	const int warp_id     = thread_id   / WARP_SIZE;                // global warp index
-	const int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
-	const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
-
-	for(int src = warp_id; src < m; src += num_warps) {
-		if(depths[src] == MYINFINITY) { // not visited
-			// use two threads to fetch Ap[row] and Ap[row+1]
-			// this is considerably faster than the straightforward version
-			if(thread_lane < 2)
-				ptrs[warp_lane][thread_lane] = row_offsets[src + thread_lane];
-			const int row_begin = ptrs[warp_lane][0];                   //same as: row_start = row_offsets[row];
-			const int row_end   = ptrs[warp_lane][1];                   //same as: row_end   = row_offsets[row+1];
-			for(int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
-				bool changed = false;
-				int dst = column_indices[offset];
-				if(front[dst] == 1) { // if the parent is in the current frontier
-					depths[src] = depth;
-					next[src] = 1; // put this vertex into the next frontier
-					changed = true;
-				}
-				if(__any(changed)) break;
-			}
+__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, DistT *depths, int *front, int *next, int depth) {
+	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
+	unsigned lane_id = LaneId();
+	__shared__ int owner[NUM_WARPS];
+	__shared__ int sh_vertex[NUM_WARPS];
+	owner[warp_id] = -1;
+	int size = 0;
+	int dst = id;
+	if(dst < m && depths[dst] == MYINFINITY) {
+		size = row_offsets[dst+1] - row_offsets[dst];
+	}
+	while(__any(size) >= WARP_SIZE) {
+		if(size >= WARP_SIZE)
+			owner[warp_id] = lane_id;
+		if(owner[warp_id] == lane_id) {
+			sh_vertex[warp_id] = dst;
+			owner[warp_id] = -1;
+			size = 0;
 		}
+		int winner = sh_vertex[warp_id];
+		int row_begin = row_offsets[winner];
+		int row_end = row_offsets[winner+1];
+		int neighbor_size = row_end - row_begin;
+		int num = ((neighbor_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+		for(int i = lane_id; i < num; i+= WARP_SIZE) {
+			bool changed = false;
+			int edge = row_begin + i;
+			if(i < neighbor_size) {
+				process_edge(dst, depth, edge, column_indices, depths, front, next, &changed);
+			}
+			if(__any(changed)) break;
+		}
+	}
+}
+
+__global__ void bottom_up_lb(int m, int *row_offsets, int *column_indices, DistT *depths, int *front, int *next, int depth) {
+	//expandByCta(m, row_offsets, column_indices, depths, front, next, depth);
+	expandByWarp(m, row_offsets, column_indices, depths, front, next, depth);
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int tx = threadIdx.x;
+	int dst = tid;
+	const int SCRATCHSIZE = BLOCK_SIZE;
+	__shared__ BlockScan::TempStorage temp_storage;
+	__shared__ int gather_offsets[SCRATCHSIZE];
+	__shared__ int dstIndex[BLOCK_SIZE];
+	__shared__ bool dstDone[BLOCK_SIZE];
+	gather_offsets[tx] = 0;
+	dstIndex[tx] = 0;
+	dstDone[tx] = false;
+	
+	int neighbor_size = 0;
+	int neighbor_offset = 0;
+	int scratch_offset = 0;
+	int total_edges = 0;
+	if(dst < m && depths[dst] == MYINFINITY) {
+		neighbor_offset = row_offsets[dst];
+		neighbor_size = row_offsets[dst+1] - neighbor_offset;
+	}
+	BlockScan(temp_storage).ExclusiveSum(neighbor_size, scratch_offset, total_edges);
+	int done = 0;
+	int neighbors_done = 0;
+	while(total_edges > 0) {
+		__syncthreads();
+		int i;
+		for(i = 0; !dstDone[dst%BLOCK_SIZE] && neighbors_done + i < neighbor_size && (scratch_offset + i - done) < SCRATCHSIZE; i++) {
+			int j = scratch_offset + i - done;
+			gather_offsets[j] = neighbor_offset + neighbors_done + i;
+			dstIndex[j] = dst;
+		}
+		neighbors_done += i;
+		scratch_offset += i;
+		__syncthreads();
+		if(tx < total_edges) {
+			int edge = gather_offsets[tx];
+			int dst = dstIndex[tx];
+			bool changed = false;
+			process_edge(dst, depth, edge, column_indices, depths, front, next, &changed);
+			if(changed) dstDone[dst%BLOCK_SIZE] = true;
+		}
+		total_edges -= BLOCK_SIZE;
+		done += BLOCK_SIZE;
 	}
 }
 
@@ -94,7 +165,7 @@ __global__ void BitmapToQueue(int m, int *bm, Worklist2 queue) {
 	if(tid < m && bm[tid]) queue.push(tid);
 }
 
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *h_degree, DistT *h_depths) {
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *in_degree, int *h_degree, DistT *h_depths) {
 	//print_device_info(0);
 	DistT zero = 0;
 	int *d_in_row_offsets, *d_in_column_indices;
@@ -131,16 +202,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	int scout_count = h_degree[source];
 	
 	const int nthreads = BLOCK_SIZE;
-#ifdef WARP_BU
-	cudaDeviceProp deviceProp;
-	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
-	const int nSM = deviceProp.multiProcessorCount;
-	const int max_blocks_per_SM = maximum_residency(bottom_up_warp, nthreads, 0);
-	const int max_blocks = max_blocks_per_SM * nSM;
-	const int nblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
-#else
 	const int nblocks = (m - 1) / nthreads + 1;
-#endif
 	insert<<<1, nthreads>>>(source, *in_frontier);
 	printf("Launching CUDA BFS solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
 
@@ -154,8 +216,8 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 			do {
 				++ iter;
 				old_awake_count = awake_count;
-#ifdef WARP_BU
-				bottom_up_warp <<<nblocks, nthreads>>> (m, d_in_row_offsets, d_in_column_indices, d_depths, front, next, iter);
+#ifdef LB_BU
+				bottom_up_lb <<<nblocks, nthreads>>> (m, d_in_row_offsets, d_in_column_indices, d_depths, front, next, iter);
 #else
 				bottom_up_base <<<nblocks, nthreads>>> (m, d_in_row_offsets, d_in_column_indices, d_depths, front, next, iter);
 #endif

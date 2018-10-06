@@ -23,5 +23,5 @@ cc_base: one thread per vertex using CUDA
 cc_warp: one warp per vertex using CUDA
 */
 
-void CCSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices, CompT *comp);
-void CCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, CompT *comp);
+void CCSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, int *degree, CompT *comp);
+void CCVerifier(int m, IndexT *row_offsets, IndexT *column_indices, CompT *comp);

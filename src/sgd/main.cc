@@ -2,6 +2,7 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "sgd.h"
 #include "graph_io.h"
+#include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <random>
 void Initialize(int len, LatentT *lv) {

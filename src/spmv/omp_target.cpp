@@ -6,7 +6,7 @@
 #include "omp_target_config.h"
 #define SPMV_VARIANT "omp_target"
 
-void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueType *Ax, ValueType *x, ValueType *y) {
+void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degree) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -26,7 +26,7 @@ void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueType *Ax, ValueTyp
 	for (int i = 0; i < num_rows; i++){
 		int row_begin = Ap[i];
 		int row_end   = Ap[i+1];
-		ValueType sum = y[i];
+		ValueT sum = y[i];
 		#pragma ivdep
 		//#pragma omp simd
 		for (int jj = row_begin; jj < row_end; jj++) {

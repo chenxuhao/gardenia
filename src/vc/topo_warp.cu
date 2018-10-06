@@ -153,9 +153,9 @@ int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors)
 	const int mblocks = (m - 1) / nthreads + 1;
 	cudaDeviceProp deviceProp;
 	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
-	const int nSM = deviceProp.multiProcessorCount;
-	const int max_blocks_per_SM = maximum_residency(conflict_resolve, nthreads, 0);
-	const int max_blocks = max_blocks_per_SM * nSM;
+	//const int nSM = deviceProp.multiProcessorCount;
+	//const int max_blocks_per_SM = maximum_residency(conflict_resolve, nthreads, 0);
+	//const int max_blocks = max_blocks_per_SM * nSM;
 	//const int nblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
 	const int nblocks = std::min(MAX_BLOCKS, DIVIDE_INTO(m, WARPS_PER_BLOCK));
 	printf("Launching CUDA VC solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);

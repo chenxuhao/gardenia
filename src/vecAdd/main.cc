@@ -5,7 +5,7 @@
 #include "timer.h"
 #include <omp.h>
 
-void run_serial(int n, ValueType *a, ValueType *b, ValueType *c) {
+void run_serial(int n, ValueT *a, ValueT *b, ValueT *c) {
 	Timer t;
 	t.Start();
 	for(int i = 0; i < n; i ++) {
@@ -15,7 +15,7 @@ void run_serial(int n, ValueType *a, ValueType *b, ValueType *c) {
 	printf("\truntime [%s] = %f ms.\n", "serial", t.Millisecs());
 }
 
-void run_simd(int n, ValueType *a, ValueType *b, ValueType *c) {
+void run_simd(int n, ValueT *a, ValueT *b, ValueT *c) {
 	Timer t;
 	t.Start();
 	for(int i = 0; i < n; i += 4) {
@@ -28,7 +28,7 @@ void run_simd(int n, ValueType *a, ValueType *b, ValueType *c) {
 	printf("\truntime [%s] = %f ms.\n", "simd", t.Millisecs());
 }
 
-void run_omp(int n, ValueType *a, ValueType *b, ValueType *c) {
+void run_omp(int n, ValueT *a, ValueT *b, ValueT *c) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -46,7 +46,7 @@ void run_omp(int n, ValueType *a, ValueType *b, ValueType *c) {
 	printf("\truntime [%s] = %f ms.\n", "omp", t.Millisecs());
 }
 
-void run_omp_simd(int n, ValueType *a, ValueType *b, ValueType *c) {
+void run_omp_simd(int n, ValueT *a, ValueT *b, ValueT *c) {
 	Timer t;
 	t.Start();
 	#pragma omp parallel for simd
@@ -61,9 +61,9 @@ int main(int argc, char *argv[]) {
 	int num = 1024 * 1024;
 	if(argc == 2) num = atoi(argv[1]);
 	printf("Vector Addition num = %d\n", num);
-	ValueType *h_a = (ValueType *)malloc(num * sizeof(ValueType));
-	ValueType *h_b = (ValueType *)malloc(num * sizeof(ValueType));
-	ValueType *h_c = (ValueType *)malloc(num * sizeof(ValueType));
+	ValueT *h_a = (ValueT *)malloc(num * sizeof(ValueT));
+	ValueT *h_b = (ValueT *)malloc(num * sizeof(ValueT));
+	ValueT *h_c = (ValueT *)malloc(num * sizeof(ValueT));
 	for(int i = 0; i < num; i ++) { h_a[i] = 1; h_b[i] = 1; h_c[i] = 0; }
 	printf("Lauching serial...\n");
 	run_serial(num, h_a, h_b, h_c);

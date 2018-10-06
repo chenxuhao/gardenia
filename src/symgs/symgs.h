@@ -26,5 +26,5 @@ symgs_warp:   one warp per row (vertex) using CUDA
 symgs_vector: one vector per row (vertex) using CUDA
 */
 
-void SymGSSolver(int m, int nnz, IndexType *Ap, IndexType *Aj, int *indices, ValueType *Ax, ValueType *x, ValueType *b, std::vector<int> color_offsets);
-void SymGSVerifier(int num_rows, IndexType *Ap, IndexType *Aj, int *indices, ValueType *Ax, ValueType *test_x, ValueType *x_host, ValueType *b, std::vector<int> color_offsets);
+void SymGSSolver(int m, int nnz, IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, std::vector<int> color_offsets);
+void SymGSVerifier(int num_rows, IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *test_x, ValueT *x_host, ValueT *b, std::vector<int> color_offsets);

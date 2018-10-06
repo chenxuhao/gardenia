@@ -4,7 +4,7 @@
 #include <vector>
 #include "bfs.h"
 #include "timer.h"
-void BFSVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, DistT *depth_to_test) {
+void BFSVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices, DistT *depth_to_test) {
 	printf("Verifying...\n");
 	vector<DistT> depth(m, MYINFINITY);
 	vector<int> to_visit;
@@ -15,10 +15,10 @@ void BFSVerifier(int m, int source, IndexType *row_offsets, IndexType *column_in
 	to_visit.push_back(source);
 	for (std::vector<int>::iterator it = to_visit.begin(); it != to_visit.end(); it++) {
 		int src = *it;
-		const IndexType row_begin = row_offsets[src];
-		const IndexType row_end = row_offsets[src + 1]; 
-		for (IndexType offset = row_begin; offset < row_end; ++ offset) {
-			IndexType dst = column_indices[offset];
+		const IndexT row_begin = row_offsets[src];
+		const IndexT row_end = row_offsets[src + 1]; 
+		for (IndexT offset = row_begin; offset < row_end; ++ offset) {
+			IndexT dst = column_indices[offset];
 			if (depth[dst] == MYINFINITY) {
 				depth[dst] = depth[src] + 1;
 				to_visit.push_back(dst);

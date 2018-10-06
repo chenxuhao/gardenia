@@ -4,11 +4,11 @@
 #include <iostream>
 #include "sssp.h"
 #include "timer.h"
-void SSSPVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, DistT *weight, DistT *dist_to_test) {
+void SSSPVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices, DistT *weight, DistT *dist_to_test) {
 	printf("Verifying...\n");
 	// Serial Dijkstra implementation to get oracle distances
 	vector<DistT> oracle_dist(m, kDistInf);
-	typedef pair<DistT, IndexType> WN;
+	typedef pair<DistT, IndexT> WN;
 	priority_queue<WN, vector<WN>, greater<WN> > mq;
 	int iter = 0;
 	Timer t;
@@ -17,13 +17,13 @@ void SSSPVerifier(int m, int source, IndexType *row_offsets, IndexType *column_i
 	mq.push(make_pair(0, source));
 	while (!mq.empty()) {
 		DistT td = mq.top().first;
-		IndexType src = mq.top().second;
+		IndexT src = mq.top().second;
 		mq.pop();
 		if (td == oracle_dist[src]) {
-			IndexType row_begin = row_offsets[src];
-			IndexType row_end = row_offsets[src + 1]; 
-			for (IndexType offset = row_begin; offset < row_end; ++ offset) {
-				IndexType dst = column_indices[offset];
+			IndexT row_begin = row_offsets[src];
+			IndexT row_end = row_offsets[src + 1]; 
+			for (IndexT offset = row_begin; offset < row_end; ++ offset) {
+				IndexT dst = column_indices[offset];
 				DistT wt = weight[offset];
 				if (td + wt < oracle_dist[dst]) {
 					oracle_dist[dst] = td + wt;

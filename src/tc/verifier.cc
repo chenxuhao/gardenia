@@ -6,7 +6,7 @@
 #include <algorithm>
 
 // Compares with simple serial implementation that uses std::set_intersection
-void TCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, int test_total) {
+void TCVerifier(int m, IndexT *row_offsets, IndexT *column_indices, int test_total) {
 	printf("Verifying...\n");
 	int total = 0;
 	vector<int> intersection;
@@ -14,12 +14,12 @@ void TCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, int te
 	Timer t;
 	t.Start();
 	for (int src = 0; src < m; src ++) {
-		IndexType row_begin = row_offsets[src];
-		IndexType row_end = row_offsets[src + 1];
-		for (IndexType offset = row_begin; offset < row_end; ++ offset) {
-			IndexType dst = column_indices[offset];
-			IndexType row_begin_dst = row_offsets[dst];
-			IndexType row_end_dst = row_offsets[dst + 1];
+		IndexT row_begin = row_offsets[src];
+		IndexT row_end = row_offsets[src + 1];
+		for (IndexT offset = row_begin; offset < row_end; ++ offset) {
+			IndexT dst = column_indices[offset];
+			IndexT row_begin_dst = row_offsets[dst];
+			IndexT row_end_dst = row_offsets[dst + 1];
 			std::vector<int>::iterator new_end = set_intersection(column_indices + row_begin,
 					column_indices + row_end,
 					column_indices + row_begin_dst,

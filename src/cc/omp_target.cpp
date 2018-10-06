@@ -7,7 +7,7 @@
 #define CC_VARIANT "omp_target"
 
 #pragma omp declare target
-void cc_scatter(int m, int *row_offsets, int *column_indices, CompT *comp, bool &change) {
+void cc_scatter(int m, int *row_offsets, int *column_indices, CompT *comp, int *degree, bool &change) {
 	//#pragma omp target device(0)
 	#pragma omp parallel for schedule(dynamic, 64)
 	for (int src = 0; src < m; src ++) {

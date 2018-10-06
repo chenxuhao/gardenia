@@ -11,14 +11,14 @@ texture<float,1> tex_b;
 void bind_b(const float * b) { CUDA_SAFE_CALL(cudaBindTexture(NULL, tex_b, b)); }
 void unbind_b(const float * b) { CUDA_SAFE_CALL(cudaUnbindTexture(tex_b)); }
 
-__global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueType * Ax, ValueType * x, ValueType * b) {
+__global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueT * Ax, ValueT * x, ValueT * b) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if(id < num_rows) {
 		int inew = indices[id];
 		int row_begin = Ap[inew];
 		int row_end = Ap[inew+1];
-		ValueType rsum = 0;
-		ValueType diag = 0;
+		ValueT rsum = 0;
+		ValueT diag = 0;
 		for (int jj = row_begin; jj < row_end; jj++) {
 			const int j = Aj[jj];  //column index
 			if (inew == j) diag = Ax[jj];
@@ -28,14 +28,14 @@ __global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueT
 	}
 }
 
-void gs_gpu(int *d_Ap, int *d_Aj, int *d_indices, ValueType *d_Ax, ValueType *d_x, ValueType *d_b, int row_start, int row_stop, int row_step) {
+void gs_gpu(int *d_Ap, int *d_Aj, int *d_indices, ValueT *d_Ax, ValueT *d_x, ValueT *d_b, int row_start, int row_stop, int row_step) {
 	int num_rows = row_stop - row_start;
 	const size_t NUM_BLOCKS = (num_rows - 1) / BLOCK_SIZE + 1;
 	//printf("num_rows=%d, nblocks=%ld, nthreads=%ld\n", num_rows, NUM_BLOCKS, THREADS_PER_BLOCK);
 	gs_kernel<<<NUM_BLOCKS, BLOCK_SIZE>>>(num_rows, d_Ap, d_Aj, d_indices+row_start, d_Ax, d_x, d_b);
 }
 
-void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, ValueType *h_Ax, ValueType *h_x, ValueType *h_b, std::vector<int> color_offsets) {
+void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, ValueT *h_Ax, ValueT *h_x, ValueT *h_b, std::vector<int> color_offsets) {
 	//print_device_info(0);
 	Timer t;
 	int *d_Ap, *d_Aj, *d_indices;
@@ -45,13 +45,13 @@ void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, Va
 	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_indices, h_indices, num_rows * sizeof(int), cudaMemcpyHostToDevice));
-	ValueType *d_Ax, *d_x, *d_b;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueType) * nnz));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueType) * num_rows));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_b, sizeof(ValueType) * num_rows));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueType), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_b, h_b, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
+	ValueT *d_Ax, *d_x, *d_b;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueT) * nnz));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * num_rows));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_b, sizeof(ValueT) * num_rows));
+	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_b, h_b, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
 	printf("Launching CUDA SymGS solver (%d threads/CTA) ...\n", BLOCK_SIZE);
 
 	t.Start();
@@ -67,7 +67,7 @@ void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, Va
 	t.Stop();
 
 	printf("\truntime [%s] = %f ms.\n", SYMGS_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_x, d_x, sizeof(ValueType) * num_rows, cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(h_x, d_x, sizeof(ValueT) * num_rows, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_Ap));
 	CUDA_SAFE_CALL(cudaFree(d_Aj));
 	CUDA_SAFE_CALL(cudaFree(d_indices));

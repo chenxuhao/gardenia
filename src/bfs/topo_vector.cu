@@ -56,7 +56,7 @@ __global__ void bfs_update(int m, DistT *dist, bool *visited) {
 	}
 }
 
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *in_degree, int *h_degree, DistT *h_dist) {
 	//print_device_info(0);
 	DistT zero = 0;
 	int *d_row_offsets, *d_column_indices;

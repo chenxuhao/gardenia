@@ -1,6 +1,8 @@
 include ../common.mk
 SRC=main.cc
 OBJS=vector.o omp_base.o verifier.o main.o
+INCLUDES += -I${MKLROOT}/include
+LIBS += -L${MKLROOT}/lib/intel64
 all: $(OBJS) spmv_vector spmv_omp_base
 
 %.o: %.cpp
@@ -49,9 +51,17 @@ spmv_vector: main.o vector.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o vector.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
+spmv_cusparse: main.o cusparse.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o cusparse.o verifier.o -o $@ $(LIBS) -lcusparse
+	mv $@ $(BIN)
+
+spmv_mkl: main.o mkl.o verifier.o
+	$(ICPC) $(ICPCFLAGS) $(INCLUDES) main.o mkl.o verifier.o -o $@ $(LIBS) -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lpthread -lm
+	mv $@ $(BIN)
+
 spmv_omp_target: main.o omp_target.o verifier.o
-	$(ICPC) $(CXXFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
+	$(ICPC) $(ICPCFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 clean:
-	rm $(OBJS)
+	rm *.o

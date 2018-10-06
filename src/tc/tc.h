@@ -33,5 +33,5 @@ tc_base: one thread per vertex using CUDA
 tc_warp: one warp per vertex using CUDA
 */
 
-void TCSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices, int *degree, int *total);
-void TCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, int test_total);
+void TCSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, int *degree, int *total);
+void TCVerifier(int m, IndexT *row_offsets, IndexT *column_indices, int test_total);

@@ -3,6 +3,9 @@
 #include "symgs.h"
 #include "../vc/vc.h"
 #include "graph_io.h"
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
+#include <thrust/sequence.h>
 #include <thrust/reduce.h>
 #include <thrust/sort.h>
 
@@ -13,15 +16,15 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	int m, n, nnz;
-	IndexType *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	ValueType *h_weight = NULL;
+	IndexT *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
+	ValueT *h_weight = NULL;
 	read_graph(argc, argv, m, n, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true, false, true, false, true);
 
 	int num_rows = m;
 	int num_cols = m;
-	ValueType *h_x = (ValueType *)malloc(m * sizeof(ValueType));
-	ValueType *h_b = (ValueType *)malloc(m * sizeof(ValueType));
-	ValueType *x_host = (ValueType *)malloc(m * sizeof(ValueType));
+	ValueT *h_x = (ValueT *)malloc(m * sizeof(ValueT));
+	ValueT *h_b = (ValueT *)malloc(m * sizeof(ValueT));
+	ValueT *x_host = (ValueT *)malloc(m * sizeof(ValueT));
 
 	// fill matrix with random values: some matrices have extreme values,
 	// which makes correctness testing difficult, especially in single precision

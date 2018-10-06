@@ -35,7 +35,7 @@ void bfs_step(int m, int *row_offsets, int *column_indices, vector<int> &depth, 
 	}
 }
 
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *degree, DistT *dist) {
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *in_degree, int *degree, DistT *dist) {
 	//omp_set_num_threads(12);
 	int num_threads = 1;
 	#pragma omp parallel

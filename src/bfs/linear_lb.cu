@@ -121,7 +121,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 }
 
 __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 in_queue, Worklist2 out_queue, int depth) {
-	expandByCta(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
+	//expandByCta(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
 	expandByWarp(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
@@ -177,7 +177,7 @@ __global__ void insert(int source, Worklist2 in_queue) {
 	return;
 }
 
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *h_degree, DistT *h_dist) {
+void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *in_degree, int *h_degree, DistT *h_dist) {
 	//print_device_info(0);
 	DistT zero = 0;
 	int *d_row_offsets, *d_column_indices;

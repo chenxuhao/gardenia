@@ -1,5 +1,6 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
+CXXFLAGS+=-std=c++11 -march=core-avx2
 SRC=main.cu
 OBJS=gather.o gather_warp.o main.o verifier.o omp_base.o
 
@@ -21,6 +22,18 @@ endif
 
 pr_omp_base: omp_base.o main.o verifier.o pr.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o verifier.o -o $@ -lgomp
+	mv $@ $(BIN)
+
+pr_omp_push: omp_push.o main.o verifier.o pr.h
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_push.o verifier.o -o $@ -lgomp
+	mv $@ $(BIN)
+
+pr_omp_pb: omp_pb.o main.o verifier.o pr.h
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_pb.o verifier.o -o $@ -lgomp
+	mv $@ $(BIN)
+
+pr_omp_delta: omp_delta.o main.o verifier.o pr.h
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_delta.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
 pr_omp_base_sim: omp_base.o main.o verifier.o

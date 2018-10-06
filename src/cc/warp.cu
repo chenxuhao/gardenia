@@ -51,7 +51,7 @@ __global__ void update(int m, int *row_offsets, int *column_indices, CompT *comp
 	}
 }
 
-void CCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, CompT *h_comp) {
+void CCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *degree, CompT *h_comp) {
 	//print_device_info(0);
 	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));

@@ -14,20 +14,23 @@ using namespace std;
 #ifndef LONG_TYPES
 typedef float ScoreT;
 typedef float WeightT;
-typedef float ValueType;
-typedef int CompT;
+typedef float ValueT;
+typedef float LatentT;
 typedef unsigned DistT;
-typedef int IndexType;
+typedef int CompT;
+typedef int IndexT;
 #else
 typedef double ScoreT;
 typedef double WeightT;
-typedef double ValueType;
-typedef long int CompT;
+typedef double ValueT;
+typedef double LatentT;
 typedef long unsigned int DistT;
-typedef long unsigned int IndexType;
+typedef long int CompT;
+typedef long int IndexT;
 #endif
-const float kDamp = 0.85;
+extern double hub_factor;
 
+#define PAGE_SIZE 4096
 #define	MAXCOLOR 128 // assume graph can be colored with less than 128 colors
 #define MYINFINITY	1000000000
 //#define BLOCK_SIZE  256

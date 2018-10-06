@@ -32,8 +32,8 @@ texture<float,1> tex_x;
 void bind_x(const float * x) { CUDA_SAFE_CALL(cudaBindTexture(NULL, tex_x, x)); }
 void unbind_x(const float * x) { CUDA_SAFE_CALL(cudaUnbindTexture(tex_x)); }
 
-__global__ void spmv_vector(int num_rows, const int * Ap,  const int * Aj, const ValueType * Ax, const ValueType * x, ValueType * y) {
-	__shared__ ValueType sdata[BLOCK_SIZE + 16];                    // padded to avoid reduction ifs
+__global__ void spmv_vector(int num_rows, const int * Ap,  const int * Aj, const ValueT * Ax, const ValueT * x, ValueT * y) {
+	__shared__ ValueT sdata[BLOCK_SIZE + 16];                    // padded to avoid reduction ifs
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 
 	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
@@ -51,7 +51,7 @@ __global__ void spmv_vector(int num_rows, const int * Ap,  const int * Aj, const
 		const int row_end   = ptrs[warp_lane][1];                   //same as: row_end   = Ap[row+1];
 
 		// compute local sum
-		ValueType sum = 0;
+		ValueT sum = 0;
 		for(int offset = row_start + thread_lane; offset < row_end; offset += WARP_SIZE)
 			//sum += Ax[offset] * x[Aj[offset]];
 			sum += Ax[offset] * tex1Dfetch(tex_x, Aj[offset]);
@@ -71,20 +71,20 @@ __global__ void spmv_vector(int num_rows, const int * Ap,  const int * Aj, const
 	}
 }
 
-void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueType *h_Ax, ValueType *h_x, ValueType *h_y) { 
+void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degree) { 
 	//print_device_info(0);
 	int *d_Ap, *d_Aj;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (num_rows + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	ValueType *d_Ax, *d_x, *d_y;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueType) * nnz));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueType) * num_rows));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueType) * num_rows));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueType), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, num_rows * sizeof(ValueType), cudaMemcpyHostToDevice));
+	ValueT *d_Ax, *d_x, *d_y;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueT) * nnz));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * num_rows));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueT) * num_rows));
+	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
 
 	const int nthreads = BLOCK_SIZE;
 	cudaDeviceProp deviceProp;
@@ -105,7 +105,7 @@ void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueType *h_Ax, Va
 	t.Stop();
 
 	printf("\truntime [%s] = %f ms.\n", SPMV_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueType) * num_rows, cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueT) * num_rows, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_Ap));
 	CUDA_SAFE_CALL(cudaFree(d_Aj));
 	CUDA_SAFE_CALL(cudaFree(d_Ax));

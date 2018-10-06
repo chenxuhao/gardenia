@@ -17,7 +17,7 @@ inline float hsum_avx(__m256 in256) {
 	return *sum;
 }
 
-void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueType *h_Ax, ValueType *h_x, ValueType *y) {
+void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *y, int *degree) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -25,8 +25,8 @@ void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueType *h_Ax, Va
 	}
 	int *Ap = (int *) _mm_malloc((num_rows+1)*sizeof(int), 64);
 	int *Aj = (int *) _mm_malloc(nnz*sizeof(int), 64);
-	ValueType *Ax = (ValueType *) _mm_malloc(nnz*sizeof(ValueType), 64);
-	ValueType *x = (ValueType *) _mm_malloc(num_rows*sizeof(ValueType), 64);
+	ValueT *Ax = (ValueT *) _mm_malloc(nnz*sizeof(ValueT), 64);
+	ValueT *x = (ValueT *) _mm_malloc(num_rows*sizeof(ValueT), 64);
 	for (int i = 0; i < num_rows+1; i ++) Ap[i] = h_Ap[i];
 	for (int i = 0; i < nnz; i ++) Aj[i] = h_Aj[i];
 	for (int i = 0; i < nnz; i ++) Ax[i] = h_Ax[i];

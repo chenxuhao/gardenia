@@ -6,11 +6,11 @@
 #include <vector>
 #include <algorithm>
 /*
-static ValueType DEFAULT_RELATIVE_TOL = 1e-4;
-static ValueType DEFAULT_ABSOLUTE_TOL = 1e-4;
+static ValueT DEFAULT_RELATIVE_TOL = 1e-4;
+static ValueT DEFAULT_ABSOLUTE_TOL = 1e-4;
 
 template<typename T>
-bool almost_equal(const T& a, const T& b, const ValueType a_tol, const ValueType r_tol) {
+bool almost_equal(const T& a, const T& b, const ValueT a_tol, const ValueT r_tol) {
     if(fabs(a - b) > r_tol * (fabs(a) + fabs(b)) + a_tol)
         return false;
     else
@@ -66,7 +66,7 @@ bool check_almost_equal(const T * A, const T * B, const int N) {
 // - uses vector for BFS queue
 // - regenerates farthest to closest traversal order from depths
 // - regenerates successors from depths
-void BCVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, int num_iters, ScoreT *scores_to_test) {
+void BCVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices, int num_iters, ScoreT *scores_to_test) {
 	printf("Verifying...\n");
 	vector<ScoreT> scores(m, 0);
 	//std::cout << setiosflags(ios::fixed);
@@ -78,15 +78,15 @@ void BCVerifier(int m, int source, IndexType *row_offsets, IndexType *column_ind
 		depths[source] = 0;
 		vector<int> path_counts(m, 0);
 		path_counts[source] = 1;
-		vector<IndexType> to_visit;
+		vector<IndexT> to_visit;
 		to_visit.reserve(m);
 		to_visit.push_back(source);
-		for (vector<IndexType>::iterator it = to_visit.begin(); it != to_visit.end(); it++) {
-			IndexType src = *it;
-			IndexType row_begin = row_offsets[src];
-			IndexType row_end = row_offsets[src + 1];
-			for (IndexType offset = row_begin; offset < row_end; offset ++) {
-				IndexType dst = column_indices[offset];
+		for (vector<IndexT>::iterator it = to_visit.begin(); it != to_visit.end(); it++) {
+			IndexT src = *it;
+			IndexT row_begin = row_offsets[src];
+			IndexT row_end = row_offsets[src + 1];
+			for (IndexT offset = row_begin; offset < row_end; offset ++) {
+				IndexT dst = column_indices[offset];
 				if (depths[dst] == -1) {
 					depths[dst] = depths[src] + 1;
 					to_visit.push_back(dst);
@@ -109,10 +109,10 @@ void BCVerifier(int m, int source, IndexType *row_offsets, IndexType *column_ind
 		for (int depth = static_cast<int>(verts_at_depth.size()) - 1; depth >= 0; depth --) {
 			for (unsigned id = 0; id < verts_at_depth[depth].size(); id ++) {
 				int src = verts_at_depth[depth][id];
-				IndexType row_begin = row_offsets[src];
-				IndexType row_end = row_offsets[src + 1];
-				for (IndexType offset = row_begin; offset < row_end; offset ++) {
-					IndexType dst = column_indices[offset];
+				IndexT row_begin = row_offsets[src];
+				IndexT row_end = row_offsets[src + 1];
+				for (IndexT offset = row_begin; offset < row_end; offset ++) {
+					IndexT dst = column_indices[offset];
 					if (depths[dst] == depths[src] + 1) {
 						deltas[src] += static_cast<ScoreT>(path_counts[src]) /
 							static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);

@@ -22,7 +22,11 @@ class Bitmap {
  public:
   explicit Bitmap(size_t size) {
     uint64_t num_words = (size + kBitsPerWord - 1) / kBitsPerWord;
+#ifdef SIM
+    start_ = (uint64_t *)aligned_alloc(PAGE_SIZE, num_words*sizeof(uint64_t));
+#else
     start_ = new uint64_t[num_words];
+#endif
     end_ = start_ + num_words;
   }
 
@@ -63,10 +67,10 @@ class Bitmap {
 	other.end_ = temp;
   }
 
- private:
   uint64_t *start_;
   uint64_t *end_;
 
+ private:
   static const uint64_t kBitsPerWord = 64;
   static uint64_t word_offset(size_t n) { return n / kBitsPerWord; }
   static uint64_t bit_offset(size_t n) { return n & (kBitsPerWord - 1); }

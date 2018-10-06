@@ -21,26 +21,26 @@ T maximum_relative_error(const T * A, const T * B, const size_t N) {
 	return max_error;
 }
 
-void SpmvVerifier(int num_rows, int nnz, IndexType *h_Ap, IndexType *h_Aj, ValueType *h_Ax, ValueType *h_x, ValueType *h_y, ValueType *test_y) {
+void SpmvVerifier(int num_rows, int nnz, IndexT *h_Ap, IndexT *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, ValueT *test_y) {
 	printf("Verifying...\n");
-	IndexType *Ap = (IndexType *)malloc((num_rows+1) * sizeof(IndexType));
+	IndexT *Ap = (IndexT *)malloc((num_rows+1) * sizeof(IndexT));
 	for(int i = 0; i < num_rows + 1; i ++) Ap[i] = h_Ap[i];
-	IndexType *Aj = (IndexType *)malloc(nnz * sizeof(IndexType));
+	IndexT *Aj = (IndexT *)malloc(nnz * sizeof(IndexT));
 	for(int i = 0; i < nnz; i ++) Aj[i] = h_Aj[i];
-	ValueType *Ax = (ValueType *)malloc(nnz * sizeof(ValueType));
+	ValueT *Ax = (ValueT *)malloc(nnz * sizeof(ValueT));
 	for(int i = 0; i < nnz; i ++) Ax[i] = h_Ax[i];
-	ValueType *x = (ValueType *)malloc(num_rows * sizeof(ValueType));
+	ValueT *x = (ValueT *)malloc(num_rows * sizeof(ValueT));
 	for(int i = 0; i < num_rows; i ++) x[i] = h_x[i];
-	ValueType *y = (ValueType *)malloc(num_rows * sizeof(ValueType));
+	ValueT *y = (ValueT *)malloc(num_rows * sizeof(ValueT));
 	for(int i = 0; i < num_rows; i ++) y[i] = h_y[i];
 	Timer t;
 	t.Start();
 	for (int i = 0; i < num_rows; i++){
-		const IndexType row_begin = Ap[i];
-		const IndexType row_end   = Ap[i+1];
-		ValueType sum = y[i];
-		for (IndexType jj = row_begin; jj < row_end; jj++) {
-			const IndexType j = Aj[jj];  //column index
+		const IndexT row_begin = Ap[i];
+		const IndexT row_end   = Ap[i+1];
+		ValueT sum = y[i];
+		for (IndexT jj = row_begin; jj < row_end; jj++) {
+			const IndexT j = Aj[jj];  //column index
 			sum += x[j] * Ax[jj];
 		}
 		y[i] = sum; 
@@ -48,10 +48,10 @@ void SpmvVerifier(int num_rows, int nnz, IndexType *h_Ap, IndexType *h_Aj, Value
 	t.Stop();
 	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
 
-	ValueType max_error = maximum_relative_error(test_y, y, num_rows);
+	ValueT max_error = maximum_relative_error(test_y, y, num_rows);
 	printf("\t[max error %9f]\n", max_error);
 	//for(int i = 0; i < num_rows; i++) printf("test_y[%d] = %f, y[%d] = %f\n", i, test_y[i], i, y[i]);
-	if ( max_error > 5 * std::sqrt( std::numeric_limits<ValueType>::epsilon() ) )
+	if ( max_error > 5 * std::sqrt( std::numeric_limits<ValueT>::epsilon() ) )
 		printf("POSSIBLE FAILURE\n");
 	else
 		printf("Correct\n");

@@ -47,16 +47,16 @@ bool check_almost_equal(const T * A, const T * B, const size_t N) {
 	return is_almost_equal;
 }
 
-void gs_serial(IndexType *Ap, IndexType *Aj, int *indices, ValueType *Ax, ValueType *x, ValueType *b, int row_start, int row_stop, int row_step) {
+void gs_serial(IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, int row_start, int row_stop, int row_step) {
 	//printf("Solving, num_rows=%d\n", row_stop-row_start);
 	for (int i = row_start; i != row_stop; i += row_step) {
 		int inew = indices[i];
-		IndexType row_begin = Ap[inew];
-		IndexType row_end = Ap[inew+1];
-		ValueType rsum = 0;
-		ValueType diag = 0;
-		for (IndexType jj = row_begin; jj < row_end; jj++) {
-			const IndexType j = Aj[jj];  //column index
+		IndexT row_begin = Ap[inew];
+		IndexT row_end = Ap[inew+1];
+		ValueT rsum = 0;
+		ValueT diag = 0;
+		for (IndexT jj = row_begin; jj < row_end; jj++) {
+			const IndexT j = Aj[jj];  //column index
 			if (inew == j) diag = Ax[jj];
 			else rsum += x[j] * Ax[jj];
 		}
@@ -64,9 +64,9 @@ void gs_serial(IndexType *Ap, IndexType *Aj, int *indices, ValueType *Ax, ValueT
 	}
 }
 
-void SymGSVerifier(int num_rows, IndexType *Ap, IndexType *Aj, int *indices, ValueType *Ax, ValueType *test_x, ValueType *x_host, ValueType *b, std::vector<int> color_offsets) {
+void SymGSVerifier(int num_rows, IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *test_x, ValueT *x_host, ValueT *b, std::vector<int> color_offsets) {
 	printf("Verifying...\n");
-	ValueType *x = (ValueType *)malloc(num_rows * sizeof(ValueType));
+	ValueT *x = (ValueT *)malloc(num_rows * sizeof(ValueT));
 	for(int i = 0; i < num_rows; i++)
 		x[i] = x_host[i];
 	Timer t;
@@ -79,10 +79,10 @@ void SymGSVerifier(int num_rows, IndexType *Ap, IndexType *Aj, int *indices, Val
 	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
 
 	//for(int i = 0; i <10; i ++) printf("x_test[%d]=%f, x_ref[%d]=%f\n", i, test_x[i], i, x[i]);
-	ValueType max_error = maximum_relative_error<ValueType>(test_x, x, num_rows);
+	ValueT max_error = maximum_relative_error<ValueT>(test_x, x, num_rows);
 	printf("\t[max error %9f]\n", max_error);
-	//if ( max_error > 5 * std::sqrt( std::numeric_limits<ValueType>::epsilon() ) )
-	if(!check_almost_equal<ValueType>(test_x, x, num_rows))
+	//if ( max_error > 5 * std::sqrt( std::numeric_limits<ValueT>::epsilon() ) )
+	if(!check_almost_equal<ValueT>(test_x, x, num_rows))
 		printf("POSSIBLE FAILURE\n");
 	else
 		printf("Correct\n");

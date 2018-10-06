@@ -7,7 +7,7 @@
 //#include <vector>
 #include <stdlib.h>
 
-void PRVerifier(int m, IndexType *in_row_offsets, IndexType *in_column_indices, IndexType *out_row_offsets, IndexType *out_column_indices, int *degree, ScoreT *scores_to_test, double target_error) {
+void PRVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degree, ScoreT *scores_to_test, double target_error) {
 	printf("Verifying...\n");
 	const ScoreT base_score = (1.0f - kDamp) / m;
 	const ScoreT init_score = 1.0f / m;
@@ -24,10 +24,10 @@ void PRVerifier(int m, IndexType *in_row_offsets, IndexType *in_column_indices, 
 			outgoing_contrib[n] = scores[n] / degree[n];
 		for (int src = 0; src < m; src ++) {
 			ScoreT incoming_total = 0;
-			const IndexType row_begin = in_row_offsets[src];
-			const IndexType row_end = in_row_offsets[src + 1];
-			for (IndexType offset = row_begin; offset < row_end; offset ++) {
-				IndexType dst = in_column_indices[offset];
+			const IndexT row_begin = in_row_offsets[src];
+			const IndexT row_end = in_row_offsets[src + 1];
+			for (IndexT offset = row_begin; offset < row_end; offset ++) {
+				IndexT dst = in_column_indices[offset];
 				incoming_total += outgoing_contrib[dst];
 			}
 			ScoreT old_score = scores[src];
@@ -46,10 +46,10 @@ void PRVerifier(int m, IndexType *in_row_offsets, IndexType *in_column_indices, 
 	double error = 0;
 	for (int src = 0; src < m; src ++) {
 		ScoreT outgoing_contrib = scores_to_test[src] / degree[src];
-		const IndexType row_begin = out_row_offsets[src];
-		const IndexType row_end = out_row_offsets[src + 1];
-		for (IndexType offset = row_begin; offset < row_end; ++ offset) {
-			IndexType dst = out_column_indices[offset];
+		const IndexT row_begin = out_row_offsets[src];
+		const IndexT row_end = out_row_offsets[src + 1];
+		for (IndexT offset = row_begin; offset < row_end; ++ offset) {
+			IndexT dst = out_column_indices[offset];
 			incomming_sums[dst] += outgoing_contrib;
 		}
 	}

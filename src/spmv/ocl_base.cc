@@ -38,7 +38,7 @@ int initialize(int use_gpu) {
     return 0;
 }
 
-void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueType *Ax, ValueType *x, ValueType *y) {
+void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueT *Ax, ValueT *x, ValueT *y) {
 	printf("Launching OpenCL SpMV solver ...\n");
 
 	//load OpenCL kernel file

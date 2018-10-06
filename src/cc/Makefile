@@ -48,4 +48,4 @@ cc_omp_target: main.o omp_target.o verifier.o
 	mv $@ $(BIN)
 
 clean:
-	rm $(OBJS)
+	rm *.o

@@ -40,6 +40,6 @@ bfs_hybrid: one thread per vertex using CUDA, using Beamer's Direction-Optimizin
 */
 
 //void BFSSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, DistT *dist);
-void BFSSolver(int m, int nnz, int source, IndexType *in_row_offsets, IndexType *in_column_indices, IndexType *out_row_offsets, IndexType *out_column_indices, int *degree, DistT *dist);
-void BFSVerifier(int m, int source, IndexType *row_offsets, IndexType *column_indices, DistT *dist);
-void write_solution(const char *fname, int m, DistT *dist);
+void BFSSolver(int m, int nnz, int source, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *in_degree,int *out_degree, DistT *dist);
+void BFSVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices, DistT *dist);
+//void write_solution(const char *fname, int m, DistT *dist);

@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include "common.h"
+#include "bitmap.h"
 #include "/home/cxh/gem5-ics/util/m5/m5op.h"
 
 void *m5_mem = NULL;
@@ -23,4 +25,16 @@ static void map_m5_mem() {
 #endif
 }
 
+int set_hub(int m, int nnz, int *degree, Bitmap &hub) {
+	int num_hubs = 0;
+	int threshold = hub_factor * nnz / m;
+	printf("Labelling hub vertices, hub_factor = %f, threshold_degree = %d\n", hub_factor, threshold);
+	for (int i = 0; i < m; i ++) {
+		if(degree[i] > threshold) {
+			hub.set_bit(i);
+			num_hubs ++;
+		}
+	}
+	return num_hubs;
+}
 #endif

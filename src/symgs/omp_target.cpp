@@ -6,15 +6,15 @@
 #include "omp_target_config.h"
 #define SYMGS_VARIANT "omp_target"
 
-void gauss_seidel(int *Ap, int *Aj, int *indices, ValueType *Ax, ValueType *x, ValueType *b, int row_start, int row_stop, int row_step) {
+void gauss_seidel(int *Ap, int *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, int row_start, int row_stop, int row_step) {
 	#pragma omp target device(0)
 	#pragma omp parallel for
 	for (int i = row_start; i < row_stop; i += row_step) {
 		int inew = indices[i];
 		int row_begin = Ap[inew];
 		int row_end = Ap[inew+1];
-		ValueType rsum = 0;
-		ValueType diag = 0;
+		ValueT rsum = 0;
+		ValueT diag = 0;
 		#pragma ivdep
 		for (int jj = row_begin; jj < row_end; jj++) {
 			const int j = Aj[jj];  //column index
@@ -25,7 +25,7 @@ void gauss_seidel(int *Ap, int *Aj, int *indices, ValueType *Ax, ValueType *x, V
 	}
 }
 
-void SymGSSolver(int num_rows, int nnz, int *Ap, int *Aj, int *indices, ValueType *Ax, ValueType *x, ValueType *b, std::vector<int> color_offsets) {
+void SymGSSolver(int num_rows, int nnz, int *Ap, int *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, std::vector<int> color_offsets) {
 	warm_up();
 	Timer t;
 	t.Start();

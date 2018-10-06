@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include "timer.h"
 
-int serial_solver(int m, IndexType *row_offsets, IndexType *column_indices, CompT *components) {
+int serial_solver(int m, IndexT *row_offsets, IndexT *column_indices, CompT *components) {
 	std::stack<int> DFS;
 	int num_comps = 0;
 	for(int src = 0; src < m; src ++) {
@@ -17,8 +17,8 @@ int serial_solver(int m, IndexType *row_offsets, IndexType *column_indices, Comp
 			while(!DFS.empty()) {
 				int top = DFS.top();
 				DFS.pop();
-				for(IndexType offset = row_offsets[top]; offset < row_offsets[top + 1]; offset ++) {
-					IndexType dst = column_indices[offset];
+				for(IndexT offset = row_offsets[top]; offset < row_offsets[top + 1]; offset ++) {
+					IndexT dst = column_indices[offset];
 					if(components[dst] == -1) {
 						DFS.push(dst);
 						components[dst] = num_comps;
@@ -35,7 +35,7 @@ int serial_solver(int m, IndexType *row_offsets, IndexType *column_indices, Comp
 // - Asserts search does not reach a vertex with a different component label
 // - If the graph is directed, it performs the search as if it was undirected
 // - Asserts every vertex is visited (degree-0 vertex should have own label)
-void CCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, CompT *comp_test) {
+void CCVerifier(int m, IndexT *row_offsets, IndexT *column_indices, CompT *comp_test) {
 	CompT *comp = (CompT *)malloc(m * sizeof(CompT));
 	for (int i = 0; i < m; i ++) comp[i] = -1;
 	Timer t;
@@ -62,10 +62,10 @@ void CCVerifier(int m, IndexType *row_offsets, IndexType *column_indices, CompT 
 		vector<int>::iterator it;
 		for (it = frontier.begin(); it != frontier.end(); it++) {
 			int src = *it;
-			const IndexType row_begin = row_offsets[src];
-			const IndexType row_end = row_offsets[src + 1]; 
-			for (IndexType offset = row_begin; offset < row_end; ++ offset) {
-				IndexType dst = column_indices[offset];
+			const IndexT row_begin = row_offsets[src];
+			const IndexT row_end = row_offsets[src + 1]; 
+			for (IndexT offset = row_begin; offset < row_end; ++ offset) {
+				IndexT dst = column_indices[offset];
 				if (comp_test[dst] != curr_label) {
 					printf("Wrong\n");
 					return;

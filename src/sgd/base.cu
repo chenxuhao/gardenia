@@ -57,7 +57,7 @@ __global__ void compute_rmse(int m, int n, int *row_offsets, int *column_indices
 }
 
 void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_rating, LatentT *h_user_lv, LatentT *h_item_lv, ScoreT lambda, ScoreT step, int *h_ordering, int max_iters, float epsilon) {
-	print_device_info(0);
+	//print_device_info(0);
 	Timer t;
 	int iter = 0;
 	int *d_row_offsets, *d_column_indices, *d_ordering;
@@ -86,8 +86,8 @@ void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h
 	CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
 	printf("iteration %d: RMSE error = %f per edge\n", iter, sqrt(h_error/nnz));
 	//printf("Solving, nblocks=%d, nthreads=%d\n", nblocks, nthreads);
-
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
+
 	t.Start();
 	do {
 		++iter;
