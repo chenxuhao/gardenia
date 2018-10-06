@@ -2,9 +2,9 @@ include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 CXXFLAGS+=-std=c++11 -march=core-avx2
 SRC=main.cu
-OBJS=gather.o gather_warp.o main.o verifier.o omp_base.o
+OBJS=base.o warp.o main.o verifier.o omp_base.o
 
-all: $(OBJS) pr_gather pr_gather_warp pr_omp_base
+all: $(OBJS) pr_base pr_warp pr_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
@@ -40,16 +40,16 @@ pr_omp_base_sim: omp_base.o main.o verifier.o
 	$(CXX) $(SIMFLAGS) $(INCLUDES) main.o omp_base.o verifier.o $(M5OP) -o $@ -lgomp
 	mv $@ $(BIN)
 
-pr_scatter: main.o scatter.o verifier.o pr.h
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o scatter.o verifier.o -o $@ $(LIBS)
+pr_push: main.o push.o verifier.o pr.h
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o push.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_gather: main.o gather.o verifier.o pr.h
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o gather.o verifier.o -o $@ $(LIBS)
+pr_base: main.o base.o verifier.o pr.h
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_gather_warp: main.o gather_warp.o verifier.o pr.h
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o gather_warp.o verifier.o -o $@ $(LIBS)
+pr_warp: main.o warp.o verifier.o pr.h
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o warp.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 pr_fusion: main.o fusion.o verifier.o pr.h
