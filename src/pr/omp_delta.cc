@@ -8,7 +8,7 @@
 #include "timer.h"
 #include "sliding_queue.h"
 #include "platform_atomics.h"
-#define PR_VARIANT "omp_push"
+#define PR_VARIANT "omp_delta"
 
 void push_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *deltas, ScoreT *sums, SlidingQueue<IndexT> &queue) {
 	#pragma omp parallel for schedule(dynamic, 64)

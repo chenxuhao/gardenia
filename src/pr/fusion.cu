@@ -18,7 +18,7 @@ __device__ void calc_contrib(int m, ScoreT *scores, int *degree, ScoreT *outgoin
 	}
 }
 
-__device__ void gather(int m, int *row_offsets, int *column_indices, ScoreT *scores, ScoreT *contrib, float *diff, const ScoreT base_score) {
+__device__ void pull_step(int m, int *row_offsets, int *column_indices, ScoreT *scores, ScoreT *contrib, float *diff, const ScoreT base_score) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	typedef cub::BlockReduce<float, BLOCK_SIZE> BlockReduce;
 	__shared__ typename BlockReduce::TempStorage temp_storage;
@@ -48,7 +48,7 @@ __global__ void pr_kernel(int m, int *row_offsets, int *column_indices, ScoreT *
 		calc_contrib(m, scores, degree, contrib);
 		gb.Sync();
 		*diff = 0;
-		gather(m, row_offsets, column_indices, scores, contrib, diff, base_score);
+		pull_step(m, row_offsets, column_indices, scores, contrib, diff, base_score);
 		gb.Sync();
 		//if(tid==0) printf(" %2d    %lf\n", iter+1, *diff);
 		if (*diff < EPSILON) break;

@@ -1,6 +1,6 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#define PR_VARIANT "scatter"
+#define PR_VARIANT "push"
 #include "pr.h"
 #include "timer.h"
 #include "cuda_launch_config.hpp"
@@ -13,7 +13,7 @@ __global__ void initialize(int m, ScoreT *sums, ScoreT base_score) {
 	if (id < m) sums[id] = 0;
 }
 
-__global__ void push(int m, int *row_offsets, int *column_indices, ScoreT *scores, ScoreT *sums) {
+__global__ void push_step(int m, int *row_offsets, int *column_indices, ScoreT *scores, ScoreT *sums) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m) {
 		int row_begin = row_offsets[src];
@@ -69,8 +69,8 @@ void PRSolver(int m, int nnz, int *in_row_offsets, int *in_column_indices, int *
 		++ iter;
 		h_diff = 0;
 		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(float), cudaMemcpyHostToDevice));
-		push <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_scores, d_sums);
-		CudaTest("solving kernel scatter failed");
+		push_step <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_scores, d_sums);
+		CudaTest("solving kernel push failed");
 		l1norm <<<nblocks, nthreads>>> (m, d_scores, d_sums, d_diff, base_score);
 		CudaTest("solving kernel reduce failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(float), cudaMemcpyDeviceToHost));

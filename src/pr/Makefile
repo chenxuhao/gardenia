@@ -36,8 +36,12 @@ pr_omp_delta: omp_delta.o main.o verifier.o pr.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_delta.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
-pr_omp_base_sim: omp_base.o main.o verifier.o
-	$(CXX) $(SIMFLAGS) $(INCLUDES) main.o omp_base.o verifier.o $(M5OP) -o $@ -lgomp
+pr_omp_sim: omp_sim.o main.o verifier.o
+	$(CXX) $(SIMFLAGS) $(INCLUDES) main.o omp_sim.o verifier.o $(M5OP) -o $@ -lgomp
+	mv $@ $(BIN)
+
+pr_omp_target: main.o omp_target.o verifier.o
+	$(ICPC) $(CXXFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 pr_push: main.o push.o verifier.o pr.h
@@ -52,12 +56,20 @@ pr_warp: main.o warp.o verifier.o pr.h
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o warp.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
+pr_lb: main.o lb.o verifier.o pr.h
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o lb.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+pr_delta: main.o delta.o verifier.o pr.h
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o delta.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
 pr_fusion: main.o fusion.o verifier.o pr.h
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o fusion.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_omp_target: main.o omp_target.o verifier.o
-	$(ICPC) $(CXXFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
+pr_nvgraph: main.o nvgraph.o verifier.o pr.h
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o nvgraph.o verifier.o -o $@ $(LIBS) -lnvgraph
 	mv $@ $(BIN)
 
 clean:

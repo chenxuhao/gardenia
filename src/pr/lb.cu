@@ -1,118 +1,169 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#define BFS_VARIANT "lb"
+#define PR_VARIANT "pull_lb"
+#include "pr.h"
+#include "timer.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
-#define DELTA 0.00000001
-#define EPSILON 0.01
-#define MAX_ITER 19
-
-__global__ void initialize(float *cur_pagerank, float *next_pagerank, unsigned m) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
-	if (id < m) {
-		cur_pagerank[id] = 1.0f / (float)m;
-		next_pagerank[id] = 1.0f / (float)m;
-	}
-}
-
+#define FUSED 0
+typedef cub::BlockReduce<float, BLOCK_SIZE> BlockReduce;
 typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
-__global__ void update_neighbors(int m, int *row_offsets, int *column_indices, float *cur_pagerank, float *next_pagerank) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
-	__shared__ BlockScan::TempStorage temp_storage;
-	__shared__ int gather_offsets[BLOCK_SIZE];
-	__shared__ int src_id[BLOCK_SIZE];
 
-	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
-	for (int id = tid; total_inputs > 0; id += blockDim.x * gridDim.x, total_inputs--) {
-		gather_offsets[threadIdx.x] = 0;
-		unsigned row_begin = 0, row_end = 0, degree = 0;
-		int scratch_offset = 0;
-		int total_edges = 0;
-		int src = id;
-		if (src < m) {
-			row_begin = row_offsets[src];
-			row_end = row_offsets[src + 1];
-			degree = row_end - row_begin;
-		}
-		BlockScan(temp_storage).ExclusiveSum(degree, scratch_offset, total_edges);
-		int done = 0;
-		int neighborsdone = 0;
-		int neighboroffset = 0;
-		while (total_edges > 0) {
-			__syncthreads();
-			int i;
-			for(i = 0; neighborsdone + i < degree && (scratch_offset + i - done) < BLOCK_SIZE; i++) {
-				gather_offsets[scratch_offset + i - done] = neighboroffset + neighborsdone + i;
-				src_id[i] = src;
-			}
-			neighborsdone += i;
-			scratch_offset += i;
-			__syncthreads();
-			int dst = 0;
-			int edge = gather_offsets[threadIdx.x];
-			float value = 0.85 * cur_pagerank[src_id[threadIdx.x]] / (float)degree;
-			if(threadIdx.x < total_edges) {
-				dst = column_indices[edge];
-				//next_pagerank[dst] += value;
-				atomicAdd(&next_pagerank[dst], value);
-			}
-			total_edges -= BLOCK_SIZE;
-			done += BLOCK_SIZE;
-		}
-	}
+__global__ void contrib(int m, ScoreT *scores, int *degree, ScoreT *outgoing_contrib) {
+	int u = blockIdx.x * blockDim.x + threadIdx.x;
+	if (u < m) outgoing_contrib[u] = scores[u] / degree[u];
 }
 
-__global__ void self_update(int m, int *row_offsets, int *column_indices, float *cur_pagerank, float *next_pagerank, float *diff) {
-	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
-	typedef cub::BlockReduce<float, BLOCK_SIZE> BlockReduce;
+__global__ void l1norm(int m, ScoreT *scores, ScoreT *sums, float *diff, ScoreT base_score) {
+	int u = blockIdx.x * blockDim.x + threadIdx.x;
 	__shared__ typename BlockReduce::TempStorage temp_storage;
-	int total_inputs = (m - 1) / (gridDim.x * blockDim.x) + 1;
 	float local_diff = 0;
-	for (int src = tid; total_inputs > 0; src += blockDim.x * gridDim.x, total_inputs--) {
-		if(src < m) {
-			float delta = abs(next_pagerank[src] - cur_pagerank[src]);
-			local_diff += delta;
-			cur_pagerank[src] = next_pagerank[src];
-			next_pagerank[src] = 0.15 / (float)m;
-		}
+	if(u < m) {
+		ScoreT new_score = base_score + kDamp * sums[u];
+		local_diff += fabs(new_score - scores[u]);
+		scores[u] = new_score;
+		sums[u] = 0;
 	}
 	float block_sum = BlockReduce(temp_storage).Sum(local_diff);
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
-void pr(int m, int nnz, int *d_row_offsets, int *d_column_indices, int *d_degree) {
-	unsigned zero = 0;
-	float *d_diff, h_diff, e = 0.1;
-	float *d_cur_pagerank, *d_next_pagerank;
-	double starttime, endtime, runtime;
-	int iteration = 0;
-	const int nthreads = BLOCK_SIZE;
-	int nblocks = (m - 1) / nthreads + 1;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_cur_pagerank, m * sizeof(float)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_next_pagerank, m * sizeof(float)));
+__device__ __forceinline__ unsigned LaneId() {
+	unsigned ret;
+	asm("mov.u32 %0, %laneid;" : "=r"(ret));
+	return ret;
+}
+
+__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
+	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
+	unsigned lane_id = LaneId();
+	__shared__ int owner[NUM_WARPS];
+	__shared__ int sh_vertex[NUM_WARPS];
+	owner[warp_id] = -1;
+	int size = 0;
+	int dst = id;
+	if(dst < m) {
+		size = row_offsets[dst+1] - row_offsets[dst];
+	}
+	while(__any(size) >= WARP_SIZE) {
+		if(size >= WARP_SIZE)
+			owner[warp_id] = lane_id;
+		if(owner[warp_id] == lane_id) {
+			sh_vertex[warp_id] = dst;
+			owner[warp_id] = -1;
+			size = 0;
+		}
+		int winner = sh_vertex[warp_id];
+		int row_begin = row_offsets[winner];
+		int row_end = row_offsets[winner+1];
+		int neighbor_size = row_end - row_begin;
+		int num = ((neighbor_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+		for(int i = lane_id; i < num; i+= WARP_SIZE) {
+			int edge = row_begin + i;
+			if(i < neighbor_size) {
+			}
+		}
+	}
+}
+
+__global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int tx = threadIdx.x;
+	int dst = tid;
+	__shared__ BlockScan::TempStorage temp_storage;
+	__shared__ int gather_offsets[BLOCK_SIZE];
+	__shared__ int dst_id[BLOCK_SIZE];
+	__shared__ ScoreT incoming_total[BLOCK_SIZE];
+	gather_offsets[tx] = 0;
+	dst_id[tx] = 0;
+	incoming_total[tx] = 0.0;
+	int row_begin = 0, row_end = 0, degree = 0;
+	int scratch_offset = 0;
+	int total_edges = 0;
+	if (dst < m) {
+		row_begin = row_offsets[dst];
+		row_end = row_offsets[dst+1];
+		degree = row_end - row_begin;
+	}
+	BlockScan(temp_storage).ExclusiveSum(degree, scratch_offset, total_edges);
+	int done = 0;
+	int neighbors_done = 0;
+	int neighbor_offset = 0;
+	while (total_edges > 0) {
+		__syncthreads();
+		int i;
+		for(i = 0; neighbors_done + i < degree && (scratch_offset + i - done) < BLOCK_SIZE; i++) {
+			int j = scratch_offset + i - done;
+			gather_offsets[j] = neighbor_offset + neighbors_done + i;
+			dst_id[j] = dst;
+		}
+		neighbors_done += i;
+		scratch_offset += i;
+		__syncthreads();
+		if(tx < total_edges) {
+			int edge = gather_offsets[tx];
+			int src = column_indices[edge];
+			int dst = dst_id[tx];
+			atomicAdd(&incoming_total[dst], outgoing_contrib[src]);
+		}
+		total_edges -= BLOCK_SIZE;
+		done += BLOCK_SIZE;
+	}
+	sums[dst] = incoming_total[tx];
+}
+
+void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores) {
+	//print_device_info(0);
+	IndexT *d_row_offsets, *d_column_indices;
+	int *d_degrees;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(IndexT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(IndexT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degrees, m * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, in_row_offsets, (m + 1) * sizeof(IndexT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, in_column_indices, nnz * sizeof(IndexT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_degrees, degrees, m * sizeof(int), cudaMemcpyHostToDevice));
+	ScoreT *d_scores, *d_sums, *d_contrib;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scores, m * sizeof(ScoreT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_sums, m * sizeof(ScoreT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_contrib, m * sizeof(ScoreT)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_scores, scores, m * sizeof(ScoreT), cudaMemcpyHostToDevice));
+	float *d_diff, h_diff;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
-	initialize <<<nblocks, nthreads>>> (d_cur_pagerank, d_next_pagerank, m);
-	CudaTest("initializing failed");
-	const size_t max_blocks = maximum_residency(update_neighbors, nthreads, 0);
-	//const size_t max_blocks = 5;
-	starttime = rtclock();
+
+	int iter = 0;
+	int nthreads = BLOCK_SIZE;
+	const ScoreT base_score = (1.0f - kDamp) / m;
+	int nblocks = (m - 1) / nthreads + 1;
+	printf("Launching CUDA PR solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
+
+	Timer t;
+	t.Start();
 	do {
-		++iteration;
-		h_diff = 0.0f;
-		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(h_diff), cudaMemcpyHostToDevice));
-		nblocks = (m - 1) / nthreads + 1;
-		update_neighbors <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_cur_pagerank, d_next_pagerank);
-		self_update <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_cur_pagerank, d_next_pagerank, d_diff);
-		CudaTest("solving failed");
-		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(h_diff), cudaMemcpyDeviceToHost));
-		printf("iteration=%d, diff=%f\n", iteration, h_diff);
-	} while (h_diff > EPSILON && iteration < MAX_ITER);
+		++iter;
+		h_diff = 0;
+		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(float), cudaMemcpyHostToDevice));
+		contrib<<<nblocks, nthreads>>>(m, d_scores, d_degrees, d_contrib);
+		CudaTest("solving kernel contrib failed");
+		pull_step <<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_sums, d_contrib);
+		l1norm <<<nblocks, nthreads>>> (m, d_scores, d_sums, d_diff, base_score);
+		CudaTest("solving kernel pull failed");
+		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(float), cudaMemcpyDeviceToHost));
+		printf(" %2d    %f\n", iter, h_diff);
+	} while (h_diff > EPSILON && iter < MAX_ITER);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	endtime = rtclock();
-	printf("\titerations = %d.\n", iteration);
-	runtime = (1000.0f * (endtime - starttime));
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, runtime);
+	t.Stop();
+
+	printf("\titerations = %d.\n", iter);
+	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());
+	CUDA_SAFE_CALL(cudaMemcpy(scores, d_scores, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+	CUDA_SAFE_CALL(cudaFree(d_column_indices));
+	CUDA_SAFE_CALL(cudaFree(d_degrees));
+	CUDA_SAFE_CALL(cudaFree(d_scores));
+	CUDA_SAFE_CALL(cudaFree(d_sums));
+	CUDA_SAFE_CALL(cudaFree(d_contrib));
 	CUDA_SAFE_CALL(cudaFree(d_diff));
 	return;
 }

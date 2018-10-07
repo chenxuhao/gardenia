@@ -89,10 +89,10 @@ __global__ void bottom_up_lb(int m, int *row_offsets, int *column_indices, DistT
 	const int SCRATCHSIZE = BLOCK_SIZE;
 	__shared__ BlockScan::TempStorage temp_storage;
 	__shared__ int gather_offsets[SCRATCHSIZE];
-	__shared__ int dstIndex[BLOCK_SIZE];
+	__shared__ int dst_id[BLOCK_SIZE];
 	__shared__ bool dstDone[BLOCK_SIZE];
 	gather_offsets[tx] = 0;
-	dstIndex[tx] = 0;
+	dst_id[tx] = 0;
 	dstDone[tx] = false;
 	
 	int neighbor_size = 0;
@@ -112,14 +112,14 @@ __global__ void bottom_up_lb(int m, int *row_offsets, int *column_indices, DistT
 		for(i = 0; !dstDone[dst%BLOCK_SIZE] && neighbors_done + i < neighbor_size && (scratch_offset + i - done) < SCRATCHSIZE; i++) {
 			int j = scratch_offset + i - done;
 			gather_offsets[j] = neighbor_offset + neighbors_done + i;
-			dstIndex[j] = dst;
+			dst_id[j] = dst;
 		}
 		neighbors_done += i;
 		scratch_offset += i;
 		__syncthreads();
 		if(tx < total_edges) {
 			int edge = gather_offsets[tx];
-			int dst = dstIndex[tx];
+			int dst = dst_id[tx];
 			bool changed = false;
 			process_edge(dst, depth, edge, column_indices, depths, front, next, &changed);
 			if(changed) dstDone[dst%BLOCK_SIZE] = true;

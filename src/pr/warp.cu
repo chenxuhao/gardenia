@@ -1,23 +1,34 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#define PR_VARIANT "gather_warp"
+#define PR_VARIANT "pull_warp"
 #include <cub/cub.cuh>
 #include "pr.h"
 #include "timer.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-#include <thrust/reduce.h>
-#include <thrust/execution_policy.h>
+#define FUSED 0
+typedef cub::BlockReduce<float, BLOCK_SIZE> BlockReduce;
 
-__global__ void calc_contrib(int m, ScoreT *scores, int *degree, ScoreT *outgoing_contrib) {
-	int src = blockIdx.x * blockDim.x + threadIdx.x;
-	if (src < m) outgoing_contrib[src] = scores[src] / degree[src];
+__global__ void contrib(int m, ScoreT *scores, int *degree, ScoreT *outgoing_contrib) {
+	int u = blockIdx.x * blockDim.x + threadIdx.x;
+	if (u < m) outgoing_contrib[u] = scores[u] / degree[u];
 }
 
-// gather operation needs incoming neighbor list
-__global__ void gather(int m, int *row_offsets, int *column_indices, ScoreT *scores, ScoreT *contrib, float *diff, const ScoreT base_score) {
-	typedef cub::BlockReduce<float, BLOCK_SIZE> BlockReduce;
+__global__ void l1norm(int m, ScoreT *scores, ScoreT *sums, float *diff, ScoreT base_score) {
+	int u = blockIdx.x * blockDim.x + threadIdx.x;
 	__shared__ typename BlockReduce::TempStorage temp_storage;
+	float local_diff = 0;
+	if(u < m) {
+		ScoreT new_score = base_score + kDamp * sums[u];
+		local_diff += fabs(new_score - scores[u]);
+		scores[u] = new_score;
+		sums[u] = 0;
+	}
+	float block_sum = BlockReduce(temp_storage).Sum(local_diff);
+	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
+}
+
+__global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
 	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 
@@ -27,20 +38,17 @@ __global__ void gather(int m, int *row_offsets, int *column_indices, ScoreT *sco
 	const int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
 	const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
 
-	float error = 0;
-	for(int src = warp_id; src < m; src += num_warps) {
-		// use two threads to fetch row_offsets[src] and row_offsets[src+1]
-		// this is considerably faster than the straightforward version
+	for(int dst = warp_id; dst < m; dst += num_warps) {
 		if(thread_lane < 2)
-			ptrs[warp_lane][thread_lane] = row_offsets[src + thread_lane];
-		const int row_begin = ptrs[warp_lane][0];                   //same as: row_begin = row_offsets[isrc];
-		const int row_end   = ptrs[warp_lane][1];                   //same as: row_end   = row_offsets[src+1];
+			ptrs[warp_lane][thread_lane] = row_offsets[dst + thread_lane];
+		const int row_begin = ptrs[warp_lane][0];                   //same as: row_begin = row_offsets[dst];
+		const int row_end   = ptrs[warp_lane][1];                   //same as: row_end   = row_offsets[dst+1];
 
 		// compute local sum
 		ScoreT sum = 0;
 		for (int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
-			int dst = column_indices[offset];
-			sum += contrib[dst];
+			int src = column_indices[offset];
+			sum += outgoing_contrib[src];
 		}
 		// store local sum in shared memory
 		sdata[threadIdx.x] = sum; __syncthreads();
@@ -53,9 +61,50 @@ __global__ void gather(int m, int *row_offsets, int *column_indices, ScoreT *sco
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; __syncthreads();
 
 		if(thread_lane == 0) {
-			ScoreT old_score = scores[src];
+			sums[dst] += sdata[threadIdx.x];
+		}
+	}
+}
+
+// pull operation needs incoming neighbor list
+__global__ void pull_fused(int m, int *row_offsets, int *column_indices, ScoreT *scores, ScoreT *outgoing_contrib, float *diff, ScoreT base_score) {
+	__shared__ typename BlockReduce::TempStorage temp_storage;
+	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
+	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
+
+	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
+	const int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
+	const int warp_id     = thread_id   / WARP_SIZE;                // global warp index
+	const int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
+	const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
+
+	float error = 0;
+	for(int dst = warp_id; dst < m; dst += num_warps) {
+		if(thread_lane < 2)
+			ptrs[warp_lane][thread_lane] = row_offsets[dst + thread_lane];
+		const int row_begin = ptrs[warp_lane][0];                   //same as: row_begin = row_offsets[dst];
+		const int row_end   = ptrs[warp_lane][1];                   //same as: row_end   = row_offsets[dst+1];
+
+		// compute local sum
+		ScoreT sum = 0;
+		for (int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
+			int src = column_indices[offset];
+			sum += outgoing_contrib[src];
+		}
+		// store local sum in shared memory
+		sdata[threadIdx.x] = sum; __syncthreads();
+
+		// reduce local sums to row sum
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x + 16]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  8]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  4]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  2]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; __syncthreads();
+
+		if(thread_lane == 0) {
+			ScoreT old_score = scores[dst];
 			ScoreT new_score = base_score + kDamp * sdata[threadIdx.x];
-			scores[src] = new_score;
+			scores[dst] = new_score;
 			error += fabs(new_score - old_score);
 		}
 	}
@@ -63,34 +112,39 @@ __global__ void gather(int m, int *row_offsets, int *column_indices, ScoreT *sco
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
-void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *out_row_offsets, int *out_column_indices, int *h_degree, ScoreT *h_scores) {
+void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores) {
 	//print_device_info(0);
-	int *d_row_offsets, *d_column_indices, *d_degree;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
-	ScoreT *d_scores;
+	IndexT *d_row_offsets, *d_column_indices;
+	int *d_degrees;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(IndexT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(IndexT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degrees, m * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, in_row_offsets, (m + 1) * sizeof(IndexT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, in_column_indices, nnz * sizeof(IndexT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_degrees, degrees, m * sizeof(int), cudaMemcpyHostToDevice));
+	ScoreT *d_scores, *d_sums, *d_contrib;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scores, m * sizeof(ScoreT)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_scores, h_scores, m * sizeof(ScoreT), cudaMemcpyHostToDevice));
-	ScoreT *d_contrib;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_sums, m * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_contrib, m * sizeof(ScoreT)));
-	float *d_errors;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_errors, m * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_scores, scores, m * sizeof(ScoreT), cudaMemcpyHostToDevice));
 	float *d_diff, h_diff;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
 
 	int iter = 0;
+	int nthreads = BLOCK_SIZE;
 	const ScoreT base_score = (1.0f - kDamp) / m;
-	const int nthreads = BLOCK_SIZE;
+	int nblocks = (m - 1) / nthreads + 1;
+
 	cudaDeviceProp deviceProp;
 	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
 	const int nSM = deviceProp.multiProcessorCount;
-	const int max_blocks_per_SM = maximum_residency(gather, nthreads, 0);
+#if FUSED
+	const int max_blocks_per_SM = maximum_residency(pull_fused, nthreads, 0);
+#else
+	const int max_blocks_per_SM = maximum_residency(pull_step, nthreads, 0);
+#endif
 	const int max_blocks = max_blocks_per_SM * nSM;
-	const int nblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
+	const int mblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
 	printf("Launching CUDA PR solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
 
 	Timer t;
@@ -99,14 +153,16 @@ void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *ou
 		++iter;
 		h_diff = 0;
 		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(float), cudaMemcpyHostToDevice));
-		calc_contrib<<<(m - 1) / nthreads + 1, nthreads>>>(m, d_scores, d_degree, d_contrib);
-		CudaTest("solving kernel calc_contrib failed");
-		//CUDA_SAFE_CALL(cudaMemset(d_errors, 0, m * sizeof(float)));
-		gather<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_scores, d_contrib, d_diff, base_score);
-		CudaTest("solving kernel gather failed");
-		//h_diff = thrust::reduce(thrust::device, d_errors, d_errors+m);
+		contrib <<<nblocks, nthreads>>>(m, d_scores, d_degrees, d_contrib);
+		CudaTest("solving kernel contrib failed");
+#if FUSED
+		pull_fused <<<mblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_scores, d_contrib, d_diff, base_score);
+#else
+		pull_step <<<mblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_sums, d_contrib);
+		l1norm <<<nblocks, nthreads>>> (m, d_scores, d_sums, d_diff, base_score);
+#endif
+		CudaTest("solving kernel pull failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(float), cudaMemcpyDeviceToHost));
-		//printf("iteration=%d, diff=%f\n", iter, h_diff);
 		printf(" %2d    %f\n", iter, h_diff);
 	} while (h_diff > EPSILON && iter < MAX_ITER);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
@@ -114,11 +170,12 @@ void PRSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *ou
 
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_scores, d_scores, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(scores, d_scores, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
-	CUDA_SAFE_CALL(cudaFree(d_degree));
+	CUDA_SAFE_CALL(cudaFree(d_degrees));
 	CUDA_SAFE_CALL(cudaFree(d_scores));
+	CUDA_SAFE_CALL(cudaFree(d_sums));
 	CUDA_SAFE_CALL(cudaFree(d_contrib));
 	CUDA_SAFE_CALL(cudaFree(d_diff));
 	return;

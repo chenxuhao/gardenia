@@ -6,7 +6,7 @@
 #include "timer.h"
 #define PR_VARIANT "omp_base"
 
-void PRSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degree, ScoreT *scores) {
+void PRSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -22,7 +22,7 @@ void PRSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, Index
 		double error = 0;
 		#pragma omp parallel for
 		for (int n = 0; n < m; n ++)
-			outgoing_contrib[n] = scores[n] / degree[n];
+			outgoing_contrib[n] = scores[n] / degrees[n];
 		#pragma omp parallel for reduction(+ : error) schedule(dynamic, 64)
 		for (int src = 0; src < m; src ++) {
 			ScoreT incoming_total = 0;

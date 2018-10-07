@@ -8,7 +8,7 @@ const float epsilon2 = 0.001;
 #ifdef SIM
 #define MAX_ITER 3
 #else
-#define MAX_ITER 30
+#define MAX_ITER 100
 #endif
 /*
 GARDENIA Benchmark Suite
@@ -23,9 +23,9 @@ it is not necesarily the fastest way to implement it. It does perform the
 updates in the pull direction to remove the need for atomics.
 
 pr_omp: OpenMP implementation, one thread per vertex
-pr_gather: topology-driven GPU implementation using gather/pull approach, one thread per vertex using CUDA
-pr_scatter: topology-driven GPU implementation using scatter/push approach, one thread per edge using CUDA
+pr_base: topology-driven GPU implementation using pull approach, one thread per vertex using CUDA
+pr_push: topology-driven GPU implementation using push approach, one thread per edge using CUDA
 */
 
-void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degree, ScoreT *scores);
-void PRVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degree, ScoreT *scores, double target_error);
+void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores);
+void PRVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores, double target_error);
