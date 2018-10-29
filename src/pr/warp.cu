@@ -7,7 +7,7 @@
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #define FUSED 0
-typedef cub::BlockReduce<float, BLOCK_SIZE> BlockReduce;
+typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
 __global__ void contrib(int m, ScoreT *scores, int *degree, ScoreT *outgoing_contrib) {
 	int u = blockIdx.x * blockDim.x + threadIdx.x;
@@ -50,19 +50,25 @@ __global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, Sc
 			int src = column_indices[offset];
 			sum += outgoing_contrib[src];
 		}
-		// store local sum in shared memory
+#if 1
+		// store local sum in shared memory,
+		// and reduce local sums to global sum
 		sdata[threadIdx.x] = sum; __syncthreads();
-
-		// reduce local sums to row sum
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x + 16]; __syncthreads();
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  8]; __syncthreads();
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  4]; __syncthreads();
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  2]; __syncthreads();
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; __syncthreads();
-
-		if(thread_lane == 0) {
-			sums[dst] += sdata[threadIdx.x];
-		}
+		if(thread_lane == 0) sums[dst] += sdata[threadIdx.x];
+#else
+		sum += __shfl_down_sync(0xFFFFFFFF, sum, 16);
+		sum += __shfl_down_sync(0xFFFFFFFF, sum,  8);
+		sum += __shfl_down_sync(0xFFFFFFFF, sum,  4);
+		sum += __shfl_down_sync(0xFFFFFFFF, sum,  2);
+		sum += __shfl_down_sync(0xFFFFFFFF, sum,  1);
+		sum = __shfl_sync(0xFFFFFFFF, sum,  0);
+		if(thread_lane == 0) sums[dst] = sum;
+#endif
 	}
 }
 

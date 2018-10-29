@@ -31,7 +31,7 @@ void fill_data(int m, int &nnz, IndexT *&row_offsets, IndexT *&column_indices, W
 	int num_selfloops = 0;
 	if(remove_selfloops) {
 		printf("Removing self loops...");
-		for(unsigned i = 0; i < (unsigned)m; i++) {
+		for(int i = 0; i < m; i++) {
 			for(unsigned j = 0; j < vertices[i].size(); j ++) {
 				if(i == vertices[i][j].dst) {
 					vertices[i].erase(vertices[i].begin()+j);
@@ -47,7 +47,7 @@ void fill_data(int m, int &nnz, IndexT *&row_offsets, IndexT *&column_indices, W
 	int num_redundents = 0;
 	if(remove_redundents) {
 		printf("Removing redundent edges...");
-		for (unsigned i = 0; i < (unsigned)m; i++) {
+		for (int i = 0; i < m; i++) {
 			for (unsigned j = 1; j < vertices[i].size(); j ++) {
 				if (vertices[i][j].dst == vertices[i][j-1].dst) {
 					vertices[i].erase(vertices[i].begin()+j);

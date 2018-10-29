@@ -10,30 +10,34 @@ all: $(OBJS) pr_base pr_warp pr_omp_base
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
 
 ifeq ($(HOST),X86)
-%.o: %.cc
+%.o: %.cc ../../include/partition.h pr.h ../../include/prop_blocking.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
 else
 %.o: %.cc
 	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
 endif
 
-%.o: %.cu
+%.o: %.cu ../../include/partition.h pr.h ../../include/prop_blocking.h
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
-pr_omp_base: omp_base.o main.o verifier.o pr.h
+pr_omp_base: omp_base.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
-pr_omp_push: omp_push.o main.o verifier.o pr.h
+pr_omp_push: omp_push.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_push.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
-pr_omp_pb: omp_pb.o main.o verifier.o pr.h
+pr_omp_pb: omp_pb.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_pb.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
-pr_omp_delta: omp_delta.o main.o verifier.o pr.h
+pr_omp_delta: omp_delta.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_delta.o verifier.o -o $@ -lgomp
+	mv $@ $(BIN)
+
+pr_omp_partition: omp_partition.o main.o verifier.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_partition.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
 pr_omp_sim: omp_sim.o main.o verifier.o
@@ -44,31 +48,35 @@ pr_omp_target: main.o omp_target.o verifier.o
 	$(ICPC) $(CXXFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_push: main.o push.o verifier.o pr.h
+pr_push: main.o push.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o push.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_base: main.o base.o verifier.o pr.h
+pr_base: main.o base.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_warp: main.o warp.o verifier.o pr.h
+pr_warp: main.o warp.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o warp.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_lb: main.o lb.o verifier.o pr.h
+pr_lb: main.o lb.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o lb.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_delta: main.o delta.o verifier.o pr.h
+pr_delta: main.o delta.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o delta.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_fusion: main.o fusion.o verifier.o pr.h
+pr_fusion: main.o fusion.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o fusion.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-pr_nvgraph: main.o nvgraph.o verifier.o pr.h
+pr_partition: main.o partition.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o partition.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+pr_nvgraph: main.o nvgraph.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o nvgraph.o verifier.o -o $@ $(LIBS) -lnvgraph
 	mv $@ $(BIN)
 

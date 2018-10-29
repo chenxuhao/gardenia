@@ -11,15 +11,10 @@
 // CSR SpMV kernels based on a scalar model (one thread per row)
 ///////////////////////////////////////////////////////////////////////
 //
-// spmv_csr_scalar_device
+// spmv_csr_scalar
 //   Straightforward translation of standard CSR SpMV to CUDA
 //   where each thread computes y[i] += A[i,:] * x 
 //   (the dot product of the i-th row of A with the x vector)
-//
-// spmv_csr_scalar_tex_device
-//   Same as spmv_csr_scalar_device, except x is accessed via texture cache.
-//
-
 __global__ void spmv_csr_scalar_kernel(const int num_rows, const int * Ap,  const int * Aj,
 		const ValueT * Ax, const ValueT * x, ValueT * y) {
 	int row = blockIdx.x * blockDim.x + threadIdx.x;

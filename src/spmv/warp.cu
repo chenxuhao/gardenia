@@ -9,10 +9,10 @@
 #include "timer.h"
 
 //////////////////////////////////////////////////////////////////////////////
-// CSR SpMV kernels based on a vector model (one warp per row)
+// CSR SpMV kernels based on a warp model (one warp per row)
 //////////////////////////////////////////////////////////////////////////////
 //
-// spmv_csr_vector_device
+// spmv_csr_warp
 //   Each row of the CSR matrix is assigned to a warp.  The warp computes
 //   y[i] = A[i,:] * x, i.e. the dot product of the i-th row of A with 
 //   the x vector, in parallel.  This division of work implies that 
@@ -22,17 +22,14 @@
 //   work.  Since an entire 32-thread warp is assigned to each row, many 
 //   threads will remain idle when their row contains a small number 
 //   of elements.  This code relies on implicit synchronization among 
-//   threads in a warp.
-//
-// spmv_csr_vector_tex_device
-//   Same as spmv_csr_vector_tex_device, except that the texture cache is 
-//   used for accessing the x vector.
+//   threads in a warp. Note that the texture cache is used for accessing
+//   the x vector.
 
 texture<float,1> tex_x;
 void bind_x(const float * x) { CUDA_SAFE_CALL(cudaBindTexture(NULL, tex_x, x)); }
 void unbind_x(const float * x) { CUDA_SAFE_CALL(cudaUnbindTexture(tex_x)); }
 
-__global__ void spmv_vector(int num_rows, const int * Ap,  const int * Aj, const ValueT * Ax, const ValueT * x, ValueT * y) {
+__global__ void spmv_warp(int num_rows, const int * Ap,  const int * Aj, const ValueT * Ax, const ValueT * x, ValueT * y) {
 	__shared__ ValueT sdata[BLOCK_SIZE + 16];                    // padded to avoid reduction ifs
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 
@@ -90,7 +87,7 @@ void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, Value
 	cudaDeviceProp deviceProp;
 	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
 	const int nSM = deviceProp.multiProcessorCount;
-	const int max_blocks_per_SM = maximum_residency(spmv_vector, nthreads, 0);
+	const int max_blocks_per_SM = maximum_residency(spmv_warp, nthreads, 0);
 	const int max_blocks = max_blocks_per_SM * nSM;
 	const int nblocks = std::min(max_blocks, DIVIDE_INTO(num_rows, WARPS_PER_BLOCK));
 	printf("Launching CUDA SpMV solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
@@ -98,7 +95,7 @@ void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, Value
 	Timer t;
 	t.Start();
 	bind_x(d_x);
-	spmv_vector<<<nblocks, nthreads>>>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);   
+	spmv_warp<<<nblocks, nthreads>>>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);   
 	CudaTest("solving failed");
 	unbind_x(d_x);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());

@@ -17,12 +17,16 @@ __global__ void contrib(int m, ScoreT *scores, int *degree, ScoreT *outgoing_con
 __global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
 	int dst = blockIdx.x * blockDim.x + threadIdx.x;
 	if (dst < m) {
-		IndexT row_begin = row_offsets[dst];
-		IndexT row_end = row_offsets[dst+1];
+		//IndexT row_begin = row_offsets[dst];
+		//IndexT row_end = row_offsets[dst+1];
+		IndexT row_begin = __ldg(row_offsets+dst);
+		IndexT row_end = __ldg(row_offsets+dst+1);
 		ScoreT incoming_total = 0;
 		for (IndexT offset = row_begin; offset < row_end; ++ offset) {
-			IndexT src = column_indices[offset];
-			incoming_total += outgoing_contrib[src];
+			//IndexT src = column_indices[offset];
+			IndexT src = __ldg(column_indices+offset);
+			//incoming_total += outgoing_contrib[src];
+			incoming_total += __ldg(outgoing_contrib+src);
 		}
 		sums[dst] = incoming_total;
 	}
@@ -94,7 +98,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 		++iter;
 		h_diff = 0;
 		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(float), cudaMemcpyHostToDevice));
-		contrib<<<nblocks, nthreads>>>(m, d_scores, d_degrees, d_contrib);
+		contrib <<<nblocks, nthreads>>>(m, d_scores, d_degrees, d_contrib);
 		CudaTest("solving kernel contrib failed");
 #if FUSED
 		pull_fused <<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_scores, d_contrib, d_diff, base_score);

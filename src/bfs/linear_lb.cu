@@ -12,8 +12,8 @@ typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
 
 __device__ __forceinline__ void process_edge(int depth, int edge, int *column_indices, DistT *dist, Worklist2 &out_queue) {
 	int dst = column_indices[edge];
-	if (dist[dst] > depth) {
-		//atomicMin(&dist[dst], depth);
+	//if (dist[dst] > depth) {
+	if (dist[dst] == MYINFINITY) {
 		dist[dst] = depth;
 		out_queue.push(dst);
 	}
@@ -33,8 +33,7 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		if(size > BLOCK_SIZE)
 			owner = threadIdx.x;
 		__syncthreads();
-		if(owner == -1)
-			break;
+		if(owner == -1) break;
 		__syncthreads();
 		if(owner == threadIdx.x) {
 			sh_vertex = vertex;
@@ -49,20 +48,21 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		int num = ((neighbor_size + blockDim.x - 1) / blockDim.x) * blockDim.x;
 		for(int i = threadIdx.x; i < num; i += blockDim.x) {
 			int edge = row_begin + i;
-			//int dst = 0;
-			//int ncnt = 0;
+			int dst = 0;
+			int ncnt = 0;
 			if(i < neighbor_size) {
-				process_edge(depth, edge, column_indices, dist, out_queue);
-				/*
+				// TODO: push() doesn't work for expandByCta
+				//process_edge(depth, edge, column_indices, dist, out_queue);
+				///*
 				dst = column_indices[edge];
-				assert(dst < m);
+				//assert(dst < m);
 				if(dist[dst] == MYINFINITY) {
 					dist[dst] = depth;
 					ncnt = 1;
 				}
-				*/
+				//*/
 			}
-			//out_queue.push_1item<BlockScan>(ncnt, dst, BLOCK_SIZE);
+			out_queue.push_1item<BlockScan>(ncnt, dst, BLOCK_SIZE);
 		}
 	}
 }
@@ -86,7 +86,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 		if (vertex != -1)
 			size = row_offsets[vertex + 1] - row_offsets[vertex];
 	}
-	while(__any(size) >= WARP_SIZE) {
+	while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
 		if(size >= WARP_SIZE)
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {
@@ -108,12 +108,12 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 				process_edge(depth, edge, column_indices, dist, out_queue);
 				/*
 				dst = column_indices[edge];
-				assert(dst < m);
+				//assert(dst < m);
 				if(dist[dst] == MYINFINITY) {
 					dist[dst] = depth;
 					ncnt = 1;
 				}
-				*/
+				//*/
 			}
 			//out_queue.push_1item<BlockScan>(ncnt, dst, BLOCK_SIZE);
 		}
@@ -121,7 +121,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 }
 
 __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 in_queue, Worklist2 out_queue, int depth) {
-	//expandByCta(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
+	expandByCta(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
 	expandByWarp(m, row_offsets, column_indices, dist, in_queue, out_queue, depth);
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
@@ -158,12 +158,12 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 			process_edge(depth, edge, column_indices, dist, out_queue);
 			/*
 			dst = column_indices[edge];
-			assert(dst < m);
+			//assert(dst < m);
 			if(dist[dst] == MYINFINITY) {
 				dist[dst] = depth;
 				ncnt = 1;
 			}
-			*/
+			//*/
 		}
 		//out_queue.push_1item<BlockScan>(ncnt, dst, BLOCK_SIZE);
 		total_edges -= BLOCK_SIZE;
@@ -209,6 +209,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 		bfs_kernel<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_dist, *in_frontier, *out_frontier, iter);
 		CudaTest("solving failed");
 		nitems = out_frontier->nitems();
+		//printf("iteration=%d, frontier_size=%d\n", iter, nitems);
 		Worklist2 *tmp = in_frontier;
 		in_frontier = out_frontier;
 		out_frontier = tmp;

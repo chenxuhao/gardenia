@@ -2,7 +2,9 @@
 #define COMMON_H_
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <cassert>
+#include <omp.h>
 //#include <vector>
 //#include <algorithm>
 //#include <iomanip>
@@ -33,8 +35,8 @@ extern double hub_factor;
 #define PAGE_SIZE 4096
 #define	MAXCOLOR 128 // assume graph can be colored with less than 128 colors
 #define MYINFINITY	1000000000
-//#define BLOCK_SIZE  256
-#define BLOCK_SIZE  128
+#define BLOCK_SIZE  256
+//#define BLOCK_SIZE  128
 #define WARP_SIZE   32
 #define MAXBLOCKSIZE    1024
 #define MAXSHARED   (48*1024)

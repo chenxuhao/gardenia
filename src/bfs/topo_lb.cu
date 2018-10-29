@@ -11,7 +11,6 @@ typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
 
 __device__ __forceinline__ void process_edge(int depth, int edge, int *column_indices, DistT *dist, bool *changed) {
 	int dst = column_indices[edge];
-	//assert(dst < m);
 	if (dist[dst] > depth) {
 	//if(dist[dst] == MYINFINITY) {
 		dist[dst] = depth;
@@ -33,9 +32,8 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		if(size > BLOCK_SIZE)
 			owner = threadIdx.x;
 		__syncthreads();
-		if(owner == -1)
-			break;
-		__syncthreads();
+		if(owner == -1) break;
+		//__syncthreads();
 		if(owner == threadIdx.x) {
 			sh_vertex = vertex;
 			expanded[id] = true;
@@ -74,7 +72,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	if(vertex < m && visited[vertex] && !expanded[vertex]) {
 		size = row_offsets[vertex + 1] - row_offsets[vertex];
 	}
-	while(__any(size) >= WARP_SIZE) {
+	while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
 		if(size >= WARP_SIZE)
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {
@@ -98,7 +96,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 }
 
 __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, bool *changed, bool *visited, bool *expanded, int *frontier_size, int depth) {
-	expandByCta(m, row_offsets, column_indices, dist, visited, expanded, depth, changed);
+	//expandByCta(m, row_offsets, column_indices, dist, visited, expanded, depth, changed);
 	expandByWarp(m, row_offsets, column_indices, dist, visited, expanded, depth, changed);
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src = tid;

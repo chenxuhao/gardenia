@@ -43,6 +43,7 @@ __global__ void contrib(int m, ScoreT *deltas, int *degrees, ScoreT *outgoing_co
 	}
 }
 
+#if 0
 __global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
 	int dst = blockIdx.x * blockDim.x + threadIdx.x;
 	if (dst < m) {
@@ -56,6 +57,41 @@ __global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, Sc
 		sums[dst] = incoming_total;
 	}
 }
+#else
+__global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
+	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
+	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
+
+	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
+	const int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
+	const int warp_id     = thread_id   / WARP_SIZE;                // global warp index
+	const int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
+	const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
+
+	for(int dst = warp_id; dst < m; dst += num_warps) {
+		if(thread_lane < 2)
+			ptrs[warp_lane][thread_lane] = row_offsets[dst + thread_lane];
+		const int row_begin = ptrs[warp_lane][0];                   //same as: row_begin = row_offsets[dst];
+		const int row_end   = ptrs[warp_lane][1];                   //same as: row_end   = row_offsets[dst+1];
+
+		// compute local sum
+		ScoreT sum = 0;
+		for (int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
+			int src = column_indices[offset];
+			sum += outgoing_contrib[src];
+		}
+		// store local sum in shared memory,
+		// and reduce local sums to global sum
+		sdata[threadIdx.x] = sum; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x + 16]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  8]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  4]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  2]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; __syncthreads();
+		if(thread_lane == 0) sums[dst] += sdata[threadIdx.x];
+	}
+}
+#endif
 
 __global__ void update_first(int m, ScoreT *scores, ScoreT *sums, ScoreT *deltas, ScoreT base_score, ScoreT init_score, Worklist2 queue) {
 	int u = blockIdx.x * blockDim.x + threadIdx.x;

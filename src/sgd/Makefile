@@ -1,4 +1,5 @@
 include ../common.mk
+INCLUDES+=-I $(CUB_DIR)
 SRC=main.cc
 OBJS=base.o vector.o omp_base.o main.o verifier.o
 CXXFLAGS+=-std=c++11
@@ -7,7 +8,7 @@ EXTRA+=-std=c++11
 all: $(OBJS) sgd_omp_base sgd_vector
 
 %.o: %.cpp
-	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
 
 %.o: %.cc sgd.h
 	$(CXX) $(CXXFLAGS) $(PARFLAG) $(INCLUDES) -c $<
@@ -28,7 +29,7 @@ sgd_omp_base: omp_base.o main.o verifier.o
 	mv $@ $(BIN)
 
 sgd_omp_target: main.o omp_target.o verifier.o
-	$(ICPC) $(CXXFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(EXTRA) main.o omp_target.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 clean:

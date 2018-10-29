@@ -35,8 +35,9 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	for(int i = 0; i < nnz; i++) weights_h[i] = rand() / (RAND_MAX + 1.0);
 	float *bookmark_h = (float *)malloc(m * sizeof(float));
 	for(int i = 0; i < m; i++) {
-		if(degrees[i] == 0) bookmark_h[i] = 1.0;
-		else bookmark_h[i] = 0.0;
+		//if(degrees[i] == 0) bookmark_h[i] = 1.0;
+		//else bookmark_h[i] = 0.0;
+		bookmark_h[i] = 0.0;
 	}
 	vertex_dim[0] = (void*)bookmark_h;
 	vertex_dim[1] = (void*)scores;
@@ -63,7 +64,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 
 	Timer t;
 	t.Start();
-	check(nvgraphPagerank(handle, graph, 0, alpha1_p, 0, 1, 1, EPSILON, MAX_ITER));
+	check(nvgraphPagerank(handle, graph, 0, alpha1_p, 0, 0, 1, EPSILON, MAX_ITER));
 	t.Stop();
 	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());
 

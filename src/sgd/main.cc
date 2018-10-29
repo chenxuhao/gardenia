@@ -28,10 +28,6 @@ void Initialize(int len, LatentT *lv) {
 }
 
 int main(int argc, char *argv[]) {
-	ScoreT lambda = 0.05; // regularization_factor
-	ScoreT step = 0.003; // learning_rate
-	int max_iters = 1;
-	float epsilon = 0.1;
 	printf("Stochastic Gradient Descent by Xuhao Chen\n");
 	if (argc < 2) {
 		printf("Usage: %s <graph> [lambda(0.05)] [step(0.003)] [max_iter(1)]\n", argv[0]);
@@ -65,8 +61,8 @@ int main(int argc, char *argv[]) {
 	thrust::sequence(ordering, ordering+m);
 	std::random_shuffle(ordering, ordering+m);
 
-	SGDSolver(m, n, nnz, h_row_offsets, h_column_indices, h_rating, h_user_lv, h_item_lv, lambda, step, ordering, max_iters, epsilon);
-	SGDVerifier(m, n, nnz, h_row_offsets, h_column_indices, h_rating, lv_u, lv_i, lambda, step, ordering, max_iters, epsilon);
+	SGDSolver(m, n, nnz, h_row_offsets, h_column_indices, h_rating, h_user_lv, h_item_lv, ordering);
+	SGDVerifier(m, n, nnz, h_row_offsets, h_column_indices, h_rating, lv_u, lv_i, ordering);
 
 	free(h_row_offsets);
 	free(h_column_indices);

@@ -29,29 +29,72 @@ __global__ void l1norm(int m, ScoreT *scores, ScoreT *sums, float *diff, ScoreT 
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
+__device__ __forceinline__ void expandByCta(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib, bool *processed) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	__shared__ typename BlockReduce::TempStorage temp_storage;
+	__shared__ int owner;
+	__shared__ int sh_vertex;
+	owner = -1;
+	int size = 0;
+	int dst = id;
+	if(dst < m && !processed[dst]) {
+		size = row_offsets[dst+1] - row_offsets[dst];
+	}
+	while(true) {
+		if(size > BLOCK_SIZE)
+			owner = threadIdx.x;
+		__syncthreads();
+		if(owner == -1) break;
+		__syncthreads();
+		if(owner == threadIdx.x) {
+			sh_vertex = dst;
+			processed[dst] = 1;
+			owner = -1;
+			size = 0;
+		}
+		__syncthreads();
+		int row_begin = row_offsets[sh_vertex];
+		int row_end = row_offsets[sh_vertex+1];
+		int neighbor_size = row_end - row_begin;
+		int num = ((neighbor_size + blockDim.x - 1) / blockDim.x) * blockDim.x;
+		ScoreT sum = 0;
+		for(int i = threadIdx.x; i < num; i += blockDim.x) {
+			int edge = row_begin + i;
+			if(i < neighbor_size) {
+				int src = column_indices[edge];
+				sum += outgoing_contrib[src];
+			}
+		}
+		ScoreT block_sum = BlockReduce(temp_storage).Sum(sum);
+		if(threadIdx.x == 0) sums[sh_vertex] = block_sum;
+	}
+}
+
 __device__ __forceinline__ unsigned LaneId() {
 	unsigned ret;
 	asm("mov.u32 %0, %laneid;" : "=r"(ret));
 	return ret;
 }
 
-__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
+__device__ __forceinline__ void expandByWarp(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib, bool *processed) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
 	unsigned lane_id = LaneId();
 	__shared__ int owner[NUM_WARPS];
 	__shared__ int sh_vertex[NUM_WARPS];
+	__shared__ ScoreT sdata[BLOCK_SIZE + 16];
 	owner[warp_id] = -1;
 	int size = 0;
 	int dst = id;
-	if(dst < m) {
+	if(dst < m && !processed[dst]) {
 		size = row_offsets[dst+1] - row_offsets[dst];
 	}
-	while(__any(size) >= WARP_SIZE) {
+	while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
 		if(size >= WARP_SIZE)
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {
 			sh_vertex[warp_id] = dst;
+			processed[dst] = 1;
 			owner[warp_id] = -1;
 			size = 0;
 		}
@@ -60,29 +103,57 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 		int row_end = row_offsets[winner+1];
 		int neighbor_size = row_end - row_begin;
 		int num = ((neighbor_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+		ScoreT sum = 0;
 		for(int i = lane_id; i < num; i+= WARP_SIZE) {
 			int edge = row_begin + i;
 			if(i < neighbor_size) {
+				int src = column_indices[edge];
+				sum += outgoing_contrib[src];
 			}
 		}
+		sdata[threadIdx.x] = sum; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x + 16]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  8]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  4]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  2]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; __syncthreads();
+		if(lane_id == 0) sums[dst] += sdata[threadIdx.x];
 	}
 }
-
-__global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
+#if 1
+__global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib, bool *processed) {
+	expandByCta(m, row_offsets, column_indices, sums, outgoing_contrib, processed);
+	expandByWarp(m, row_offsets, column_indices, sums, outgoing_contrib, processed);
+	int dst = blockIdx.x * blockDim.x + threadIdx.x;
+	if (dst < m && !processed[dst]) {
+		IndexT row_begin = row_offsets[dst];
+		IndexT row_end = row_offsets[dst+1];
+		ScoreT incoming_total = 0;
+		for (IndexT offset = row_begin; offset < row_end; ++ offset) {
+			IndexT src = column_indices[offset];
+			incoming_total += outgoing_contrib[src];
+		}
+		sums[dst] = incoming_total;
+	}
+}
+#else
+__global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib, bool *processed) {
+	expandByCta(m, row_offsets, column_indices, sums, outgoing_contrib, processed);
+	expandByWarp(m, row_offsets, column_indices, sums, outgoing_contrib, processed);
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int tx = threadIdx.x;
 	int dst = tid;
 	__shared__ BlockScan::TempStorage temp_storage;
 	__shared__ int gather_offsets[BLOCK_SIZE];
-	__shared__ int dst_id[BLOCK_SIZE];
+	__shared__ int dst_idx[BLOCK_SIZE];
 	__shared__ ScoreT incoming_total[BLOCK_SIZE];
 	gather_offsets[tx] = 0;
-	dst_id[tx] = 0;
+	dst_idx[tx] = 0;
 	incoming_total[tx] = 0.0;
 	int row_begin = 0, row_end = 0, degree = 0;
 	int scratch_offset = 0;
 	int total_edges = 0;
-	if (dst < m) {
+	if (dst < m && !processed[dst]) {
 		row_begin = row_offsets[dst];
 		row_end = row_offsets[dst+1];
 		degree = row_end - row_begin;
@@ -97,7 +168,7 @@ __global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, Sc
 		for(i = 0; neighbors_done + i < degree && (scratch_offset + i - done) < BLOCK_SIZE; i++) {
 			int j = scratch_offset + i - done;
 			gather_offsets[j] = neighbor_offset + neighbors_done + i;
-			dst_id[j] = dst;
+			dst_idx[j] = tx;
 		}
 		neighbors_done += i;
 		scratch_offset += i;
@@ -105,15 +176,14 @@ __global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, Sc
 		if(tx < total_edges) {
 			int edge = gather_offsets[tx];
 			int src = column_indices[edge];
-			int dst = dst_id[tx];
-			atomicAdd(&incoming_total[dst], outgoing_contrib[src]);
+			atomicAdd(&incoming_total[dst_idx[tx]], outgoing_contrib[src]);
 		}
 		total_edges -= BLOCK_SIZE;
 		done += BLOCK_SIZE;
 	}
 	sums[dst] = incoming_total[tx];
 }
-
+#endif
 void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores) {
 	//print_device_info(0);
 	IndexT *d_row_offsets, *d_column_indices;
@@ -131,6 +201,8 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	CUDA_SAFE_CALL(cudaMemcpy(d_scores, scores, m * sizeof(ScoreT), cudaMemcpyHostToDevice));
 	float *d_diff, h_diff;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_diff, sizeof(float)));
+	bool *d_processed;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_processed, m * sizeof(bool)));
 
 	int iter = 0;
 	int nthreads = BLOCK_SIZE;
@@ -146,7 +218,8 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(float), cudaMemcpyHostToDevice));
 		contrib<<<nblocks, nthreads>>>(m, d_scores, d_degrees, d_contrib);
 		CudaTest("solving kernel contrib failed");
-		pull_step <<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_sums, d_contrib);
+		CUDA_SAFE_CALL(cudaMemset(d_processed, 0, m * sizeof(bool)));
+		pull_step <<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_sums, d_contrib, d_processed);
 		l1norm <<<nblocks, nthreads>>> (m, d_scores, d_sums, d_diff, base_score);
 		CudaTest("solving kernel pull failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(float), cudaMemcpyDeviceToHost));

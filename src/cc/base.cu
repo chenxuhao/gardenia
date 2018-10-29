@@ -1,6 +1,6 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#define CC_VARIANT "topo_base"
+#define CC_VARIANT "base"
 #include "cc.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
@@ -14,12 +14,12 @@ Author: Xuhao Chen
 Will return comp array labelling each vertex with a connected component ID
 This CC implementation makes use of the Shiloach-Vishkin algorithm
 */
-__global__ void scatter(int m, int *row_offsets, int *column_indices, CompT *comp, bool *changed) {
+__global__ void push(int m, int *row_offsets, int *column_indices, CompT *comp, bool *changed) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m) {
 		int comp_src = comp[src];
 		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1]; 
+		int row_end = row_offsets[src+1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
 			int comp_dst = comp[dst];
@@ -31,7 +31,7 @@ __global__ void scatter(int m, int *row_offsets, int *column_indices, CompT *com
 	}
 }
 
-__global__ void update(int m, int *row_offsets, int *column_indices, CompT *comp) {
+__global__ void update(int m, CompT *comp) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m) {
 		while (comp[src] != comp[comp[src]]) {
@@ -65,9 +65,9 @@ void CCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *de
 		h_changed = false;
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(h_changed), cudaMemcpyHostToDevice));
 		//printf("iteration=%d\n", iter);
-		scatter<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_comp, d_changed);
-		CudaTest("solving kernel scatter failed");
-		update<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_comp);
+		push<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_comp, d_changed);
+		CudaTest("solving kernel push failed");
+		update<<<nblocks, nthreads>>>(m, d_comp);
 		CudaTest("solving kernel update failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_changed, d_changed, sizeof(h_changed), cudaMemcpyDeviceToHost));
 	} while (h_changed);

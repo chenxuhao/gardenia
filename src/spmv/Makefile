@@ -51,6 +51,11 @@ spmv_vector: main.o vector.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o vector.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
+spmv_partition: main.o partition.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o partition.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+
 spmv_cusparse: main.o cusparse.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o cusparse.o verifier.o -o $@ $(LIBS) -lcusparse
 	mv $@ $(BIN)

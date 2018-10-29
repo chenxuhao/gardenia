@@ -35,6 +35,10 @@ cc_base: main.o base.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
+cc_partition: main.o partition.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o partition.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
 cc_warp: main.o warp.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o warp.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)

@@ -6,13 +6,15 @@ Gardenia Benchmark Suite
 Kernel: Stochastic Gradient Descent (SGD)
 Author: Xuhao Chen
 */
-#define SGD_VARIANT "base"
+#define SGD_VARIANT "vector"
 #include "sgd.h"
 #include "timer.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+#include <cub/cub.cuh>
+typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
-__global__ void calculate_delta(int m, int n, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT lambda, ScoreT step, int *ordering) {
+__global__ void update(int m, int n, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT lambda, ScoreT step, int *ordering, ScoreT *squared_errors) {
 	//__shared__ ScoreT sdata[BLOCK_SIZE/WARP_SIZE*K];                // padded to avoid reduction ifs
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 
@@ -23,7 +25,8 @@ __global__ void calculate_delta(int m, int n, int *row_offsets, int *column_indi
 	const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
 
 	for(int index = warp_id; index < m; index += num_warps) {
-		int user_id = ordering[index];
+		//int user_id = ordering[index];
+		int user_id = index;
 		if(thread_lane < 2)
 			ptrs[warp_lane][thread_lane] = row_offsets[user_id + thread_lane];
 		const int row_begin = ptrs[warp_lane][0];                   //same as: row_begin = row_offsets[row];
@@ -42,13 +45,15 @@ __global__ void calculate_delta(int m, int n, int *row_offsets, int *column_indi
 				temp_q[j] = item_lv[base_q+thread_lane+i];
 				estimate += temp_p[j] * temp_q[j];
 			}
-			estimate += __shfl_down(estimate, 16);
-			estimate += __shfl_down(estimate, 8);
-			estimate += __shfl_down(estimate, 4);
-			estimate += __shfl_down(estimate, 2);
-			estimate += __shfl_down(estimate, 1);
-			estimate = __shfl(estimate, 0);
+			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 16);
+			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 8);
+			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 4);
+			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 2);
+			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 1);
+			estimate = __shfl_sync(0xFFFFFFFF, estimate, 0);
 			ScoreT delta = rating[offset] - estimate;
+			if (thread_lane == 0)
+				squared_errors[user_id] += delta * delta;
 			for (int i = 0; i < K; i += WARP_SIZE) {
 				int j = i/WARP_SIZE;
 				LatentT new_user_feature = temp_p[j] + step * (-lambda * temp_p[j] + temp_q[j] * delta);
@@ -60,48 +65,17 @@ __global__ void calculate_delta(int m, int n, int *row_offsets, int *column_indi
 	}
 }
 
-__global__ void compute_rmse(int m, int n, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT *total_error) {
-	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
-	__shared__ ScoreT local_errors[BLOCK_SIZE/WARP_SIZE];
-
-	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
-	const int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
-	const int warp_id     = thread_id   / WARP_SIZE;                // global warp index
-	const int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
-	const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
-
-	for(int user_id = warp_id; user_id < m; user_id += num_warps) {
-		if(thread_lane < 2)
-			ptrs[warp_lane][thread_lane] = row_offsets[user_id + thread_lane];
-		local_errors[warp_lane] = 0; __syncthreads();
-		const int row_begin = ptrs[warp_lane][0];                   //same as: row_begin = row_offsets[row];
-		const int row_end   = ptrs[warp_lane][1];                   //same as: row_end   = row_offsets[row+1];
-		//for(int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
-		for(int offset = row_begin; offset < row_end; offset ++) {
-			int item_id = column_indices[offset];
-			int base_p = user_id * K;
-			int base_q = item_id * K;
-			ScoreT estimate = 0;
-			for (int i = 0; i < K; i += WARP_SIZE) {
-				estimate += user_lv[base_p+thread_lane+i] * item_lv[base_q+thread_lane+i];
-			}
-			estimate += __shfl_down(estimate, 16);
-			estimate += __shfl_down(estimate, 8);
-			estimate += __shfl_down(estimate, 4);
-			estimate += __shfl_down(estimate, 2);
-			estimate += __shfl_down(estimate, 1);
-			estimate = __shfl(estimate, 0);
-			ScoreT error = rating[offset] - estimate;
-			if(thread_lane == 0) local_errors[warp_lane] += error*error;
-		}
-		if(thread_lane == 0) atomicAdd(total_error, local_errors[warp_lane]);
-	}
+__global__ void rmse(int m, int nnz, ScoreT *squared_errors, ScoreT *total_error) {
+	int uid = blockIdx.x * blockDim.x + threadIdx.x;
+	__shared__ typename BlockReduce::TempStorage temp_storage;
+	ScoreT local_error = 0.0;
+	if(uid < m) local_error = squared_errors[uid];
+	ScoreT block_sum = BlockReduce(temp_storage).Sum(local_error);
+	if(threadIdx.x == 0) atomicAdd(total_error, block_sum);
 }
 
-void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_rating, LatentT *h_user_lv, LatentT *h_item_lv, ScoreT lambda, ScoreT step, int *h_ordering, int max_iters, float epsilon) {
+void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_rating, LatentT *h_user_lv, LatentT *h_item_lv, int *h_ordering) {
 	//print_device_info(0);
-	Timer t;
-	int iter = 0;
 	int *d_row_offsets, *d_column_indices, *d_ordering;
 	ScoreT *d_rating;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (num_users + 1) * sizeof(int)));
@@ -118,31 +92,31 @@ void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_item_lv, num_items * K * sizeof(LatentT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_user_lv, h_user_lv, num_users * K * sizeof(LatentT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_item_lv, h_item_lv, num_items * K * sizeof(LatentT), cudaMemcpyHostToDevice));
-	ScoreT h_error, *d_error;
+	ScoreT h_error, *d_error, *squared_errors;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_error, sizeof(ScoreT)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&squared_errors, num_users * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMemset(d_error, 0, sizeof(ScoreT)));
 
+	int iter = 0;
 	int nthreads = BLOCK_SIZE;
 	int nblocks = (num_users - 1) / WARPS_PER_BLOCK + 1;
 	printf("Launching CUDA SGD solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
-	compute_rmse<<<nblocks, nthreads>>>(num_users, num_items, d_row_offsets, d_column_indices, d_rating, d_user_lv, d_item_lv, d_error);
-	CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
-	printf("iteration %d: RMSE error = %f per edge\n", iter, sqrt(h_error/nnz));
-
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
+
+	Timer t;
 	t.Start();
 	do {
 		++iter;
 		h_error = 0.0;
+		CUDA_SAFE_CALL(cudaMemset(squared_errors, 0, num_users * sizeof(ScoreT)));
 		CUDA_SAFE_CALL(cudaMemcpy(d_error, &h_error, sizeof(ScoreT), cudaMemcpyHostToDevice));
-		calculate_delta<<<nblocks, nthreads>>>(num_users, num_items, d_row_offsets, d_column_indices, d_rating, d_user_lv, d_item_lv, lambda, step, d_ordering);
-		CudaTest("solving kernel calculate_delta failed");
-		compute_rmse<<<nblocks, nthreads>>>(num_users, num_items, d_row_offsets, d_column_indices, d_rating, d_user_lv, d_item_lv, d_error);
-		CudaTest("solving kernel compute_rmse failed");
+		update<<<nblocks, nthreads>>>(num_users, num_items, d_row_offsets, d_column_indices, d_rating, d_user_lv, d_item_lv, lambda, step, d_ordering, squared_errors);
+		CudaTest("solving kernel update failed");
+		rmse<<<nblocks, nthreads>>>(num_users, nnz, squared_errors, d_error);
+		CudaTest("solving kernel rmse failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
 		//printf("h_error=%f\n", h_error);
-		assert(h_error>0);
-		printf("iteration %d: RMSE error = %f per edge\n", iter, sqrt(h_error/nnz));
+		printf("iteration %d: RMSE error = %f\n", iter, sqrt(h_error/nnz));
 		//CUDA_SAFE_CALL(cudaMemcpy(h_user_lv, d_user_lv, num_users * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
 		//CUDA_SAFE_CALL(cudaMemcpy(h_item_lv, d_item_lv, num_items * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
 		//print_latent_vector(num_users, num_items, h_user_lv, h_item_lv);
@@ -160,5 +134,6 @@ void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h
 	CUDA_SAFE_CALL(cudaFree(d_user_lv));
 	CUDA_SAFE_CALL(cudaFree(d_item_lv));
 	CUDA_SAFE_CALL(cudaFree(d_error));
+	CUDA_SAFE_CALL(cudaFree(squared_errors));
 }
 

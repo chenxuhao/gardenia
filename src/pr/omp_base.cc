@@ -24,17 +24,17 @@ void PRSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, Index
 		for (int n = 0; n < m; n ++)
 			outgoing_contrib[n] = scores[n] / degrees[n];
 		#pragma omp parallel for reduction(+ : error) schedule(dynamic, 64)
-		for (int src = 0; src < m; src ++) {
+		for (int dst = 0; dst < m; dst ++) {
 			ScoreT incoming_total = 0;
-			const IndexT row_begin = row_offsets[src];
-			const IndexT row_end = row_offsets[src+1];
+			const IndexT row_begin = row_offsets[dst];
+			const IndexT row_end = row_offsets[dst+1];
 			for (IndexT offset = row_begin; offset < row_end; offset ++) {
-				IndexT dst = column_indices[offset];
-				incoming_total += outgoing_contrib[dst];
+				IndexT src = column_indices[offset];
+				incoming_total += outgoing_contrib[src];
 			}
-			ScoreT old_score = scores[src];
-			scores[src] = base_score + kDamp * incoming_total;
-			error += fabs(scores[src] - old_score);
+			ScoreT old_score = scores[dst];
+			scores[dst] = base_score + kDamp * incoming_total;
+			error += fabs(scores[dst] - old_score);
 		}   
 		printf(" %2d    %lf\n", iter+1, error);
 		if (error < EPSILON) break;
