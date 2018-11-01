@@ -39,13 +39,14 @@ int main(int argc, char *argv[]) {
 	DistT *h_dist = (DistT *) malloc(m * sizeof(DistT));
 	for(int i = 0; i < nnz; i ++) h_wt[i] = (DistT) h_weight[i];
 	for(int i = 0; i < m; i ++) h_dist[i] = kDistInf;
+	free(h_weight);
 
 	SSSPSolver(m, nnz, source, h_row_offsets, h_column_indices, h_wt, h_dist, delta);
 #ifndef SIM
 	SSSPVerifier(m, source, h_row_offsets, h_column_indices, h_wt, h_dist);
 	free(h_row_offsets);
 	free(h_column_indices);
-	free(h_weight);
+	free(h_wt);
 	free(h_dist);
 	if(h_degree) free(h_degree);
 #endif

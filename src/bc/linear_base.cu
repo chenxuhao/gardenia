@@ -18,13 +18,13 @@ __global__ void initialize(int m, int *depths) {
 __global__ void bc_forward(int *row_offsets, int *column_indices, int *path_counts, int *depths, int depth, Worklist2 in_queue, Worklist2 outwl) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
-	if(in_queue.pop_id(tid, src)) {
+	if (in_queue.pop_id(tid, src)) {
 		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1]; 
+		int row_end = row_offsets[src+1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
-			if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depth)==-1)) {
-			//if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depths[src]+1)==-1)) {
+			if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depth) == -1)) {
+			//if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depths[src]+1) == -1)) {
 				assert(outwl.push(dst));
 			}
 			if (depths[dst] == depth) {
@@ -38,14 +38,14 @@ __global__ void bc_forward(int *row_offsets, int *column_indices, int *path_coun
 // Dependency accumulation by back propagation
 __global__ void bc_reverse(int num, int *row_offsets, int *column_indices, int start, int *frontiers, ScoreT *scores, int *path_counts, int *depths, int depth, ScoreT *deltas) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	if(id < num) {
+	if (id < num) {
 		int src = frontiers[start + id];
 		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
+		int row_end = row_offsets[src+1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
 			//if(depths[dst] == depths[src] + 1) {
-			if(depths[dst] == depth + 1) {
+			if (depths[dst] == depth + 1) {
 				deltas[src] += static_cast<ScoreT>(path_counts[src]) / 
 					static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
 			}
@@ -58,7 +58,7 @@ void bc_reverse_cpu(int num, int *row_offsets, int *column_indices, int start, i
 	for (unsigned id = 0; id < num; id ++) {
 		int src = frontiers[start+id];
 		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1]; 
+		int row_end = row_offsets[src+1]; 
 		for (int offset = row_begin; offset < row_end; offset ++) {
 			int dst = column_indices[offset];
 			if (depths[dst] == depths[src] + 1) {
@@ -72,7 +72,7 @@ void bc_reverse_cpu(int num, int *row_offsets, int *column_indices, int start, i
 }
 __global__ void insert(Worklist2 in_queue, int src, int *path_counts, int *depths) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	if(id == 0) {
+	if (id == 0) {
 		in_queue.push(src);
 		path_counts[src] = 1;
 		depths[src] = 0;
@@ -83,7 +83,7 @@ __global__ void insert(Worklist2 in_queue, int src, int *path_counts, int *depth
 __global__ void push_frontier(Worklist2 in_queue, int *queue, int queue_len) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
-	if(in_queue.pop_id(tid, vertex)) {
+	if (in_queue.pop_id(tid, vertex)) {
 		queue[queue_len+tid] = vertex;
 	}
 }

@@ -1,12 +1,12 @@
-// Copyright 2016, National University of Defense Technology
-// Author: Xuhao Chen <cxh@illinois.edu>
-#include "bfs.h"
+// Copyright 2018, National University of Defense Technology
+// Author: Xuhao Chen <cxh.nudt@gmail.com>
+#include "sssp.h"
 #include "timer.h"
 #include "ocl_util.h"
 #include <string.h>
-#define BFS_VARIANT "ocl_base"
+#define SSSP_VARIANT "ocl_base"
 
-void BFSSolver(int m, int nnz, int src, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *in_degree, int *h_degree, DistT *h_depths) {
+void SSSPSolver(int m, int nnz, int src, int *h_row_offsets, int *h_column_indices, DistT *h_weights, DistT *h_dists, int delta) {
 	//load OpenCL kernel file
 	char *filechar = "base.cl";
 	int src_size = 1024*1024;
@@ -41,7 +41,7 @@ void BFSSolver(int m, int nnz, int src, int *in_row_offsets, int *in_column_indi
 	cl_command_queue queue;
 	cl_program program;
 	cl_kernel init_kernel;
-	cl_kernel bfs_kernel;
+	cl_kernel sssp_kernel;
 
 	// create context
 	context = clCreateContext(0, 1, &devices[0], NULL, NULL, &err);
@@ -69,12 +69,13 @@ void BFSSolver(int m, int nnz, int src, int *in_row_offsets, int *in_column_indi
 
 	// create kernel
 	init_kernel = clCreateKernel(program, "init", &err);
-	bfs_kernel = clCreateKernel(program, "bfs_step", &err);
+	sssp_kernel = clCreateKernel(program, "sssp_step", &err);
 	if (err < 0) { fprintf(stderr, "ERROR: create kernel failed, err code: %d\n", err); exit(1); }
 
 	cl_mem d_row_offsets = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * (m+1), NULL, NULL);
 	cl_mem d_column_indices = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * nnz, NULL, NULL);
-	cl_mem d_depths = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int) * m, NULL, NULL);
+	cl_mem d_weights = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(DistT) * nnz, NULL, NULL);
+	cl_mem d_dists = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(DistT) * m, NULL, NULL);
 	cl_mem d_in_frontier = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int) * m, NULL, NULL);
 	cl_mem d_out_frontier = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int) * m, NULL, NULL);
 	cl_mem d_in_nitems = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int), NULL, NULL);
@@ -83,7 +84,8 @@ void BFSSolver(int m, int nnz, int src, int *in_row_offsets, int *in_column_indi
 	int out_nitems = 0, in_nitems = 0;
 	err  = clEnqueueWriteBuffer(queue, d_row_offsets, CL_TRUE, 0, sizeof(int) * (m+1), h_row_offsets, 0, NULL, NULL);
 	err |= clEnqueueWriteBuffer(queue, d_column_indices, CL_TRUE, 0, sizeof(int) * nnz, h_column_indices, 0, NULL, NULL);
-	err |= clEnqueueWriteBuffer(queue, d_depths, CL_TRUE, 0, sizeof(int) * m, h_depths, 0, NULL, NULL);
+	err |= clEnqueueWriteBuffer(queue, d_weights, CL_TRUE, 0, sizeof(DistT) * nnz, h_weights, 0, NULL, NULL);
+	err |= clEnqueueWriteBuffer(queue, d_dists, CL_TRUE, 0, sizeof(DistT) * m, h_dists, 0, NULL, NULL);
 	err |= clEnqueueWriteBuffer(queue, d_in_nitems, CL_TRUE, 0, sizeof(int), &in_nitems, 0, NULL, NULL);
 	err |= clEnqueueWriteBuffer(queue, d_out_nitems, CL_TRUE, 0, sizeof(int), &out_nitems, 0, NULL, NULL);
 	if (err < 0) { fprintf(stderr, "ERROR write buffer, err code: %d\n", err); exit(1); }
@@ -91,24 +93,25 @@ void BFSSolver(int m, int nnz, int src, int *in_row_offsets, int *in_column_indi
 	err  = clSetKernelArg(init_kernel, 0, sizeof(int), &src);
 	err |= clSetKernelArg(init_kernel, 1, sizeof(cl_mem), &d_in_nitems);
 	err |= clSetKernelArg(init_kernel, 2, sizeof(cl_mem), &d_in_frontier);
-	err |= clSetKernelArg(init_kernel, 3, sizeof(cl_mem), &d_depths);
+	err |= clSetKernelArg(init_kernel, 3, sizeof(cl_mem), &d_dists);
 	if (err < 0) { fprintf(stderr, "ERROR set init kernel arg, err code: %d\n", err); exit(1); }
 
-	err  = clSetKernelArg(bfs_kernel, 0, sizeof(int), &m);
-	err |= clSetKernelArg(bfs_kernel, 1, sizeof(cl_mem), &d_row_offsets);
-	err |= clSetKernelArg(bfs_kernel, 2, sizeof(cl_mem), &d_column_indices);
-	err |= clSetKernelArg(bfs_kernel, 3, sizeof(cl_mem), &d_depths);
-	err |= clSetKernelArg(bfs_kernel, 4, sizeof(cl_mem), &d_in_frontier);
-	err |= clSetKernelArg(bfs_kernel, 5, sizeof(cl_mem), &d_out_frontier);
-	err |= clSetKernelArg(bfs_kernel, 6, sizeof(cl_mem), &d_in_nitems);
-	err |= clSetKernelArg(bfs_kernel, 7, sizeof(cl_mem), &d_out_nitems);
-	if (err < 0) { fprintf(stderr, "ERROR set bfs kernel arg, err code: %d\n", err); exit(1); }
+	err  = clSetKernelArg(sssp_kernel, 0, sizeof(int), &m);
+	err |= clSetKernelArg(sssp_kernel, 1, sizeof(cl_mem), &d_row_offsets);
+	err |= clSetKernelArg(sssp_kernel, 2, sizeof(cl_mem), &d_column_indices);
+	err |= clSetKernelArg(sssp_kernel, 3, sizeof(cl_mem), &d_weights);
+	err |= clSetKernelArg(sssp_kernel, 4, sizeof(cl_mem), &d_dists);
+	err |= clSetKernelArg(sssp_kernel, 5, sizeof(cl_mem), &d_in_frontier);
+	err |= clSetKernelArg(sssp_kernel, 6, sizeof(cl_mem), &d_out_frontier);
+	err |= clSetKernelArg(sssp_kernel, 7, sizeof(cl_mem), &d_in_nitems);
+	err |= clSetKernelArg(sssp_kernel, 8, sizeof(cl_mem), &d_out_nitems);
+	if (err < 0) { fprintf(stderr, "ERROR set sssp kernel arg, err code: %d\n", err); exit(1); }
 
 	int iter = 0;
 	size_t globalSize, localSize;
 	localSize = BLOCK_SIZE;
 	globalSize = ceil(m/(float)localSize)*localSize;
-	printf("Launching OpenCL BFS solver (%ld threads/CTA) ...\n", localSize);
+	printf("Launching OpenCL SSSP solver (%ld threads/CTA) ...\n", localSize);
 
 	Timer t;
 	t.Start();
@@ -121,8 +124,8 @@ void BFSSolver(int m, int nnz, int src, int *in_row_offsets, int *in_column_indi
 		//printf("iteration %d: frontier_size = %d\n", iter, in_nitems);
 		//printf(" %2d    %d\n", iter, in_nitems);
 		globalSize = ceil(in_nitems/(float)localSize)*localSize;
-		err = clEnqueueNDRangeKernel(queue, bfs_kernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
-		if (err < 0) { fprintf(stderr, "ERROR enqueue bfs kernel, err code: %d\n", err); exit(1); }
+		err = clEnqueueNDRangeKernel(queue, sssp_kernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
+		if (err < 0) { fprintf(stderr, "ERROR enqueue sssp kernel, err code: %d\n", err); exit(1); }
 
 		// move the items from out_queue to in_queue
 		err = clEnqueueReadBuffer(queue, d_out_nitems, CL_TRUE, 0, sizeof(int), &out_nitems, 0, NULL, NULL);
@@ -136,13 +139,14 @@ void BFSSolver(int m, int nnz, int src, int *in_row_offsets, int *in_column_indi
 	t.Stop();
 
 	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
-	err = clEnqueueReadBuffer(queue, d_depths, CL_TRUE, 0, sizeof(DistT) * m, h_depths, 0, NULL, NULL);
+	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, t.Millisecs());
+	err = clEnqueueReadBuffer(queue, d_dists, CL_TRUE, 0, sizeof(DistT) * m, h_dists, 0, NULL, NULL);
 	if (err < 0) { fprintf(stderr, "ERROR enqueue read buffer, err code: %d\n", err); exit(1); }
 
 	clReleaseMemObject(d_row_offsets);
 	clReleaseMemObject(d_column_indices);
-	clReleaseMemObject(d_depths);
+	clReleaseMemObject(d_weights);
+	clReleaseMemObject(d_dists);
 	clReleaseMemObject(d_in_frontier);
 	clReleaseMemObject(d_out_frontier);
 
@@ -150,6 +154,6 @@ void BFSSolver(int m, int nnz, int src, int *in_row_offsets, int *in_column_indi
 	clReleaseCommandQueue(queue);
 	clReleaseProgram(program);
 	clReleaseKernel(init_kernel);
-	clReleaseKernel(bfs_kernel);
+	clReleaseKernel(sssp_kernel);
 	return;
 }

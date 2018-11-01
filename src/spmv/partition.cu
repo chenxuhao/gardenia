@@ -9,7 +9,7 @@
 #include "timer.h"
 #define GPU_SEGMENTING
 #include "segmenting.h"
-#define ENABLE_WARP
+//#define ENABLE_WARP
 
 template<typename T>
 __global__ void initialize(int m, T *sums) {

@@ -24,7 +24,8 @@ static double DEFAULT_ABSOLUTE_TOL = 1e-4;
 template<typename T>
 bool almost_equal(const T& a, const T& b, const double a_tol, const double r_tol) {
     using std::abs;
-    if(abs(double(a - b)) > r_tol * (abs(double(a)) + abs(double(b))) + a_tol)
+    //if(abs(double(a - b)) > r_tol * (abs(double(a)) + abs(double(b))) + a_tol)
+    if(fabs(double(a - b)) > r_tol * (fabs(double(a)) + fabs(double(b))) + a_tol)
         return false;
     else
         return true;
