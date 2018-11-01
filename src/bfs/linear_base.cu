@@ -10,13 +10,13 @@
 __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 in_queue, Worklist2 out_queue) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
-	if(in_queue.pop_id(tid, src)) {
+	if (in_queue.pop_id(tid, src)) {
 		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
+		int row_end = row_offsets[src+1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
 			//DistT new_dist = dist[src] + 1;
-			if ((dist[dst] == MYINFINITY) && (atomicCAS(&dist[dst], MYINFINITY, dist[src]+1)==MYINFINITY)) {
+			if ((dist[dst] == MYINFINITY) && (atomicCAS(&dist[dst], MYINFINITY, dist[src]+1) == MYINFINITY)) {
 			//if (dist[dst] == MYINFINITY) {//Not visited
 			//	dist[dst] = new_dist;
 				assert(out_queue.push(dst));

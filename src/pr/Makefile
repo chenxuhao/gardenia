@@ -10,15 +10,19 @@ all: $(OBJS) pr_base pr_warp pr_omp_base
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
 
 ifeq ($(HOST),X86)
-%.o: %.cc ../../include/partition.h pr.h ../../include/prop_blocking.h
+%.o: %.cc pr.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
 else
-%.o: %.cc
+%.o: %.cc pr.h
 	$(CXX) $(SIMFLAGS) $(INCLUDES) -c $<
 endif
 
-%.o: %.cu ../../include/partition.h pr.h ../../include/prop_blocking.h
+%.o: %.cu pr.h
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
+
+pr_ocl_base: ocl_base.o main.o verifier.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o ocl_base.o verifier.o -o $@ -lOpenCL
+	mv $@ $(BIN)
 
 pr_omp_base: omp_base.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o verifier.o -o $@ -lgomp
@@ -74,6 +78,10 @@ pr_fusion: main.o fusion.o verifier.o
 
 pr_partition: main.o partition.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o partition.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+pr_push_tile: main.o push_tile.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o push_tile.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 pr_nvgraph: main.o nvgraph.o verifier.o

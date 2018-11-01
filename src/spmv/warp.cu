@@ -1,12 +1,11 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#include <stdio.h>
-#include <algorithm>
 #define SPMV_VARIANT "warp"
 #include "spmv.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include "timer.h"
+#include <algorithm>
 
 //////////////////////////////////////////////////////////////////////////////
 // CSR SpMV kernels based on a warp model (one warp per row)
@@ -25,12 +24,12 @@
 //   threads in a warp. Note that the texture cache is used for accessing
 //   the x vector.
 
-texture<float,1> tex_x;
-void bind_x(const float * x) { CUDA_SAFE_CALL(cudaBindTexture(NULL, tex_x, x)); }
-void unbind_x(const float * x) { CUDA_SAFE_CALL(cudaUnbindTexture(tex_x)); }
+texture<ValueT,1> tex_x;
+void bind_x(const ValueT * x) { CUDA_SAFE_CALL(cudaBindTexture(NULL, tex_x, x)); }
+void unbind_x(const ValueT * x) { CUDA_SAFE_CALL(cudaUnbindTexture(tex_x)); }
 
-__global__ void spmv_warp(int num_rows, const int * Ap,  const int * Aj, const ValueT * Ax, const ValueT * x, ValueT * y) {
-	__shared__ ValueT sdata[BLOCK_SIZE + 16];                    // padded to avoid reduction ifs
+__global__ void spmv_warp(int m, const IndexT * Ap, const IndexT * Aj, const ValueT * Ax, const ValueT * x, ValueT * y) {
+	__shared__ ValueT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 
 	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
@@ -39,7 +38,7 @@ __global__ void spmv_warp(int num_rows, const int * Ap,  const int * Aj, const V
 	const int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
 	const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
 
-	for(int row = warp_id; row < num_rows; row += num_warps) {
+	for(int row = warp_id; row < m; row += num_warps) {
 		// use two threads to fetch Ap[row] and Ap[row+1]
 		// this is considerably faster than the straightforward version
 		if(thread_lane < 2)
@@ -62,26 +61,25 @@ __global__ void spmv_warp(int num_rows, const int * Ap,  const int * Aj, const V
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; __syncthreads();
 
 		// first thread writes warp result
-		if (thread_lane == 0)
-			y[row] += sdata[threadIdx.x];
+		if (thread_lane == 0) y[row] += sdata[threadIdx.x];
 		//if (thread_lane == 0) printf("thread_id %d, warp_id %d, warp_lane %d, num_warps %d, sdata %f\n", thread_id, warp_id, warp_lane, num_warps, sdata[threadIdx.x]);
 	}
 }
 
-void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degree) { 
+void SpmvSolver(int m, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degree) { 
 	//print_device_info(0);
 	int *d_Ap, *d_Aj;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (num_rows + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	ValueT *d_Ax, *d_x, *d_y;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueT) * nnz));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * num_rows));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueT) * num_rows));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * m));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueT) * m));
 	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, m * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, m * sizeof(ValueT), cudaMemcpyHostToDevice));
 
 	const int nthreads = BLOCK_SIZE;
 	cudaDeviceProp deviceProp;
@@ -89,20 +87,20 @@ void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, Value
 	const int nSM = deviceProp.multiProcessorCount;
 	const int max_blocks_per_SM = maximum_residency(spmv_warp, nthreads, 0);
 	const int max_blocks = max_blocks_per_SM * nSM;
-	const int nblocks = std::min(max_blocks, DIVIDE_INTO(num_rows, WARPS_PER_BLOCK));
+	const int nblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
 	printf("Launching CUDA SpMV solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
 
 	Timer t;
 	t.Start();
 	bind_x(d_x);
-	spmv_warp<<<nblocks, nthreads>>>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);   
+	spmv_warp<<<nblocks, nthreads>>>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);   
 	CudaTest("solving failed");
 	unbind_x(d_x);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 
 	printf("\truntime [%s] = %f ms.\n", SPMV_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueT) * num_rows, cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueT) * m, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_Ap));
 	CUDA_SAFE_CALL(cudaFree(d_Aj));
 	CUDA_SAFE_CALL(cudaFree(d_Ax));

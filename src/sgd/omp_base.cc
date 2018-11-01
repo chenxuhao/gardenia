@@ -23,17 +23,18 @@ void SGDSolver(int m, int n, int nnz, int *row_offsets, int *column_indices, Sco
 	printf("Launching OpenMP SGD solver (%d threads) ...\n", num_threads);
 
 #ifdef COMPUTE_ERROR
-	ScoreT* squaredErrors = (ScoreT *)malloc(m * sizeof(ScoreT));
+	ScoreT* squared_errors = (ScoreT *)malloc(m * sizeof(ScoreT));
 	ScoreT total_error = 0.0;
 #endif
+
 	int iter = 0;
 	Timer t;
 	t.Start();
 	do {
-#ifdef COMPUTE_ERROR
-		for (int i = 0; i < m; i ++) squaredErrors[i] = 0;
-#endif
 		iter ++;
+#ifdef COMPUTE_ERROR
+		for (int i = 0; i < m; i ++) squared_errors[i] = 0;
+#endif
 		#pragma omp parallel for schedule(dynamic, 64)
 		for(int i = 0; i < m; i ++) {
 			//int src = ordering[i];
@@ -48,7 +49,7 @@ void SGDSolver(int m, int n, int nnz, int *row_offsets, int *column_indices, Sco
 				}
 				ScoreT delta = rating[offset] - estimate;
 #ifdef COMPUTE_ERROR
-				squaredErrors[src] += delta * delta;
+				squared_errors[src] += delta * delta;
 #endif
 				for (int i = 0; i < K; i++) {
 					LatentT p_s = user_lv[src*K+i];
@@ -59,7 +60,7 @@ void SGDSolver(int m, int n, int nnz, int *row_offsets, int *column_indices, Sco
 			}
 		}
 #ifdef COMPUTE_ERROR
-		total_error = rmse_par(m, nnz, squaredErrors);
+		total_error = rmse_par(m, nnz, squared_errors);
 		printf("Iteration %d: RMSE error = %f\n", iter, total_error);
 		if (total_error < epsilon) break;
 #endif
@@ -68,7 +69,7 @@ void SGDSolver(int m, int n, int nnz, int *row_offsets, int *column_indices, Sco
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", SGD_VARIANT, t.Millisecs());
 #ifdef COMPUTE_ERROR
-	free(squaredErrors);
+	free(squared_errors);
 #endif
 	return;
 }

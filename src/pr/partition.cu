@@ -6,10 +6,10 @@
 #include "timer.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
-#define GPU_PARTITION
-#include "partition.h"
-//#define ENABLE_PULL_WARP
-#define ENABLE_MERGE_WARP
+#define GPU_SEGMENTING
+#include "segmenting.h"
+//#define ENABLE_WARP
+#define ENABLE_CTA
 
 typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
@@ -309,7 +309,7 @@ void pull_warp(int m, const __restrict__ IndexT *row_offsets, const __restrict__
 
 void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores) {
 	//print_device_info(0);
-	column_blocking(m, in_row_offsets, in_column_indices, NULL);
+	segmenting(m, in_row_offsets, in_column_indices, NULL);
 
 	int *d_degrees;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degrees, m * sizeof(int)));
@@ -360,7 +360,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	int nthreads = BLOCK_SIZE;
 	const ScoreT base_score = (1.0f - kDamp) / m;
 	int nblocks = (m - 1) / nthreads + 1;
-#ifndef ENABLE_MERGE_WARP
+#ifndef ENABLE_CTA
 	int mblocks = (num_ranges - 1) / nthreads + 1;
 #endif
 	printf("Launching CUDA PR solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
@@ -379,7 +379,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 			int n_vertices = ms_of_subgraphs[bid];
 			int nnz = nnzs_of_subgraphs[bid];
 			CUDA_SAFE_CALL(cudaMemset(d_processed, 0, n_vertices * sizeof(bool)));
-#ifndef ENABLE_PULL_WARP
+#ifndef ENABLE_WARP
 			int bblocks = (n_vertices - 1) / nthreads + 1;
 			pull_base <<<bblocks, nthreads>>>(n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib, d_processed);
 #else
@@ -402,7 +402,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 			//if(iter == 1) printf("\truntime subgraph[%d] = %f ms.\n", bid, tt.Millisecs());
 		}
 		CudaTest("solving kernel pull_step failed");
-#ifndef ENABLE_MERGE_WARP
+#ifndef ENABLE_CTA
 		merge <<<mblocks, nthreads>>>(num_ranges, num_subgraphs, d_range_indices_ptr, d_idx_map_ptr, d_partial_sums_ptr, d_sums);
 #else
 		merge_cta <<<num_ranges, nthreads>>>(m, num_subgraphs, d_range_indices_ptr, d_idx_map_ptr, d_partial_sums_ptr, d_sums);

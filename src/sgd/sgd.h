@@ -34,16 +34,6 @@ void SGDVerifier(int m, int n, int nnz, IndexT *row_offsets, IndexT *column_indi
 	LatentT *user_lv, LatentT *item_lv, int *ordering);
 
 #define COMPUTE_ERROR
-#ifdef COMPUTE_ERROR
-// calculate RMSE
-static inline ScoreT rmse(int m, int nnz, ScoreT *errors) {
-	ScoreT total_error = 0.0;
-	for(int i = 0; i < m; i ++)
-		total_error += errors[i];
-	total_error = sqrt(total_error/nnz);
-	return total_error;
-}
-#endif
 
 /*
 static void print_latent_vector(int m, int n, LatentT *user_lv, LatentT *item_lv) {

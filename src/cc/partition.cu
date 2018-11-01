@@ -5,8 +5,8 @@
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include "timer.h"
-#define GPU_PARTITION
-#include "partition.h"
+#define GPU_SEGMENTING
+#include "segmenting.h"
 #define ENABLE_WARP
 
 /*
@@ -72,7 +72,7 @@ __global__ void update(int m, CompT *comp) {
 
 void CCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *degree, CompT *h_comp) {
 	//print_device_info(0);
-	column_blocking(m, h_row_offsets, h_column_indices, NULL);
+	segmenting(m, h_row_offsets, h_column_indices, NULL);
 
 	CompT *d_comp;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_comp, sizeof(CompT) * m));

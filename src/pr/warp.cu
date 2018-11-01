@@ -28,7 +28,7 @@ __global__ void l1norm(int m, ScoreT *scores, ScoreT *sums, float *diff, ScoreT 
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
-__global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, ScoreT *sums, ScoreT *outgoing_contrib) {
+__global__ void pull_step(int m, const IndexT *row_offsets, const IndexT *column_indices, ScoreT *sums, const ScoreT *outgoing_contrib) {
 	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 
@@ -48,7 +48,8 @@ __global__ void pull_step(int m, IndexT *row_offsets, IndexT *column_indices, Sc
 		ScoreT sum = 0;
 		for (int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
 			int src = column_indices[offset];
-			sum += outgoing_contrib[src];
+			//int src = __ldg(column_indices+offset);
+			sum += __ldg(outgoing_contrib+src);
 		}
 #if 1
 		// store local sum in shared memory,

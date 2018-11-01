@@ -1,5 +1,5 @@
 // Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Authors: Xuhao Chen <cxh.nudt@gmail.com>
 #include <stdio.h>
 #define SPMV_VARIANT "scalar"
 #include "spmv.h"
@@ -15,10 +15,9 @@
 //   Straightforward translation of standard CSR SpMV to CUDA
 //   where each thread computes y[i] += A[i,:] * x 
 //   (the dot product of the i-th row of A with the x vector)
-__global__ void spmv_csr_scalar_kernel(const int num_rows, const int * Ap,  const int * Aj,
-		const ValueT * Ax, const ValueT * x, ValueT * y) {
+__global__ void spmv_csr_scalar_kernel(int m, const IndexT * Ap, const IndexT * Aj, const ValueT * Ax, const ValueT * x, ValueT * y) {
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
-	if(row < num_rows) {
+	if(row < m) {
 		ValueT sum = y[row];
 		int row_begin = Ap[row];
 		int row_end = Ap[row+1];
@@ -29,7 +28,7 @@ __global__ void spmv_csr_scalar_kernel(const int num_rows, const int * Ap,  cons
 	}
 }
 
-void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degree) { 
+void SpmvSolver(int num_rows, int nnz, IndexT *h_Ap, IndexT *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degrees) { 
 	//print_device_info(0);
 	int *d_Ap, *d_Aj;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (num_rows + 1) * sizeof(int)));

@@ -23,6 +23,10 @@ endif
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
+bfs_ocl_base: ocl_base.o main.o verifier.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o ocl_base.o verifier.o -o $@ -lOpenCL
+	mv $@ $(BIN)
+
 bfs_omp_base: omp_base.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)

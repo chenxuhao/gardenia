@@ -34,8 +34,6 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
-	int num_rows = m;
-	int num_cols = m;
 #ifdef SIM
 	ValueT *h_x = (ValueT *)aligned_alloc(PAGE_SIZE, m * sizeof(ValueT));
 #else
@@ -46,9 +44,9 @@ int main(int argc, char *argv[]) {
 	srand(13);
 	for(int i = 0; i < nnz; i++) h_weight[i] = 1.0 - 2.0 * (rand() / (RAND_MAX + 1.0)); // Ax[] (-1 ~ 1)
 	//for(int i = 0; i < nnz; i++) h_weight[i] = rand() / (RAND_MAX + 1.0); // Ax[] (0 ~ 1)
-	for(int i = 0; i < num_cols; i++) h_x[i] = rand() / (RAND_MAX + 1.0);
-	for(int i = 0; i < num_cols; i++) h_x[i] = 1.0;
-	for(int i = 0; i < num_rows; i++) {
+	//for(int i = 0; i < m; i++) h_x[i] = rand() / (RAND_MAX + 1.0);
+	for(int i = 0; i < m; i++) h_x[i] = 1.0;
+	for(int i = 0; i < m; i++) {
 		h_y[i] = 0.0;//rand() / (RAND_MAX + 1.0);
 		y_host[i] = h_y[i];
 	}

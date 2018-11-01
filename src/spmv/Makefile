@@ -55,6 +55,9 @@ spmv_partition: main.o partition.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o partition.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
+spmv_tiling: main.o tiling.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o tiling.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
 
 spmv_cusparse: main.o cusparse.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o cusparse.o verifier.o -o $@ $(LIBS) -lcusparse

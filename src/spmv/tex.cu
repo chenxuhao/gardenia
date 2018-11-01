@@ -8,31 +8,19 @@
 #include "timer.h"
 
 // CSR SpMV kernels based on a scalar model (one thread per row)
-//
-// spmv_csr_scalar_tex_device
-//   Same as spmv_csr_scalar_device, except x is accessed via texture cache.
-
-/*
-template <bool UseCache>
-__inline__ __device__ float fetch_x(const int& i, const float * x) {
-    if (UseCache)
-        return tex1Dfetch(tex_x, i);
-    else
-        return x[i];
-}
-*/
+// spmv_csr_scalar_tex
+//   Same as spmv_csr_scalar, except x is accessed via texture cache.
 texture<float,1> tex_x;
 void bind_x(const float * x) { CUDA_SAFE_CALL(cudaBindTexture(NULL, tex_x, x)); }
 void unbind_x(const float * x) { CUDA_SAFE_CALL(cudaUnbindTexture(tex_x)); }
 
-__global__ void spmv_csr_scalar_kernel(const int num_rows, const int * Ap,  const int * Aj,
-		const ValueT * Ax, const ValueT * x, ValueT * y) {
+__global__ void spmv_csr_scalar_kernel(int m, const IndexT * Ap,  const IndexT * Aj, const ValueT * Ax, const ValueT * x, ValueT * y) {
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
-	if(row < num_rows) {
+	if (row < m) {
 		ValueT sum = y[row];
 		int row_begin = Ap[row];
 		int row_end = Ap[row+1];
-		for (int offset = row_begin; offset < row_end; offset ++){
+		for (int offset = row_begin; offset < row_end; offset ++) {
 			sum += Ax[offset] * tex1Dfetch(tex_x, Aj[offset]);
 		}
 		y[row] = sum;

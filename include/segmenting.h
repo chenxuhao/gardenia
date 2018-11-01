@@ -1,7 +1,11 @@
+// Copyright 2018, National University of Defense Technology
+// Authors: Xuhao Chen <cxh@illinois.edu>
+// This implements the CSR segmenting technique for graph computation
+
 #include "common.h"
 #include "timer.h"
 #include <vector>
-#ifdef GPU_PARTITION
+#ifdef GPU_SEGMENTING
 #define SUBGRAPH_SIZE (1024*256)
 #define RANGE_WIDTH (1024)
 #else
@@ -19,9 +23,9 @@ vector<int> ms_of_subgraphs;
 vector<int> nnzs_of_subgraphs;
 
 // This is for pull model, using incomming edges
-void column_blocking(int m, IndexT *rowptr, IndexT *colidx, ValueT *values) {
+void segmenting(int m, IndexT *rowptr, IndexT *colidx, ValueT *values) {
 	int num_subgraphs = (m - 1) / SUBGRAPH_SIZE + 1;
-	int num_ranges = (m-1)/RANGE_WIDTH+1;
+	int num_ranges = (m - 1) / RANGE_WIDTH + 1;
 	printf("number of subgraphs and ranges: %d, %d\n", num_subgraphs, num_ranges);
 
 	rowptr_blocked.resize(num_subgraphs);
@@ -115,7 +119,7 @@ void column_blocking(int m, IndexT *rowptr, IndexT *colidx, ValueT *values) {
 		std::vector<int> counts(num_ranges, 0);
 		for (int j = 0; j < ms_of_subgraphs[i]; ++ j) {
 			int dst = idx_map[i][j];
-				counts[dst/RANGE_WIDTH] ++;
+			counts[dst/RANGE_WIDTH] ++;
 		}
 		for (int j = 1; j < num_ranges+1; ++j) {
 			range_indices[i][j] = range_indices[i][j-1] + counts[j-1];
@@ -138,7 +142,7 @@ void column_blocking(int m, IndexT *rowptr, IndexT *colidx, ValueT *values) {
 	printf("\truntime [preprocessing] = %f ms.\n", t.Millisecs());
 }
 
-void free_partitions() {
+void free_segments() {
 	for (size_t i = 0; i < rowptr_blocked.size(); ++i) {
 		free(rowptr_blocked[i]);
 		free(colidx_blocked[i]);

@@ -1,69 +1,114 @@
 // Copyright 2016, National University of Defense Technology
 // Author: Xuhao Chen <cxh@illinois.edu>
 #include "tc.h"
-#include <CL/cl.h>
-#include <string.h>
 #include "timer.h"
+#include "ocl_util.h"
+#include <string.h>
 #define TC_VARIANT "ocl_base"
 
-// local variables
-static cl_context	    context;
-static cl_command_queue cmd_queue;
-static cl_device_type   device_type;
-static cl_device_id   * device_list;
-static cl_int           num_devices;
-
-int initialize(int use_gpu) {
-    cl_int result;
-    size_t size;
-    // create OpenCL context
-    cl_platform_id platform_id;
-    if (clGetPlatformIDs(1, &platform_id, NULL) != CL_SUCCESS) { printf("ERROR: clGetPlatformIDs(1,*,0) failed\n"); return -1; }
-    cl_context_properties ctxprop[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform_id, 0};
-    device_type = use_gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU;
-    context = clCreateContextFromType( ctxprop, device_type, NULL, NULL, NULL );
-    if( !context ) { fprintf(stderr, "ERROR: clCreateContextFromType(%s) failed\n", use_gpu ? "GPU" : "CPU"); return -1; }
-    // get the list of GPUs
-    result = clGetContextInfo( context, CL_CONTEXT_DEVICES, 0, NULL, &size );
-    num_devices = (int) (size / sizeof(cl_device_id));
-    printf("num_devices = %d\n", num_devices);
-    if( result != CL_SUCCESS || num_devices < 1 ) { fprintf(stderr, "ERROR: clGetContextInfo() failed\n"); return -1; }
-    device_list = new cl_device_id[num_devices];
-    if( !device_list ) { fprintf(stderr, "ERROR: new cl_device_id[] failed\n"); return -1; }
-    result = clGetContextInfo( context, CL_CONTEXT_DEVICES, size, device_list, NULL );
-    if( result != CL_SUCCESS ) { fprintf(stderr, "ERROR: clGetContextInfo() failed\n"); return -1; }
-    // create command queue for the first device
-    cmd_queue = clCreateCommandQueue( context, device_list[0], 0, NULL );
-    if( !cmd_queue ) { fprintf(stderr, "ERROR: clCreateCommandQueue() failed\n"); return -1; }
-    return 0;
-}
-
-void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, int *total) {
-	printf("Launching OpenCL TC solver ...\n");
-
+void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degrees, int *total) {
 	//load OpenCL kernel file
-	cl_int err = 0;
 	char *filechar = "base.cl";
 	int sourcesize = 1024*1024;
 	char * source = (char *)calloc(sourcesize, sizeof(char));
-	if(!source) { printf("ERROR: calloc(%d) failed\n", sourcesize); return; }
+	if (!source) { printf("ERROR: calloc(%d) failed\n", sourcesize); return; }
 	FILE * fp = fopen(filechar, "rb");
-	if(!fp) { printf("ERROR: unable to open '%s'\n", filechar); return; }
-	fread(source + strlen(source), sourcesize, 1, fp);
+	if (!fp) { printf("ERROR: unable to open '%s'\n", filechar); return; }
+	size_t error = fread(source + strlen(source), sourcesize, 1, fp);
+	if (error) printf("ERROR: file read failed\n");
 	fclose(fp);
 
-	// OpenCL initialization
-	if(initialize(1)) return;
-	const char * slist[2] = { source, 0 };
-	cl_program prog = clCreateProgramWithSource(context, 1, slist, NULL, &err);
-	if(err != CL_SUCCESS) { printf("ERROR: clCreateProgramWithSource() => %d\n", err); return; }
-	err = clBuildProgram(prog, 0, NULL, NULL, NULL, NULL);
-	if(err != CL_SUCCESS) { printf("ERROR: clBuildProgram() => %d\n", err); return; }
+	cl_platform_id platforms[32];
+	cl_uint num_platforms;
+	cl_device_id devices[32];
+	cl_uint num_devices;
+	char deviceName[1024];
+
+	cl_int err = 0;
+	err = clGetPlatformIDs(32, platforms, &num_platforms);
+	if (err < 0) { fprintf(stderr, "ERROR clGetPlatformIDs failed, err code: %d\n", err); exit(1); }
+	//printf("Number of platforms: %u\n", num_platforms);	
+
+	// get number of devices
+	err = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, sizeof(devices), devices, &num_devices);
+	if (err < 0) { fprintf(stderr, "ERROR get num of devices failed, err code: %d\n", err); exit(1); }
+	//printf("Number of devices: %d\n", num_devices);
+
+	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, sizeof(deviceName), deviceName, NULL);
+	printf("Device name: %s\n", deviceName);
+
+	cl_context context;
+	cl_command_queue queue;
+	cl_program program;
+	cl_kernel kernel;
+
+	// create context
+	context = clCreateContext(0, 1, &devices[0], NULL, NULL, &err);
+	if (err < 0) { fprintf(stderr, "ERROR: create context failed, err code: %d\n", err); exit(1); }
+
+	// create command queue
+	queue = clCreateCommandQueue(context, devices[0], 0, &err);
+	if (err < 0) { fprintf(stderr, "ERROR: create command queue failed, err code: %d\n", err); exit(1); }
+
+	// create program
+	program = clCreateProgramWithSource(context, 1, (const char **) & source, NULL, &err);
+	if (err < 0) { fprintf(stderr, "ERROR: create program failed, err code: %d\n", err); exit(1); }
+
+	// build program
+	err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+	if (err < 0) { fprintf(stderr, "ERROR: build program failed, err code: %d\n", err); exit(1); }
+	if (err < 0) {
+		size_t len;
+		char buffer[1000];
+		printf("ERROR: build program failure\n");
+		clGetProgramBuildInfo(program, devices[0], CL_PROGRAM_BUILD_LOG, 1000, buffer, &len);
+		printf("error info: %s\n", buffer);
+		exit(1);
+	}
+
+	// create kernel
+	kernel = clCreateKernel(program, "ordered_count", &err);
+	if (err < 0) { fprintf(stderr, "ERROR: create kernel failed, err code: %d\n", err); exit(1); }
+
+	cl_mem d_row_offsets = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * (m+1), NULL, NULL);
+	cl_mem d_column_indices = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * nnz, NULL, NULL);
+	cl_mem d_total = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int), NULL, NULL);
+
+	err  = clEnqueueWriteBuffer(queue, d_row_offsets, CL_TRUE, 0, sizeof(int) * (m+1), row_offsets, 0, NULL, NULL);
+	err |= clEnqueueWriteBuffer(queue, d_column_indices, CL_TRUE, 0, sizeof(int) * nnz, column_indices, 0, NULL, NULL);
+	err |= clEnqueueWriteBuffer(queue, d_total, CL_TRUE, 0, sizeof(int), total, 0, NULL, NULL);
+	if (err < 0) { fprintf(stderr, "ERROR write buffer, err code: %d\n", err); exit(1); }
+
+	err  = clSetKernelArg(kernel, 0, sizeof(int), &m);
+	err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_row_offsets);
+	err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &d_column_indices);
+	err |= clSetKernelArg(kernel, 3, sizeof(cl_mem), &d_total);
+	if (err < 0) { fprintf(stderr, "ERROR set kernel arg, err code: %d\n", err); exit(1); }
+
+	size_t globalSize, localSize;
+	localSize = BLOCK_SIZE;
+	globalSize = ceil(m/(float)localSize)*localSize;
+	printf("Launching OpenCL TC solver ...\n");
 
 	Timer t;
 	t.Start();
-
+	err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
+	if(err < 0){fprintf(stderr, "ERROR enqueue nd range, err code: %d\n", err); exit(1);}
+	clFinish(queue);
 	t.Stop();
+
 	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, t.Millisecs());
+	err = clEnqueueReadBuffer(queue, d_total, CL_TRUE, 0, sizeof(int), total, 0, NULL, NULL);
+	if(err < 0){fprintf(stderr, "ERROR enqueue read buffer, err code: %d\n", err); exit(1);}
+	printf("total: %d\n", *total);
+
+	clReleaseMemObject(d_row_offsets);
+	clReleaseMemObject(d_column_indices);
+	clReleaseMemObject(d_total);
+
+	clReleaseContext(context);
+	clReleaseCommandQueue(queue);
+	clReleaseProgram(program);
+	clReleaseKernel(kernel);
 	return;
 }

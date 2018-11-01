@@ -74,7 +74,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 		}
 	}
 	t.Stop();
-	printf("\truntime[bining] = %f ms.\n", t.Millisecs());
+	printf("\truntime[binning] = %f ms.\n", t.Millisecs());
 	t.Start();
 	///*
 	//printf("dump the residual data in the buffer\n");
