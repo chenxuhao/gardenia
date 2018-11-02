@@ -1,4 +1,4 @@
-GARDENIA Benchmark Suite [![Build Status](https://chenxuhao.github.io/gardenia.svg)](https://chenxuhao.github.io/gardenia)
+GARDENIA Benchmark Suite [![Build Status](https://travis-ci.org/chenxuhao/gardenia.svg)](https://travis-ci.org/chenxuhao/gardenia)
 ===================
 
 Copyright 2018 Xuhao Chen, National University of Defense Technology

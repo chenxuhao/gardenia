@@ -12,10 +12,14 @@ Author: Xuhao Chen
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
+#define SHFL
 typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
 __global__ void update(int m, int n, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT lambda, ScoreT step, int *ordering, ScoreT *squared_errors) {
+#ifndef SHFL
 	//__shared__ ScoreT sdata[BLOCK_SIZE/WARP_SIZE*K];                // padded to avoid reduction ifs
+	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
+#endif
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 
 	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
@@ -45,15 +49,23 @@ __global__ void update(int m, int n, int *row_offsets, int *column_indices, Scor
 				temp_q[j] = item_lv[base_q+thread_lane+i];
 				estimate += temp_p[j] * temp_q[j];
 			}
+#ifdef SHFL
 			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 16);
 			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 8);
 			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 4);
 			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 2);
 			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 1);
 			estimate = __shfl_sync(0xFFFFFFFF, estimate, 0);
+#else
+			sdata[threadIdx.x] = estimate; __syncthreads();
+			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x + 16]; __syncthreads();
+			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x +  8]; __syncthreads();
+			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x +  4]; __syncthreads();
+			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x +  2]; __syncthreads();
+			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x +  1]; __syncthreads();
+#endif
 			ScoreT delta = rating[offset] - estimate;
-			if (thread_lane == 0)
-				squared_errors[user_id] += delta * delta;
+			if (thread_lane == 0) squared_errors[user_id] += delta * delta;
 			for (int i = 0; i < K; i += WARP_SIZE) {
 				int j = i/WARP_SIZE;
 				LatentT new_user_feature = temp_p[j] + step * (-lambda * temp_p[j] + temp_q[j] * delta);
