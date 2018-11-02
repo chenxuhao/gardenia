@@ -2,14 +2,6 @@ language: generic
 cache: apt
 matrix:
   include:
-    - compiler: gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-5
-      env: CXX=g++-5
     - compiler: nvcc
       addons:
         apt:

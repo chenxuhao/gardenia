@@ -38,8 +38,7 @@ Quick Start
 
 Setup CUB library:
 
-    $ git submodule init
-    $ git submodule update
+    $ git submodule update --init --recursive
 
 Build the project (you will need to install gcc and nvcc first):
 

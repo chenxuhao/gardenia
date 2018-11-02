@@ -33,7 +33,7 @@ test-build: all
 #-----------------------------------------------------------------------#
 
 # Since all implementations use same code for this, only test one kernel
-GENERATE_KERNEL = bin/pr_base
+GENERATE_KERNEL = bin/pr_omp_base
 
 # Loading graphs from files
 test-load: test-load-pr.mtx
