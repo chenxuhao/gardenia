@@ -51,7 +51,7 @@ __global__ void bottom_up_warp(int m, int *row_offsets, int *column_indices, Dis
 					next[dst] = 1; // put this vertex into the next frontier
 					changed = true;
 				}
-				if(__any(changed)) break;
+				if(__any_sync(0xFFFFFFFF, changed)) break;
 			}
 		}
 	}

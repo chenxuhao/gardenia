@@ -1,0 +1,46 @@
+PageRank by Xuhao Chen
+This is a directed graph
+Reading (.mtx) input file test/graphs/pr.mtx
+Removing self loops... 0 selfloops are removed
+Removing redundent edges... 0 redundent edges are removed
+num_vertices 4 num_edges 8
+Calculating degree... Done
+Reading (.mtx) input file test/graphs/pr.mtx
+Removing self loops... 0 selfloops are removed
+Removing redundent edges... 0 redundent edges are removed
+num_vertices 4 num_edges 8
+Calculating degree... Done
+  1    0.354167
+  2    0.240833
+  3    0.085295
+  4    0.043501
+  5    0.035948
+  6    0.020080
+  7    0.007204
+  8    0.005053
+  9    0.003801
+ 10    0.001311
+ 11    0.000713
+ 12    0.000599
+ 13    0.000314
+ 14    0.000118
+ 15    0.000083
+	iterations = 15.
+Verifying...
+  1    0.354167
+  2    0.240833
+  3    0.085295
+  4    0.043501
+  5    0.035948
+  6    0.020080
+  7    0.007204
+  8    0.005053
+  9    0.003801
+ 10    0.001311
+ 11    0.000713
+ 12    0.000599
+ 13    0.000314
+ 14    0.000118
+ 15    0.000083
+	iterations = 15.
+Correct

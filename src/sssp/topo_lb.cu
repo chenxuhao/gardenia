@@ -77,7 +77,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	if(vertex < m && visited[vertex] && !expanded[vertex]) {
 		size = row_offsets[vertex + 1] - row_offsets[vertex];
 	}
-	while(__any(size) >= WARP_SIZE) {
+	while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
 		if(size >= WARP_SIZE)
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {

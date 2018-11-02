@@ -3,7 +3,7 @@ INCLUDES+=-I $(CUB_DIR)
 SRC=main.cc
 OBJS=omp_base.o topo_base.o topo_bitset.o topo_warp.o linear_base.o linear_bitset.o linear_warp.o main.o verifier.o
 
-all: $(OBJS) vc_linear_bitset vc_linear_warp vc_topo_bitset vc_topo_warp vc_omp_base
+all: $(OBJS) vc_linear_bitset vc_linear_warp vc_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<

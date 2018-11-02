@@ -1,7 +1,6 @@
 *~
 *.DS_Store
 *.log
-*.out
 *.o
 *.d
 *.swp
@@ -15,3 +14,5 @@ bfs/bfs_wlw
 bfs/bfs_wlc
 vecAdd/vecAdd
 color/color.txt
+
+test/out/*.out

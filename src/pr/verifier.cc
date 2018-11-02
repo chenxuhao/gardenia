@@ -39,7 +39,7 @@ void PRVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT
 	}
 	t.Stop();
 	printf("\titerations = %d.\n", iter+1);
-	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
+	//printf("\truntime [serial] = %f ms.\n", t.Millisecs());
 	
 	ScoreT *incomming_sums = (ScoreT *)malloc(m * sizeof(ScoreT));
 	for(int i = 0; i < m; i ++) incomming_sums[i] = 0;

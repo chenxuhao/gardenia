@@ -1,12 +1,10 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "symgs.h"
-#include <omp.h>
 #include "timer.h"
 #define SYMGS_VARIANT "omp_base"
 
 void gauss_seidel(IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, int row_start, int row_stop, int row_step) {
-	//printf("Solving, num_rows=%d\n", row_stop-row_start);
 	#pragma omp parallel for
 	for (int i = row_start; i < row_stop; i += row_step) {
 		int inew = indices[i];
@@ -14,9 +12,8 @@ void gauss_seidel(IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, V
 		IndexT row_end = Ap[inew+1];
 		ValueT rsum = 0;
 		ValueT diag = 0;
-		#pragma ivdep
 		for (IndexT jj = row_begin; jj < row_end; jj++) {
-			const IndexT j = Aj[jj];  //column index
+			IndexT j = Aj[jj];  //column index
 			if (inew == j) diag = Ax[jj];
 			else rsum += x[j] * Ax[jj];
 		}
@@ -26,7 +23,7 @@ void gauss_seidel(IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, V
 
 void SymGSSolver(int num_rows, int nnz, IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, std::vector<int> color_offsets) {
 	int num_threads = 1;
-#pragma omp parallel
+	#pragma omp parallel
 	{
 		num_threads = omp_get_num_threads();
 	}

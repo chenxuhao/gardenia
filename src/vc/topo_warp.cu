@@ -121,7 +121,7 @@ __global__ void conflict_resolve(int m, int *row_offsets, int *column_indices, i
 				int dst = column_indices[offset];
 				if(src < dst && colors[src] == colors[dst])
 					is_conflicted = true;
-				if(__any(is_conflicted)) { conflicted[warp_lane] = true; break; }
+				if(__any_sync(0xFFFFFFFF, is_conflicted)) { conflicted[warp_lane] = true; break; }
 			}
 			if (thread_lane == 0) {
 				//if(is_conflicted) {

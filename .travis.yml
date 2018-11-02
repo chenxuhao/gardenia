@@ -1,0 +1,23 @@
+language: generic
+cache: apt
+matrix:
+  include:
+    - compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-5.5
+      env: CXX=g++-5.5
+    - compiler: nvcc
+      addons:
+        apt:
+          sources:
+            - cuda-9.1
+          packages:
+            - cuda-9.1
+      env: NVCC=nvcc
+script:
+  - make -j
+  - make test

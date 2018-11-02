@@ -81,7 +81,7 @@ __global__ void conflict_resolve(int nitems, int *row_offsets, int *column_indic
 		for(int offset = row_start + thread_lane; offset < row_end; offset += WARP_SIZE) {
 			int dst = column_indices[offset];
 			if(src < dst && colors[src] == colors[dst]) is_conflicted = true;
-			if(__any(is_conflicted)) { conflicted[warp_lane] = true; break; }
+			if(__any_sync(0xFFFFFFFF, is_conflicted)) { conflicted[warp_lane] = true; break; }
 		}
 		if (thread_lane == 0 && conflicted[warp_lane]) {
 			colors[src] = MAXCOLOR;

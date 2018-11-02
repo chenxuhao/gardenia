@@ -9,14 +9,12 @@ Link: https://github.com/chenxuhao/gardenia
 
 This is the reference implementation for the [GARDENIA](https://chenxuhao.github.io/) [Benchmark Suite](https://chenxuhao.github.io/). It is designed to be a portable high-performance baseline for desgining next-generation accelerators. It uses CUDA, OpenCL and OpenMP for parallelism. The details of the benchmark can be found in the [specification](https://arxiv.org/pdf/1708.04567.pdf).
 
-The GARDENIA Benchmark Suite is an extented version of the [GAP](https://gap.cs.berkeley.edu/) [Benchmark Suite](https://gap.cs.berkeley.edu/benchmark.html) which is intended to help graph processing research by standardizing evaluations. Fewer differences between graph processing evaluations will make it easier to compare different research efforts and quantify improvements. The benchmark not only specifies graph kernels, input graphs, and evaluation methodologies, but it also provides an optimized baseline implementation (this repo). These baseline implementations are representative of state-of-the-art performance, and thus new contributions should outperform them to demonstrate an improvement. The code infrastructure is ported from GAPBS and Lonstargpu by the ISS group at the University of Texas. 
-To run the benchmarks on a simulator, please find the [revised GPGPU-Sim version](https://github.com/chenxuhao/gpgpu-sim-ndp) and we highly recommend you to use CUDA-5.5 for the compatibility issue.
+The GARDENIA Benchmark Suite is an extented version of the [GAP](https://gap.cs.berkeley.edu/) [Benchmark Suite](https://gap.cs.berkeley.edu/benchmark.html) which is intended to help graph processing research by standardizing evaluations. The benchmark provides a baseline implementation which incorporates state-of-the-art optimization techniques proposed for modern accelerators, such as GPUs and MICs. These baseline implementations are representative of state-of-the-art performance, and thus new contributions should outperform them to demonstrate an improvement. The code infrastructure is ported from GAPBS and Lonstargpu by the [ISS group](http://iss.ices.utexas.edu/?p=projects/galois/lonestargpu) at the University of Texas. 
+To run the benchmarks on the GPGPU-Sim simulator, please use the [revised GPGPU-Sim version](https://github.com/chenxuhao/gpgpu-sim-ndp) and we highly recommend you to use CUDA-5.5 for the compatibility issue.
 Note that in the code, 'm' is the number of vertices, and 'nnz' is the number of edges.
 Graphs are stored as the CSR format in memory.
 CSR is represented by two auxiliary data structures: 'row_offsets' and 'column_indices'.
-You will need to install gcc and nvcc.
-You will also need to download and install [CUB](https://nvlabs.github.io/cub/).
-Place a symlink to the top-level CUB directory in $GARDENIA_HOME. 
+You will need to download [CUB](https://nvlabs.github.io/cub/) and place a symlink to the top-level CUB directory in $GARDENIA_HOME. 
 
 Kernels Included
 ----------------
@@ -43,7 +41,7 @@ Setup CUB linkage (assuming the top-level CUB directory is $CUBDIR):
     $ cd $GARDENIA_HOME
     $ ln -s $CUBDIR
 
-Build the project:
+Build the project (you will need to install gcc and nvcc first):
 
     $ make
 

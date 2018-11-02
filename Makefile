@@ -1,22 +1,20 @@
 # See LICENSE.txt for license details.
 include src/common.mk
-KERNELS = bc bfs cc mst pr sgd sssp tc vc
-SUITE = $(KERNELS) nvGRAPH
+KERNELS = bc bfs cc pr sgd spmv sssp vc symgs tc
+SUITE = $(KERNELS)
 
 .PHONY: all
-all:
+all: bin_dir $(SUITE)
+
+bin_dir:
 	mkdir -p bin
-	cd src/bc; make
-	cd src/bfs; make
-	cd src/cc; make
-	cd src/pr; make
-	cd src/spmv; make
-	cd src/sssp; make
-	cd src/vc; make
-	cd src/symgs; make
-	cd src/tc; make
-	cd src/sgd; make
+
+% : src/%/Makefile
+	cd src/$@; make; cd ../..
+
+# Testing
+include test/test.mk
 
 .PHONY: clean
 clean:
-	rm src/*/*.o
+	rm src/*/*.o test/out/*

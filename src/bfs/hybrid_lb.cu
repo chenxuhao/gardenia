@@ -56,7 +56,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	if(dst < m && depths[dst] == MYINFINITY) {
 		size = row_offsets[dst+1] - row_offsets[dst];
 	}
-	while(__any(size) >= WARP_SIZE) {
+	while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
 		if(size >= WARP_SIZE)
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {
@@ -75,7 +75,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 			if(i < neighbor_size) {
 				process_edge(dst, depth, edge, column_indices, depths, front, next, &changed);
 			}
-			if(__any(changed)) break;
+			if(__any_sync(0xFFFFFFFF, changed)) break;
 		}
 	}
 }

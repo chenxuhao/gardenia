@@ -90,7 +90,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	int nthreads = BLOCK_SIZE;
 	const ScoreT base_score = (1.0f - kDamp) / m;
 	int nblocks = (m - 1) / nthreads + 1;
-	printf("Launching CUDA PR solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
+	//printf("Launching CUDA PR solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
 
 	Timer t;
 	t.Start();
@@ -114,7 +114,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	t.Stop();
 
 	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());
+	//printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(scores, d_scores, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
