@@ -16,7 +16,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - cuda
+            - nvidia-cuda-toolkit
       env: NVCC=nvcc
 script:
   - make -j
