@@ -40,5 +40,5 @@ else
 	CXXFLAGS += -O3
 	NVFLAGS += -O3
 endif
-INCLUDES=-I$(CUDA_HOME)/include -I$(GARDENIA_ROOT)/include
+INCLUDES=-I$(CUDA_HOME)/include -I../../include
 LIBS=-L$(CUDA_HOME)/lib64

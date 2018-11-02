@@ -1,5 +1,4 @@
 # See LICENSE.txt for license details.
-include src/common.mk
 KERNELS = bc bfs cc pr sgd spmv sssp vc symgs tc
 SUITE = $(KERNELS)
 
