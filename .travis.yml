@@ -14,9 +14,9 @@ matrix:
       addons:
         apt:
           sources:
-            - cuda-9.1
+            - ubuntu-toolchain-r-test
           packages:
-            - cuda-9.1
+            - cuda
       env: NVCC=nvcc
 script:
   - make -j
