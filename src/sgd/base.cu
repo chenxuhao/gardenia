@@ -41,7 +41,7 @@ __global__ void update(int m, int n, int *row_offsets, int *column_indices, Scor
 	}
 }
 
-__global__ void rmse(int m, int nnz, ScoreT *squared_errors, ScoreT *total_error) {
+__global__ void rmse(int m, ScoreT *squared_errors, ScoreT *total_error) {
 	int uid = blockIdx.x * blockDim.x + threadIdx.x;
 	__shared__ typename BlockReduce::TempStorage temp_storage;
 	ScoreT local_error = 0.0;
@@ -88,7 +88,7 @@ void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h
 		CUDA_SAFE_CALL(cudaMemcpy(d_error, &h_error, sizeof(ScoreT), cudaMemcpyHostToDevice));
 		update<<<nblocks, nthreads>>>(num_users, num_items, d_row_offsets, d_column_indices, d_rating, d_user_lv, d_item_lv, lambda, step, d_ordering, squared_errors);
 		CudaTest("solving kernel update failed");
-		rmse<<<nblocks, nthreads>>>(num_users, nnz, squared_errors, d_error);
+		rmse<<<nblocks, nthreads>>>(num_users, squared_errors, d_error);
 		CudaTest("solving kernel rmse failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
 		//printf("h_error=%f\n", h_error);

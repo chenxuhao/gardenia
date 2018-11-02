@@ -2,8 +2,6 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "sgd.h"
 #include "graph_io.h"
-#include <thrust/sequence.h>
-#include <thrust/sort.h>
 #include <random>
 void Initialize(int len, LatentT *lv) {
 	std::default_random_engine rng;
@@ -58,7 +56,7 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < nnz; i++) h_rating[i] = (ScoreT)h_weight[i];
 	printf("Shuffling users...\n");
 	int *ordering = (int *)malloc(m * sizeof(int));
-	thrust::sequence(ordering, ordering+m);
+	for (int i = 0; i < m; i ++) ordering[i] = i;
 	std::random_shuffle(ordering, ordering+m);
 
 	SGDSolver(m, n, nnz, h_row_offsets, h_column_indices, h_rating, h_user_lv, h_item_lv, ordering);
