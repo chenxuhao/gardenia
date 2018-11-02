@@ -8,15 +8,15 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-5.5
-      env: CXX=g++-5.5
+            - g++-5
+      env: CXX=g++-5
     - compiler: nvcc
       addons:
         apt:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - nvidia-cuda-toolkit
+            - nvidia-cuda-dev nvidia-profiler nvidia-cuda-toolkit
       env: NVCC=nvcc
 script:
   - make -j
