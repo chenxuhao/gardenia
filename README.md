@@ -14,7 +14,7 @@ To run the benchmarks on the GPGPU-Sim simulator, please use the [revised GPGPU-
 Note that in the code, 'm' is the number of vertices, and 'nnz' is the number of edges.
 Graphs are stored as the CSR format in memory.
 CSR is represented by two auxiliary data structures: 'row_offsets' and 'column_indices'.
-You will need to download [CUB](https://nvlabs.github.io/cub/) and place a symlink to the top-level CUB directory in $GARDENIA_HOME. 
+You will need to download [CUB](https://nvlabs.github.io/cub/).
 
 Kernels Included
 ----------------
@@ -36,10 +36,10 @@ Kernels Included
 Quick Start
 -----------
 
-Setup CUB linkage (assuming the top-level CUB directory is $CUBDIR):
+Setup CUB library:
 
-    $ cd $GARDENIA_HOME
-    $ ln -s $CUBDIR
+    $ git submodule init
+    $ git submodule update
 
 Build the project (you will need to install gcc and nvcc first):
 
