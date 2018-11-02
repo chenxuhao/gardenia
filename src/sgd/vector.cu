@@ -12,12 +12,11 @@ Author: Xuhao Chen
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
-#define SHFL
+//#define SHFL
 typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
 __global__ void update(int m, int n, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT lambda, ScoreT step, int *ordering, ScoreT *squared_errors) {
 #ifndef SHFL
-	//__shared__ ScoreT sdata[BLOCK_SIZE/WARP_SIZE*K];                // padded to avoid reduction ifs
 	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
 #endif
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
@@ -63,6 +62,7 @@ __global__ void update(int m, int n, int *row_offsets, int *column_indices, Scor
 			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x +  4]; __syncthreads();
 			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x +  2]; __syncthreads();
 			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x +  1]; __syncthreads();
+			estimate = sdata[warp_lane*WARP_SIZE];
 #endif
 			ScoreT delta = rating[offset] - estimate;
 			if (thread_lane == 0) squared_errors[user_id] += delta * delta;

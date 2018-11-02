@@ -1,7 +1,8 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 SRC=main.cc
-OBJS=omp_base.o topo_base.o topo_bitset.o topo_warp.o linear_base.o linear_bitset.o linear_warp.o main.o verifier.o
+#OBJS=omp_base.o topo_base.o topo_bitset.o topo_warp.o linear_base.o linear_bitset.o linear_warp.o main.o verifier.o
+OBJS=omp_base.o linear_bitset.o main.o verifier.o
 
 all: $(OBJS) vc_linear_bitset vc_omp_base
 
