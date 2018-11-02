@@ -16,7 +16,7 @@ CXX=aarch64-linux-gnu-g++
 endif
 ICC=$(ICC_HOME)/icc
 ICPC=$(ICC_HOME)/icpc
-NVCC=$(CUDA_HOME)/bin/nvcc
+NVCC=nvcc
 COMPUTECAPABILITY=sm_60
 CUDA_ARCH := \
 	-gencode arch=compute_35,code=sm_35 \

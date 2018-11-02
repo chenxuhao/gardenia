@@ -19,5 +19,5 @@ matrix:
             - nvidia-cuda-dev nvidia-profiler nvidia-cuda-toolkit
       env: NVCC=nvcc
 script:
-  - make -j
+  - make
   - make test
