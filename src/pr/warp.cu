@@ -6,6 +6,7 @@
 #include "timer.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+//#define SHFL
 #define FUSED 0
 typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
@@ -29,7 +30,9 @@ __global__ void l1norm(int m, ScoreT *scores, ScoreT *sums, float *diff, ScoreT 
 }
 
 __global__ void pull_step(int m, const IndexT *row_offsets, const IndexT *column_indices, ScoreT *sums, const ScoreT *outgoing_contrib) {
+#ifndef SHFL
 	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
+#endif
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 
 	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
@@ -51,7 +54,7 @@ __global__ void pull_step(int m, const IndexT *row_offsets, const IndexT *column
 			//int src = __ldg(column_indices+offset);
 			sum += __ldg(outgoing_contrib+src);
 		}
-#if 1
+#ifndef SHFL
 		// store local sum in shared memory,
 		// and reduce local sums to global sum
 		sdata[threadIdx.x] = sum; __syncthreads();

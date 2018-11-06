@@ -2,19 +2,11 @@
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #define CC_VARIANT "base"
 #include "cc.h"
-#include "cuda_launch_config.hpp"
-#include "cutil_subset.h"
 #include "timer.h"
+#include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
 
-/*
-Gardenia Benchmark Suite
-Kernel: Connected Components (CC)
-Author: Xuhao Chen
-
-Will return comp array labelling each vertex with a connected component ID
-This CC implementation makes use of the Shiloach-Vishkin algorithm
-*/
-__global__ void push(int m, int *row_offsets, int *column_indices, CompT *comp, bool *changed) {
+__global__ void push(int m, const IndexT *row_offsets, const IndexT *column_indices, CompT *comp, bool *changed) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m) {
 		int comp_src = comp[src];
@@ -22,7 +14,8 @@ __global__ void push(int m, int *row_offsets, int *column_indices, CompT *comp, 
 		int row_end = row_offsets[src+1]; 
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
-			int comp_dst = comp[dst];
+			//int comp_dst = comp[dst];
+			int comp_dst = __ldg(comp+dst);
 			if ((comp_src < comp_dst) && (comp_dst == comp[comp_dst])) {
 				*changed = true;
 				comp[comp_dst] = comp_src;
@@ -40,7 +33,7 @@ __global__ void update(int m, CompT *comp) {
 	}
 }
 
-void CCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, int *degree, CompT *h_comp) {
+void CCSolver(int m, int nnz, IndexT *h_row_offsets, IndexT *h_column_indices, int *degree, CompT *h_comp) {
 	//print_device_info(0);
 	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));

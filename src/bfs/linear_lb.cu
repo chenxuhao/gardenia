@@ -27,7 +27,7 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 	owner = -1;
 	int size = 0;
 	if(in_queue.pop_id(id, vertex)) {
-		size = row_offsets[vertex + 1] - row_offsets[vertex];
+		size = row_offsets[vertex+1] - row_offsets[vertex];
 	}
 	while(true) {
 		if(size > BLOCK_SIZE)
@@ -43,7 +43,7 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		}
 		__syncthreads();
 		int row_begin = row_offsets[sh_vertex];
-		int row_end = row_offsets[sh_vertex + 1];
+		int row_end = row_offsets[sh_vertex+1];
 		int neighbor_size = row_end - row_begin;
 		int num = ((neighbor_size + blockDim.x - 1) / blockDim.x) * blockDim.x;
 		for(int i = threadIdx.x; i < num; i += blockDim.x) {
@@ -84,7 +84,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	int vertex;
 	if(in_queue.pop_id(id, vertex)) {
 		if (vertex != -1)
-			size = row_offsets[vertex + 1] - row_offsets[vertex];
+			size = row_offsets[vertex+1] - row_offsets[vertex];
 	}
 	while(__any(size) >= WARP_SIZE) {
 		if(size >= WARP_SIZE)
@@ -97,7 +97,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 		}
 		int winner = sh_vertex[warp_id];
 		int row_begin = row_offsets[winner];
-		int row_end = row_offsets[winner + 1];
+		int row_end = row_offsets[winner+1];
 		int neighbor_size = row_end - row_begin;
 		int num = ((neighbor_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 		for(int i = lane_id; i < num; i+= WARP_SIZE) {
