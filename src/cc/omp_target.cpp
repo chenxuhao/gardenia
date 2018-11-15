@@ -7,26 +7,29 @@
 #define CC_VARIANT "omp_target"
 
 #pragma omp declare target
-void cc_scatter(int m, int *row_offsets, int *column_indices, CompT *comp, int *degree, bool &change) {
+void hook(int m, int *row_offsets, int *column_indices, CompT *comp, int *degree, bool &change) {
 	//#pragma omp target device(0)
 	#pragma omp parallel for schedule(dynamic, 64)
 	for (int src = 0; src < m; src ++) {
 		int comp_src = comp[src];
 		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
+		int row_end = row_offsets[src+1];
 		#pragma ivdep
 		for (int offset = row_begin; offset < row_end; offset ++) {
 			int dst = column_indices[offset];
 			int comp_dst = comp[dst];      
-			if ((comp_src < comp_dst) && (comp_dst == comp[comp_dst])) {
+			if (comp_src == comp_dst) continue;
+			int high_comp = comp_src > comp_dst ? comp_src : comp_dst;
+			int low_comp = comp_src + (comp_dst - high_comp);
+			if (high_comp == comp[high_comp]) {
 				change = true;
-				comp[comp_dst] = comp_src;
+				comp[high_comp] = low_comp;
 			}
 		}
 	}
 }
 
-void cc_update(int m, CompT *comp) {
+void shortcut(int m, CompT *comp) {
 	//#pragma omp target device(0)
 	#pragma omp parallel for
 	for (int n = 0; n < m; n++) {
@@ -58,8 +61,8 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, CompT *comp
 	while (change) {
 		change = false;
 		iter ++;
-		cc_scatter(m, row_offsets, column_indices, comp, change);
-		cc_update(m, comp);
+		hook(m, row_offsets, column_indices, comp, change);
+		shortcut(m, comp);
 	}
 	t2 = omp_get_wtime();
 	}

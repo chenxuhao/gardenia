@@ -1,13 +1,13 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#define CC_VARIANT "warp"
 #include "cc.h"
 #include "timer.h"
 #include "cutil_subset.h"
 #include "cuda_launch_config.hpp"
 #include <algorithm>
+#define CC_VARIANT "warp"
 
-__global__ void push(int m, const IndexT *row_offsets, const IndexT *column_indices, CompT *comp, bool *changed) {
+__global__ void hook(int m, const IndexT *row_offsets, const IndexT *column_indices, CompT *comp, bool *changed) {
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
 	const int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
@@ -27,15 +27,18 @@ __global__ void push(int m, const IndexT *row_offsets, const IndexT *column_indi
 			int dst = column_indices[offset];
 			//int comp_dst = comp[dst];
 			int comp_dst = __ldg(comp+dst);
-			if ((comp_src < comp_dst) && (comp_dst == comp[comp_dst])) {
+			if (comp_src == comp_dst) continue;
+			int high_comp = comp_src > comp_dst ? comp_src : comp_dst;
+			int low_comp = comp_src + (comp_dst - high_comp);
+			if (high_comp == comp[high_comp]) {
 				*changed = true;
-				comp[comp_dst] = comp_src;
+				comp[high_comp] = low_comp;
 			}
 		}
 	}
 }
 
-__global__ void update(int m, CompT *comp) {
+__global__ void shortcut(int m, CompT *comp) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m) {
 		while (comp[src] != comp[comp[src]]) {
@@ -44,7 +47,7 @@ __global__ void update(int m, CompT *comp) {
 	}
 }
 
-void CCSolver(int m, int nnz, IndexT *h_row_offsets, IndexT *h_column_indices, int *degree, CompT *h_comp) {
+void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *h_row_offsets, IndexT *h_column_indices, int *degree, CompT *h_comp, bool is_directed) {
 	//print_device_info(0);
 	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
@@ -62,7 +65,7 @@ void CCSolver(int m, int nnz, IndexT *h_row_offsets, IndexT *h_column_indices, i
 	cudaDeviceProp deviceProp;
 	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
 	const int nSM = deviceProp.multiProcessorCount;
-	const int max_blocks_per_SM = maximum_residency(push, nthreads, 0);
+	const int max_blocks_per_SM = maximum_residency(hook, nthreads, 0);
 	const int max_blocks = max_blocks_per_SM * nSM;
 	const int nblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
 	printf("Launching CUDA CC solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
@@ -74,10 +77,10 @@ void CCSolver(int m, int nnz, IndexT *h_row_offsets, IndexT *h_column_indices, i
 		h_changed = false;
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(h_changed), cudaMemcpyHostToDevice));
 		//printf("iteration=%d\n", iter);
-		push<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_comp, d_changed);
-		CudaTest("solving kernel push failed");
-		update<<<(m - 1) / nthreads + 1, nthreads>>>(m, d_comp);
-		CudaTest("solving kernel update failed");
+		hook<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_comp, d_changed);
+		CudaTest("solving kernel hook failed");
+		shortcut<<<(m - 1) / nthreads + 1, nthreads>>>(m, d_comp);
+		CudaTest("solving kernel shortcut failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_changed, d_changed, sizeof(h_changed), cudaMemcpyDeviceToHost));
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());

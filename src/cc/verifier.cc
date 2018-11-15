@@ -1,11 +1,36 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "cc.h"
+#include "timer.h"
 #include <map>
 #include <stack>
 #include <vector>
-#include <stdlib.h>
-#include "timer.h"
+#include <random>
+#include <iostream>
+#include <algorithm>
+#include <unordered_map>
+
+IndexT SampleFrequentElement(int m, IndexT *comp, int64_t num_samples) {
+	// Sample elements from 'comp'
+	std::unordered_map<IndexT, int> sample_counts(32);
+	using kvp_type = std::unordered_map<IndexT, int>::value_type;
+	std::mt19937 gen;
+	std::uniform_int_distribution<IndexT> distribution(0, m - 1);
+	for (IndexT i = 0; i < num_samples; i++) {
+		IndexT n = distribution(gen);
+		sample_counts[comp[n]]++;
+	}
+	// Find most frequent element in samples (estimate of most frequent overall)
+	auto most_frequent = std::max_element(
+			sample_counts.begin(), sample_counts.end(),
+			[](const kvp_type& a, const kvp_type& b) { return a.second < b.second; });
+	float frac_of_graph = static_cast<float>(most_frequent->second) / num_samples;
+	std::cout
+		<< "Skipping largest intermediate component (ID: " << most_frequent->first
+		<< ", approx. " << static_cast<int>(frac_of_graph) * 100
+		<< "% of the graph)" << std::endl;
+	return most_frequent->first;
+}
 
 int serial_solver(int m, IndexT *row_offsets, IndexT *column_indices, CompT *components) {
 	std::stack<int> DFS;
@@ -35,7 +60,7 @@ int serial_solver(int m, IndexT *row_offsets, IndexT *column_indices, CompT *com
 // - Asserts search does not reach a vertex with a different component label
 // - If the graph is directed, it performs the search as if it was undirected
 // - Asserts every vertex is visited (degree-0 vertex should have own label)
-void CCVerifier(int m, IndexT *row_offsets, IndexT *column_indices, CompT *comp_test) {
+void CCVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *row_offsets, IndexT *column_indices, CompT *comp_test, bool is_directed) {
 	CompT *comp = (CompT *)malloc(m * sizeof(CompT));
 	for (int i = 0; i < m; i ++) comp[i] = -1;
 	Timer t;
@@ -62,8 +87,8 @@ void CCVerifier(int m, IndexT *row_offsets, IndexT *column_indices, CompT *comp_
 		vector<int>::iterator it;
 		for (it = frontier.begin(); it != frontier.end(); it++) {
 			int src = *it;
-			const IndexT row_begin = row_offsets[src];
-			const IndexT row_end = row_offsets[src + 1]; 
+			IndexT row_begin = row_offsets[src];
+			IndexT row_end = row_offsets[src+1];
 			for (IndexT offset = row_begin; offset < row_end; ++ offset) {
 				IndexT dst = column_indices[offset];
 				if (comp_test[dst] != curr_label) {
@@ -75,20 +100,22 @@ void CCVerifier(int m, IndexT *row_offsets, IndexT *column_indices, CompT *comp_
 					frontier.push_back(dst);
 				}
 			}
-			/*
-			if (is_directed()) {
-				for (unsigned offset = row_begin; offset < row_end; ++ offset) {
-					int dst = column_indices[offset];
-					if (comp_test[dst] != curr_label)
-						return false;
+			if (is_directed) {
+				IndexT row_begin = in_row_offsets[src];
+				IndexT row_end = in_row_offsets[src+1];
+				for (IndexT offset = row_begin; offset < row_end; ++ offset) {
+					IndexT dst = in_column_indices[offset];
+					if (comp_test[dst] != curr_label) {
+						printf("Wrong\n");
+						return;
+					}
 					if (!visited[dst]) {
 						visited[dst] = true;
 						frontier.push_back(dst);
 					}
 				}
 			}
-			*/
-		}   
+		} 
 	}
 	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
 

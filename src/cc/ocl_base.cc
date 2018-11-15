@@ -6,7 +6,7 @@
 #include <string.h>
 #define CC_VARIANT "ocl_base"
 
-void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degrees, CompT *comp) {
+void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *row_offsets, IndexT *column_indices, int *degrees, CompT *comp, bool is_directed) {
 	//load OpenCL kernel file
 	char *filechar = "base.cl";
 	int sourcesize = 1024*1024;
@@ -40,8 +40,8 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 	cl_context context;
 	cl_command_queue queue;
 	cl_program program;
-	cl_kernel push_kernel;
-	cl_kernel update_kernel;
+	cl_kernel hook_kernel;
+	cl_kernel shortcut_kernel;
 
 	// create context
 	context = clCreateContext(0, 1, &devices[0], NULL, NULL, &err);
@@ -68,8 +68,8 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 	}
 
 	// create kernel
-	push_kernel = clCreateKernel(program, "push", &err);
-	update_kernel = clCreateKernel(program, "update", &err);
+	hook_kernel = clCreateKernel(program, "hook", &err);
+	shortcut_kernel = clCreateKernel(program, "shortcut", &err);
 	if (err < 0) { fprintf(stderr, "ERROR: create kernel failed, err code: %d\n", err); exit(1); }
 
 	cl_mem d_row_offsets = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * (m+1), NULL, NULL);
@@ -82,16 +82,16 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 	err |= clEnqueueWriteBuffer(queue, d_comp, CL_TRUE, 0, sizeof(ValueT) * nnz, comp, 0, NULL, NULL);
 	if (err < 0) { fprintf(stderr, "ERROR: write buffer failed, err code: %d\n", err); exit(1); }
 
-	err  = clSetKernelArg(push_kernel, 0, sizeof(int), &m);
-	err |= clSetKernelArg(push_kernel, 1, sizeof(cl_mem), &d_row_offsets);
-	err |= clSetKernelArg(push_kernel, 2, sizeof(cl_mem), &d_column_indices);
-	err |= clSetKernelArg(push_kernel, 3, sizeof(cl_mem), &d_comp);
-	err |= clSetKernelArg(push_kernel, 4, sizeof(cl_mem), &d_changed);
-	if (err < 0) { fprintf(stderr, "ERROR: set push_kernel arg failed, err code: %d\n", err); exit(1); }
+	err  = clSetKernelArg(hook_kernel, 0, sizeof(int), &m);
+	err |= clSetKernelArg(hook_kernel, 1, sizeof(cl_mem), &d_row_offsets);
+	err |= clSetKernelArg(hook_kernel, 2, sizeof(cl_mem), &d_column_indices);
+	err |= clSetKernelArg(hook_kernel, 3, sizeof(cl_mem), &d_comp);
+	err |= clSetKernelArg(hook_kernel, 4, sizeof(cl_mem), &d_changed);
+	if (err < 0) { fprintf(stderr, "ERROR: set hook_kernel arg failed, err code: %d\n", err); exit(1); }
 
-	err  = clSetKernelArg(update_kernel, 0, sizeof(int), &m);
-	err |= clSetKernelArg(update_kernel, 1, sizeof(cl_mem), &d_comp);
-	if (err < 0) { fprintf(stderr, "ERROR: set update_kernel arg failed, err code: %d\n", err); exit(1); }
+	err  = clSetKernelArg(shortcut_kernel, 0, sizeof(int), &m);
+	err |= clSetKernelArg(shortcut_kernel, 1, sizeof(cl_mem), &d_comp);
+	if (err < 0) { fprintf(stderr, "ERROR: set shortcut_kernel arg failed, err code: %d\n", err); exit(1); }
 
 	size_t globalSize, localSize;
 	localSize = BLOCK_SIZE;
@@ -107,9 +107,9 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 		changed = false;
 		err = clEnqueueWriteBuffer(queue, d_changed, CL_TRUE, 0, sizeof(changed), &changed, 0, NULL, NULL);
 		if (err < 0) { fprintf(stderr, "ERROR write buffer, err code: %d\n", err); exit(1); }
-		err = clEnqueueNDRangeKernel(queue, push_kernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
+		err = clEnqueueNDRangeKernel(queue, hook_kernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
 		if (err < 0) { fprintf(stderr, "ERROR enqueue nd range, err code: %d\n", err); exit(1); }
-		err = clEnqueueNDRangeKernel(queue, update_kernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
+		err = clEnqueueNDRangeKernel(queue, shortcut_kernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
 		if (err < 0) { fprintf(stderr, "ERROR enqueue nd range, err code: %d\n", err); exit(1); }
 		err = clEnqueueReadBuffer(queue, d_changed, CL_TRUE, 0, sizeof(changed), &changed, 0, NULL, NULL);
 		if (err < 0) { fprintf(stderr, "ERROR enqueue read buffer, err code: %d\n", err); exit(1); }
@@ -117,6 +117,7 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 	clFinish(queue);
 	t.Stop();
 
+	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", CC_VARIANT, t.Millisecs());
 	err = clEnqueueReadBuffer(queue, d_comp, CL_TRUE, 0, sizeof(CompT) * m, comp, 0, NULL, NULL);
 	if (err < 0) { fprintf(stderr, "ERROR enqueue read buffer, err code: %d\n", err); exit(1); }
@@ -126,8 +127,8 @@ void CCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 	clReleaseMemObject(d_comp);
 	clReleaseMemObject(d_changed);
 	clReleaseProgram(program);
-	clReleaseKernel(push_kernel);
-	clReleaseKernel(update_kernel);
+	clReleaseKernel(hook_kernel);
+	clReleaseKernel(shortcut_kernel);
 	clReleaseCommandQueue(queue);
 	return;
 }

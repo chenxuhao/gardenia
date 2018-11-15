@@ -9,7 +9,7 @@
 #endif
 #define CC_VARIANT "omp_base"
 
-void CCSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices, int *degree, CompT *comp) {
+void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexType *row_offsets, IndexType *column_indices, int *degree, CompT *comp, bool is_directed) {
 	int num_threads = 1;
 #ifdef SIM
 	omp_set_num_threads(4);
@@ -47,14 +47,17 @@ void CCSolver(int m, int nnz, IndexType *row_offsets, IndexType *column_indices,
 		#pragma omp parallel for schedule(dynamic, 64)
 		for (int src = 0; src < m; src ++) {
 			CompT comp_src = comp[src];
-			const IndexType row_begin = row_offsets[src];
-			const IndexType row_end = row_offsets[src + 1];
+			IndexType row_begin = row_offsets[src];
+			IndexType row_end = row_offsets[src+1];
 			for (IndexType offset = row_begin; offset < row_end; offset ++) {
 				IndexType dst = column_indices[offset];
-				CompT comp_dst = comp[dst];      
-				if ((comp_src < comp_dst) && (comp_dst == comp[comp_dst])) {
+				CompT comp_dst = comp[dst];
+				if (comp_src == comp_dst) continue;
+				int high_comp = comp_src > comp_dst ? comp_src : comp_dst;
+				int low_comp = comp_src + (comp_dst - high_comp);
+				if (high_comp == comp[high_comp]) {
 					change = true;
-					comp[comp_dst] = comp_src;
+					comp[high_comp] = low_comp;
 				}
 			}
 		}
