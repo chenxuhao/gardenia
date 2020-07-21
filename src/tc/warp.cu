@@ -19,23 +19,21 @@ __global__ void ordered_count(int m, int *row_offsets, int *column_indices, int 
 
 	int local_total = 0;
 	for(int src = warp_id; src < m; src += num_warps) {
-		// use two threads to fetch row_offsets[src] and row_offsets[src+1]
-		// this is considerably faster than the straightforward version
 		if(thread_lane < 2)
 			ptrs[warp_lane][thread_lane] = row_offsets[src + thread_lane];
-		const int row_begin = ptrs[warp_lane][0];                   //same as: row_begin = row_offsets[src];
-		const int row_end   = ptrs[warp_lane][1];                   //same as: row_end   = row_offsets[src+1];
+		const int row_begin = ptrs[warp_lane][0];
+		const int row_end   = ptrs[warp_lane][1];
 		for (int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
 			int dst = column_indices[offset];
-			if (dst > src) break;
+			//if (dst > src) break;
 			int row_begin_dst = row_offsets[dst];
 			int row_end_dst = row_offsets[dst+1];
 			int it = row_begin;
 			for (int offset_dst = row_begin_dst; offset_dst < row_end_dst; ++ offset_dst) {
 				int dst_dst = column_indices[offset_dst];
-				if (dst_dst > dst) break;
-				while(column_indices[it] < dst_dst) it ++;
-				if(column_indices[it] == dst_dst) local_total += 1;
+				//if (dst_dst > dst) break;
+				while (column_indices[it] < dst_dst && it != row_end) it ++;
+				if (it != row_end && column_indices[it] == dst_dst) local_total += 1;
 			}
 		}
 	}
@@ -43,7 +41,6 @@ __global__ void ordered_count(int m, int *row_offsets, int *column_indices, int 
 	if(threadIdx.x == 0) atomicAdd(total, block_total);
 }
 
-//void TCSolver(int m, int nnz, int *h_row_offsets, int *h_column_indices, size_t *total) {
 void TCSolver(Graph &g, uint64_t &total) {
 	int64_t m = g.num_vertices();
 	int64_t nnz = g.num_edges();
@@ -55,10 +52,8 @@ void TCSolver(Graph &g, uint64_t &total) {
 	int *d_row_offsets, *d_column_indices;//, *d_degree;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_degree, m * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	//CUDA_SAFE_CALL(cudaMemcpy(d_degree, h_degree, m * sizeof(int), cudaMemcpyHostToDevice));
 	int h_total = 0, *d_total;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_total, &zero, sizeof(int), cudaMemcpyHostToDevice));

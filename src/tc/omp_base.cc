@@ -17,24 +17,22 @@ void TCSolver(Graph &g, uint64_t &total) {
 	t.Start();
 	uint64_t total_num = 0;
 	#pragma omp parallel for reduction(+ : total_num) schedule(dynamic, 1)
-	for (int src = 0; src < m; src ++) {
-		IndexT row_begin_src = row_offsets[src];
-		IndexT row_end_src = row_offsets[src+1]; 
-		for (IndexT offset_src = row_begin_src; offset_src < row_end_src; ++ offset_src) {
-			IndexT dst = column_indices[offset_src];
-			if (dst > src)
-				break;
-			int it = row_begin_src;
-			IndexT row_begin_dst = row_offsets[dst];
-			IndexT row_end_dst = row_offsets[dst+1];
-			for (IndexT offset_dst = row_begin_dst; offset_dst < row_end_dst; ++ offset_dst) {
-				IndexT dst_dst = column_indices[offset_dst];
-				if (dst_dst > dst)
-					break;
-				while (column_indices[it] < dst_dst)
+	for (int u = 0; u < m; u ++) {
+		IndexT begin_u = row_offsets[u];
+		IndexT end_u = row_offsets[u+1]; 
+		for (IndexT e_u = begin_u; e_u < end_u; ++ e_u) {
+			IndexT v = column_indices[e_u];
+			int it = begin_u;
+			IndexT begin_v = row_offsets[v];
+			IndexT end_v = row_offsets[v+1];
+			for (IndexT e_v = begin_v; e_v < end_v; ++ e_v) {
+				IndexT w = column_indices[e_v];
+				while (column_indices[it] < w && it < end_u)
 					it ++;
-				if (dst_dst == column_indices[it])
+				if (it != end_u && w == column_indices[it]) {
+          //std::cout << "u = " << u << " v = " << v << " w = " << w << "\n";
 					total_num ++;
+        }
 			}
 		} 
 	}

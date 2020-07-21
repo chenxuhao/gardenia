@@ -11,22 +11,20 @@
 __global__ void ordered_count(int m, IndexT *row_offsets, IndexT *column_indices, int *total) {
 	typedef cub::BlockReduce<int, BLOCK_SIZE> BlockReduce;
 	__shared__ typename BlockReduce::TempStorage temp_storage;
-	int src = blockIdx.x * blockDim.x + threadIdx.x;
+	int u = blockIdx.x * blockDim.x + threadIdx.x;
 	int local_total = 0;
-	if (src < m) {
-		int row_begin_src = row_offsets[src];
-		int row_end_src = row_offsets[src+1]; 
-		for (int offset_src = row_begin_src; offset_src < row_end_src; ++ offset_src) {
-			int dst = column_indices[offset_src];
-			if (dst > src) break;
-			int row_begin_dst = row_offsets[dst];
-			int row_end_dst = row_offsets[dst+1];
-			int it = row_begin_src;
-			for (int offset_dst = row_begin_dst; offset_dst < row_end_dst; ++ offset_dst) {
-				int dst_dst = column_indices[offset_dst];
-				if (dst_dst > dst) break;
-				while(column_indices[it] < dst_dst) it ++;
-				if(column_indices[it] == dst_dst) local_total += 1;
+	if (u < m) {
+		auto begin_u = row_offsets[u];
+		auto end_u = row_offsets[u+1]; 
+		for (auto off_u = begin_u; off_u < end_u; ++ off_u) {
+			int v = column_indices[off_u];
+			int begin_v = row_offsets[v];
+			int end_v = row_offsets[v+1];
+      auto it = begin_u;
+			for (auto off_v = begin_v; off_v < end_v; ++ off_v) {
+				int w = column_indices[off_v];
+				while (column_indices[it] < w && it < end_u) it ++;
+				if (it != end_u && column_indices[it] == w) local_total += 1;
 			}
 		}
 	}
@@ -34,13 +32,11 @@ __global__ void ordered_count(int m, IndexT *row_offsets, IndexT *column_indices
 	if(threadIdx.x == 0) atomicAdd(total, block_total);
 }
 
-// uses heuristic to see if worth relabeling
 void TCSolver(Graph &g, uint64_t &total) {
 	int64_t m = g.num_vertices();
 	int64_t nnz = g.num_edges();
 	IndexT *h_row_offsets = g.out_rowptr();
 	IndexT *h_column_indices = g.out_colidx();
-
 	//print_device_info(0);
 	int zero = 0;
 	int *d_row_offsets, *d_column_indices;//, *d_degree;
