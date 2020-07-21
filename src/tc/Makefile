@@ -1,5 +1,7 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
+CXXFLAGS+=-std=c++11
+LIBS+=-lgomp
 SRC=main.cc
 OBJS=omp_base.o base.o warp.o main.o verifier.o
 all: $(OBJS) tc_base tc_warp tc_omp_base
@@ -24,6 +26,10 @@ tc_base: base.o main.o verifier.o
 
 tc_warp: warp.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o warp.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+tc_bin: bin.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o bin.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 tc_omp_base: omp_base.o main.o verifier.o

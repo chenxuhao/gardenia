@@ -6,7 +6,7 @@
 #include <string.h>
 #define TC_VARIANT "ocl_base"
 
-void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degrees, int *total) {
+void TCSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, size_t *total) {
 	//load OpenCL kernel file
 	char *filechar = "base.cl";
 	int sourcesize = 1024*1024;
@@ -73,10 +73,11 @@ void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 	cl_mem d_row_offsets = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * (m+1), NULL, NULL);
 	cl_mem d_column_indices = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int) * nnz, NULL, NULL);
 	cl_mem d_total = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int), NULL, NULL);
+	int h_total = 0;
 
 	err  = clEnqueueWriteBuffer(queue, d_row_offsets, CL_TRUE, 0, sizeof(int) * (m+1), row_offsets, 0, NULL, NULL);
 	err |= clEnqueueWriteBuffer(queue, d_column_indices, CL_TRUE, 0, sizeof(int) * nnz, column_indices, 0, NULL, NULL);
-	err |= clEnqueueWriteBuffer(queue, d_total, CL_TRUE, 0, sizeof(int), total, 0, NULL, NULL);
+	err |= clEnqueueWriteBuffer(queue, d_total, CL_TRUE, 0, sizeof(int), &h_total, 0, NULL, NULL);
 	if (err < 0) { fprintf(stderr, "ERROR write buffer, err code: %d\n", err); exit(1); }
 
 	err  = clSetKernelArg(kernel, 0, sizeof(int), &m);
@@ -98,8 +99,9 @@ void TCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree
 	t.Stop();
 
 	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, t.Millisecs());
-	err = clEnqueueReadBuffer(queue, d_total, CL_TRUE, 0, sizeof(int), total, 0, NULL, NULL);
+	err = clEnqueueReadBuffer(queue, d_total, CL_TRUE, 0, sizeof(int), &h_total, 0, NULL, NULL);
 	if(err < 0){fprintf(stderr, "ERROR enqueue read buffer, err code: %d\n", err); exit(1);}
+	*total = (size_t)h_total;
 	printf("total: %d\n", *total);
 
 	clReleaseMemObject(d_row_offsets);

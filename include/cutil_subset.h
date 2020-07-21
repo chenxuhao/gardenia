@@ -27,7 +27,7 @@ static __device__ unsigned get_smid(void) {
 
 static unsigned CudaTest(const char *msg) {
 	cudaError_t e;
-	cudaThreadSynchronize();
+	//cudaThreadSynchronize();
 	if (cudaSuccess != (e = cudaGetLastError())) {
 		fprintf(stderr, "%s: %d\n", msg, e); 
 		fprintf(stderr, "%s\n", cudaGetErrorString(e));
@@ -80,6 +80,7 @@ static void print_device_info(int device) {
 }
 
 #include <cusparse_v2.h>
+/*
 static const char * cusparseGetErrorString(cusparseStatus_t error) {
 	// Read more at: http://docs.nvidia.com/cuda/cusparse/index.html#ixzz3f79JxRar
 	switch (error) {
@@ -120,7 +121,7 @@ static const char * cusparseGetErrorString(cusparseStatus_t error) {
 
 	return "<unknown>";
 }
-
+//*/
 static void CudaSparseCheckCore(cusparseStatus_t code, const char *file, int line) {
 	if (code != CUSPARSE_STATUS_SUCCESS) {
 		fprintf(stderr,"Cuda Error %d : %s %s %d\n", code, cusparseGetErrorString(code), file, line);

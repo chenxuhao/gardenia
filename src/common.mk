@@ -16,7 +16,8 @@ ICC=$(ICC_HOME)/icc
 ICPC=$(ICC_HOME)/icpc
 NVCC=nvcc
 COMPUTECAPABILITY=sm_60
-CUDA_ARCH := -gencode arch=compute_35,code=sm_35
+CUDA_ARCH = -gencode arch=compute_35,code=sm_35
+CUDA_ARCH += -gencode arch=compute_60,code=sm_60
 CXXFLAGS=-Wall -fopenmp
 ICPCFLAGS=-O3 -Wall -qopenmp
 NVFLAGS=$(CUDA_ARCH)

@@ -1,27 +1,32 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020, MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "tc.h"
-#include "graph_io.h"
+//#include "builder.h"
+#include "mgraph_reader.h"
+#include "command_line.h"
 
 int main(int argc, char *argv[]) {
-	printf("Triangle Count by Xuhao Chen (only for undirected graphs)\n");
-	if (argc < 2) {
-		printf("Usage: %s <graph>\n", argv[0]);
-		exit(1);
-	}
-	int m, n, nnz;
-	IndexT *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-	WeightT *h_weight = NULL;
-	read_graph(argc, argv, m, n, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true);
-	//read_graph(argc, argv, m, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, true, false, true, false, false);
+  if (argc < 3) {
+    printf("Usage: %s <graph>\n", argv[0]);
+    exit(1);
+  }
+  CLApp cli(argc, argv, "triangle count");
+  printf("Triangle Count by Xuhao Chen (for undirected graphs only)\n");
+  Graph g;
+  //std::string filetype = argv[1];
+  //std::string filename = argv[2];
+  //read_graph(g, filetype, filename);
+  if (!cli.ParseArgs()) return -1;
+  Builder b(cli);
+  b.MakeGraph(g);
+  uint64_t h_total = 0;
+  int m = g.num_vertices();
+  int nnz = g.num_edges();
+  printf("After cleaning: num_vertices %d num_edges %d\n", m, nnz);
 
-	int h_total = 0;
-	TCSolver(m, nnz, h_row_offsets, h_column_indices, h_degree, &h_total);
-#ifndef SIM
-	TCVerifier(m, h_row_offsets, h_column_indices, h_total);
-	free(h_row_offsets);
-	free(h_column_indices);
-	free(h_degree);
-#endif
-	return 0;
+  TCSolver(g, h_total);
+  std::cout << "total_num_triangles = " << h_total << "\n";
+  //if (cli.do_verify()) TCVerifier(g, h_total);
+  return 0;
 }
+

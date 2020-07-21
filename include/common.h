@@ -1,36 +1,41 @@
-#ifndef COMMON_H_
-#define COMMON_H_
+#pragma once
 
+#include <omp.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <cassert>
-#include <omp.h>
-//#include <vector>
-//#include <algorithm>
-//#include <iomanip>
+#include <vector>
 #include <limits>
+#include <cassert>
 #include <climits>
-#include <math.h>
+#include <cstdint>
+//#include <algorithm>
+
 using namespace std;
 //#define LONG_TYPES
+typedef uint8_t BYTE;
 #ifndef LONG_TYPES
 typedef float ScoreT;
-typedef float WeightT;
 typedef float ValueT;
 typedef float LatentT;
-typedef unsigned DistT;
+typedef uint32_t DistT;
 typedef int CompT;
 typedef int IndexT;
+typedef int WeightT;
 #else
 typedef double ScoreT;
-typedef double WeightT;
 typedef double ValueT;
 typedef double LatentT;
-typedef long unsigned int DistT;
-typedef long int CompT;
-typedef long int IndexT;
+typedef uint64_t DistT;
+typedef int64_t CompT;
+typedef int64_t IndexT;
+typedef int64_t WeightT;
 #endif
 extern double hub_factor;
+
+typedef int VertexId;
+typedef std::vector<VertexId> VertexList;
+typedef std::vector<BYTE> ByteList;
 
 #define PAGE_SIZE 4096
 #define	MAXCOLOR 128 // assume graph can be colored with less than 128 colors
@@ -49,4 +54,3 @@ extern double hub_factor;
 #define LOG_WARP_SIZE 5
 #define NUM_WARPS (BLOCK_SIZE / WARP_SIZE)
 
-#endif
