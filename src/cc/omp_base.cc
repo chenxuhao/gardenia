@@ -4,7 +4,7 @@
 #include "timer.h"
 #define CC_VARIANT "omp_base"
 
-void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *row_offsets, IndexT *column_indices, int *degree, CompT *comp, bool is_directed) {
+void CCSolver(Graph &g, CompT *comp) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -12,7 +12,7 @@ void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	}
 	printf("Launching OpenMP CC solver (%d threads) ...\n", num_threads);
 	#pragma omp parallel for
-	for (int n = 0; n < m; n ++) comp[n] = n;
+	for (int n = 0; n < g.V(); n ++) comp[n] = n;
 	bool change = true;
 	int iter = 0;
 
@@ -23,12 +23,9 @@ void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 		iter++;
 		//printf("Executing iteration %d ...\n", iter);
 		#pragma omp parallel for schedule(dynamic, 64)
-		for (int src = 0; src < m; src ++) {
+		for (int src = 0; src < g.V(); src ++) {
 			CompT comp_src = comp[src];
-			IndexT row_begin = row_offsets[src];
-			IndexT row_end = row_offsets[src+1];
-			for (IndexT offset = row_begin; offset < row_end; offset ++) {
-				IndexT dst = column_indices[offset];
+      for (auto dst : g.N(src)) {
 				CompT comp_dst = comp[dst];
 				if (comp_src == comp_dst) continue;
 				// Hooking condition so lower component ID wins independent of direction
@@ -41,7 +38,7 @@ void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 			}
 		}
 		#pragma omp parallel for
-		for (int n = 0; n < m; n++) {
+		for (int n = 0; n < g.V(); n++) {
 			while (comp[n] != comp[comp[n]]) {
 				comp[n] = comp[comp[n]];
 			}
@@ -50,6 +47,6 @@ void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	t.Stop();
 
 	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", CC_VARIANT, t.Millisecs());
+	printf("\truntime [omp_base] = %f ms.\n", t.Millisecs());
 	return;
 }

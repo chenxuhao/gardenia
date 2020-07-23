@@ -4,7 +4,7 @@ CXXFLAGS += -std=c++11
 #NVFLAGS += -std=c++11
 OBJS = base.o warp.o omp_base.o verifier.o main.o
 
-all: $(OBJS) cc_base cc_warp cc_omp_base
+all: $(OBJS) cc_base cc_warp cc_omp_base cc_afforest
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<

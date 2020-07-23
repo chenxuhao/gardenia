@@ -4,16 +4,16 @@
 #include "timer.h"
 #include "cutil_subset.h"
 #include "cuda_launch_config.hpp"
-#define CC_VARIANT "afforest"
 
-__device__ void link(IndexT u, IndexT v, IndexT *comp) {
+__device__ void link(VertexId u, VertexId v, IndexT *comp) {
 	IndexT p1 = comp[u];
 	IndexT p2 = comp[v];
 	while (p1 != p2) {
 		IndexT high = p1 > p2 ? p1 : p2;
 		IndexT low = p1 + (p2 - high);
 		IndexT p_high = comp[high];
-		if ((p_high == low) || (p_high == high && atomicCAS(&comp[high], high, low) == high))
+		if ((p_high == low) || (p_high == high && 
+        atomicCAS(&comp[high], high, low) == high))
 			break;
 		p1 = comp[comp[high]];
 		p2 = comp[low];
@@ -29,7 +29,9 @@ __global__ void compress(int m, CompT *comp) {
 	}
 }
 
-__global__ void afforest(int m, const IndexT *row_offsets, const IndexT *column_indices, CompT *comp, int32_t r) {
+__global__ void afforest(int m, const uint64_t* row_offsets, 
+                         const VertexId* column_indices, 
+                         CompT *comp, int32_t r) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m) {
 		int row_begin = row_offsets[src];
@@ -44,7 +46,10 @@ __global__ void afforest(int m, const IndexT *row_offsets, const IndexT *column_
 	}
 }
 
-__global__ void afforest_undirected(int m, int c, const IndexT *row_offsets, const IndexT *column_indices, CompT *comp, int r) {
+__global__ void afforest_undirected(int m, int c, 
+                                    const uint64_t* row_offsets, 
+                                    const VertexId* column_indices, 
+                                    CompT *comp, int r) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m && comp[src] != c) {
 		int row_begin = row_offsets[src];
@@ -58,7 +63,12 @@ __global__ void afforest_undirected(int m, int c, const IndexT *row_offsets, con
 	}
 }
 
-__global__ void afforest_directed(int m, int c, const IndexT *in_row_offsets, const IndexT *in_column_indices, const IndexT *row_offsets, const IndexT *column_indices, CompT *comp, int r) {
+__global__ void afforest_directed(int m, int c, 
+                                  const uint64_t* in_row_offsets, 
+                                  const VertexId* in_column_indices, 
+                                  const uint64_t* row_offsets, 
+                                  const VertexId* column_indices, 
+                                  CompT *comp, int r) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	if(src < m && comp[src] != c) {
 		int row_begin = row_offsets[src];
@@ -78,18 +88,24 @@ __global__ void afforest_directed(int m, int c, const IndexT *in_row_offsets, co
 	}
 }
 
-void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, CompT *h_comp, bool is_directed) {
+void CCSolver(Graph &g, CompT *h_comp) {
+  auto m = g.V();
+  auto nnz = g.E();
+	auto in_row_offsets = g.in_rowptr();
+	auto out_row_offsets = g.out_rowptr();
+	auto in_column_indices = g.in_colidx();	
+	auto out_column_indices = g.out_colidx();	
 	//print_device_info(0);
-	int *d_in_row_offsets, *d_in_column_indices;
-	int *d_out_row_offsets, *d_out_column_indices;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_in_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_in_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_in_row_offsets, in_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_in_column_indices, in_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_out_row_offsets, out_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_out_column_indices, out_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	uint64_t *d_in_row_offsets, *d_out_row_offsets;
+	VertexId *d_in_column_indices, *d_out_column_indices;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_in_row_offsets, (m + 1) * sizeof(uint64_t)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_in_column_indices, nnz * sizeof(VertexId)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_row_offsets, (m + 1) * sizeof(uint64_t)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_column_indices, nnz * sizeof(VertexId)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_in_row_offsets, in_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_in_column_indices, in_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_out_row_offsets, out_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_out_column_indices, out_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
 	CompT *d_comp;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_comp, m * sizeof(CompT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_comp, h_comp, m * sizeof(CompT), cudaMemcpyHostToDevice));
@@ -109,7 +125,7 @@ void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	}
 	CUDA_SAFE_CALL(cudaMemcpy(h_comp, d_comp, m * sizeof(CompT), cudaMemcpyDeviceToHost));
 	IndexT c = SampleFrequentElement(m, h_comp);
-	if (!is_directed) {
+	if (!g.is_directed()) {
 		afforest_undirected<<<nblocks, nthreads>>>(m, c, d_out_row_offsets, d_out_column_indices, d_comp, neighbor_rounds);
 	} else {
 		afforest_directed<<<nblocks, nthreads>>>(m, c, d_in_row_offsets, d_in_column_indices, d_out_row_offsets, d_out_column_indices, d_comp, neighbor_rounds);
@@ -119,7 +135,7 @@ void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 
-	printf("\truntime [%s] = %f ms.\n", CC_VARIANT, t.Millisecs());
+	printf("\truntime [cuda_afforest] = %f ms.\n", t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(h_comp, d_comp, m * sizeof(CompT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_in_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_out_row_offsets));

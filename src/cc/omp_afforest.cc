@@ -7,7 +7,6 @@
 #include <iostream>
 #include <algorithm>
 #include <unordered_map>
-#define CC_VARIANT "omp_afforest"
 
 // Place nodes u and v in same component of lower component ID
 void Link(IndexT u, IndexT v, IndexT *comp) {
@@ -34,42 +33,15 @@ void Compress(int m, IndexT *comp) {
 		}
 	}
 }
-/*
-IndexT SampleFrequentElement(int m, IndexT *comp, int64_t num_samples = 1024) {
-	std::unordered_map<IndexT, int> sample_counts(32);
-	using kvp_type = std::unordered_map<IndexT, int>::value_type;
-	// Sample elements from 'comp'
-	std::mt19937 gen;
-	std::uniform_int_distribution<IndexT> distribution(0, m - 1);
-	for (IndexT i = 0; i < num_samples; i++) {
-		IndexT n = distribution(gen);
-		sample_counts[comp[n]]++;
-	}
-	// Find most frequent element in samples (estimate of most frequent overall)
-	auto most_frequent = std::max_element(
-			sample_counts.begin(), sample_counts.end(),
-			[](const kvp_type& a, const kvp_type& b) { return a.second < b.second; });
-	float frac_of_graph = static_cast<float>(most_frequent->second) / num_samples;
-	std::cout
-		<< "Skipping largest intermediate component (ID: " << most_frequent->first
-		<< ", approx. " << static_cast<int>(frac_of_graph) * 100
-		<< "% of the graph)" << std::endl;
-	return most_frequent->first;
-}
-*/
-void Afforest(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *row_offsets, IndexT *column_indices, CompT *comp, bool is_directed, int32_t neighbor_rounds = 2) {
+
+void Afforest(Graph &g, CompT *comp, int32_t neighbor_rounds = 2) {
+  auto m = g.V();
 	// Process a sparse sampled subgraph first for approximating components.
 	// Sample by processing a fixed number of neighbors for each vertex
 	for (int r = 0; r < neighbor_rounds; ++r) {
 		#pragma omp parallel for
 		for (IndexT src = 0; src < m; src ++) {
-			//for (IndexT v : g.out_neigh(u, r)) {
-			IndexT row_begin = row_offsets[src];
-			IndexT row_end = row_offsets[src+1];
-			IndexT start_offset = std::min(r, row_end - row_begin);
-			row_begin += start_offset;
-			for (IndexT offset = row_begin; offset < row_end; offset ++) {
-				IndexT dst = column_indices[offset];
+			for (IndexT dst : g.out_neigh(src, r)) {
 				// Link at most one time if neighbor available at offset r
 				Link(src, dst, comp);
 				break;
@@ -83,41 +55,26 @@ void Afforest(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *
 	IndexT c = SampleFrequentElement(m, comp);
 
 	// Final 'link' phase over remaining edges (excluding largest component)
-	if (!is_directed) {
+	if (!g.is_directed()) {
 		#pragma omp parallel for schedule(dynamic, 2048)
-		for (IndexT src = 0; src < m; src ++) {
+		for (IndexT u = 0; u < m; u ++) {
 			// Skip processing nodes in the largest component
-			if (comp[src] == c) continue;
+			if (comp[u] == c) continue;
 			// Skip over part of neighborhood (determined by neighbor_rounds)
-			//for (IndexT v : g.out_neigh(u, neighbor_rounds)) {
-			IndexT row_begin = row_offsets[src];
-			IndexT row_end = row_offsets[src+1];
-			IndexT start_offset = std::min(neighbor_rounds, row_end - row_begin);
-			row_begin += start_offset;
-			for (IndexT offset = row_begin; offset < row_end; offset ++) {
-				IndexT dst = column_indices[offset];
-				Link(src, dst, comp);
+			for (auto v : g.out_neigh(u, neighbor_rounds)) {
+				Link(u, v, comp);
 			}
 		}
 	} else {
 		#pragma omp parallel for schedule(dynamic, 2048)
-		for (IndexT src = 0; src < m; src ++) {
-			if (comp[src] == c) continue;
-			//for (IndexT v : g.out_neigh(u, neighbor_rounds)) {
-			IndexT row_begin = row_offsets[src];
-			IndexT row_end = row_offsets[src+1];
-			IndexT start_offset = std::min(neighbor_rounds, row_end - row_begin);
-			row_begin += start_offset;
-			for (IndexT offset = row_begin; offset < row_end; offset ++) {
-				IndexT dst = column_indices[offset];
-				Link(src, dst, comp);
+		for (IndexT u = 0; u < m; u ++) {
+			if (comp[u] == c) continue;
+			for (auto v : g.out_neigh(u, neighbor_rounds)) {
+				Link(u, v, comp);
 			}
 			// To support directed graphs, process reverse graph completely
-			row_begin = in_row_offsets[src];
-			row_end = in_row_offsets[src+1];
-			for (IndexT offset = row_begin; offset < row_end; offset ++) {
-				IndexT dst = in_column_indices[offset];
-				Link(src, dst, comp);
+			for (auto v : g.in_neigh(u)) {
+				Link(u, v, comp);
 			}
 		}
 	}
@@ -125,7 +82,8 @@ void Afforest(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *
 	Compress(m, comp);
 }
 
-void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, CompT *comp, bool is_directed) {
+void CCSolver(Graph &g, CompT *comp) {
+  auto m = g.V();
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -139,10 +97,10 @@ void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 
 	Timer t;
 	t.Start();
-	Afforest(m, in_row_offsets, in_column_indices, out_row_offsets, out_column_indices, comp, is_directed);
+	Afforest(g, comp);
 	t.Stop();
 
 	//printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", CC_VARIANT, t.Millisecs());
+	printf("\truntime [omp_afforest] = %f ms.\n", t.Millisecs());
 	return;
 }

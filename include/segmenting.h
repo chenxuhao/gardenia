@@ -12,13 +12,18 @@
 #define SUBGRAPH_SIZE (1024*512)
 #define RANGE_WIDTH (1024*2)
 #endif
+#ifdef USE_INT
+typedef int ParValueT;
+#else
+typedef float ParValueT;
+#endif
 
 vector<IndexT *> rowptr_blocked;
 vector<IndexT *> colidx_blocked;
 vector<ValueT *> values_blocked;
 vector<IndexT *> idx_map;
 vector<IndexT *> range_indices;
-vector<ValueT *> partial_sums;
+//vector<ParValueT *> partial_sums;
 vector<int> ms_of_subgraphs;
 vector<int> nnzs_of_subgraphs;
 
@@ -35,7 +40,7 @@ void segmenting(int m, IndexT *rowptr, IndexT *colidx, ValueT *values) {
 	nnzs_of_subgraphs.resize(num_subgraphs);
 	idx_map.resize(num_subgraphs);
 	range_indices.resize(num_subgraphs);
-	partial_sums.resize(num_subgraphs);
+	//partial_sums.resize(num_subgraphs);
 
 	Timer t;
 	t.Start();
@@ -66,7 +71,7 @@ void segmenting(int m, IndexT *rowptr, IndexT *colidx, ValueT *values) {
 		rowptr_blocked[i] = (IndexT *) malloc(sizeof(IndexT) * (ms_of_subgraphs[i]+1));
 		colidx_blocked[i] = (IndexT *) malloc(sizeof(IndexT) * nnzs_of_subgraphs[i]);
 		if(values != NULL) values_blocked[i] = (ValueT *) malloc(sizeof(ValueT) * nnzs_of_subgraphs[i]);
-		partial_sums[i] = (ValueT *) malloc(sizeof(ValueT) * ms_of_subgraphs[i]);
+		//partial_sums[i] = (ParValueT *) malloc(sizeof(ParValueT) * ms_of_subgraphs[i]);
 		nnzs_of_subgraphs[i] = 0;
 		rowptr_blocked[i][0] = 0;
 	}
@@ -114,6 +119,33 @@ void segmenting(int m, IndexT *rowptr, IndexT *colidx, ValueT *values) {
 		//*/
 	}
 //*/
+/*
+	int histo[4];
+	int total_histo[4];
+	for (int j = 0; j < 4; ++j) total_histo[j] = 0;
+	for (int i = 0; i < num_subgraphs; ++i) {
+		for (int j = 0; j < 4; ++j) histo[j] = 0;
+		int nvertices = ms_of_subgraphs[i];
+		int *sub_degrees = (int *)malloc(nvertices * sizeof(int));
+		for (int j = 0; j < ms_of_subgraphs[i]; ++j) {
+			int degree = rowptr_blocked[i][j+1] - rowptr_blocked[i][j];
+			if (degree >= 0 && degree < 8) histo[0] ++;
+			else if (degree >= 8 && degree < 16) histo[1] ++;
+			else if (degree >= 16 && degree < 32) histo[2] ++;
+			else if (degree >= 32) histo[3] ++;
+			else printf("ERROR\n");
+		}
+		for (int j = 0; j < 4; ++j)
+			total_histo[j] += histo[j];
+		for (int j = 0; j < 3; ++j)
+			printf("Subgraph[%d] degree %d to %d: %d\n", i, 8*j, 8*(j+1), histo[j]);
+		printf("Subgraph[%d] degree 32 and above: %d\n", i, histo[3]);
+	}
+	for (int j = 0; j < 3; ++j) 
+		printf("Total degree %d to %d: %d\n", 8*j, 8*(j+1), total_histo[j]);
+	printf("Total degree 32 and above: %d\n", total_histo[3]);
+	exit(0);
+//*/
 	printf("constructing IdxMap and RangeIndices\n");
 	for (int i = 0; i < num_subgraphs; ++i) {
 		std::vector<int> counts(num_ranges, 0);
@@ -125,6 +157,7 @@ void segmenting(int m, IndexT *rowptr, IndexT *colidx, ValueT *values) {
 			range_indices[i][j] = range_indices[i][j-1] + counts[j-1];
 		}
 	}
+
 /*
 	printf("printing IdxMaps:\n");
 	for (int i = 0; i < num_subgraphs; ++i) {

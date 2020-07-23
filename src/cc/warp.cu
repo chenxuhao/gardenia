@@ -5,9 +5,8 @@
 #include "cutil_subset.h"
 #include "cuda_launch_config.hpp"
 #include <algorithm>
-#define CC_VARIANT "warp"
 
-__global__ void hook(int m, const IndexT *row_offsets, const IndexT *column_indices, CompT *comp, bool *changed) {
+__global__ void hook(int m, const uint64_t *row_offsets, const IndexT *column_indices, CompT *comp, bool *changed) {
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
 	const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
 	const int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
@@ -47,13 +46,18 @@ __global__ void shortcut(int m, CompT *comp) {
 	}
 }
 
-void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *h_row_offsets, IndexT *h_column_indices, int *degree, CompT *h_comp, bool is_directed) {
+void CCSolver(Graph &g, CompT *h_comp) {
+  auto m = g.V();
+  auto nnz = g.E();
+	auto h_row_offsets = g.out_rowptr();
+	auto h_column_indices = g.out_colidx();
 	//print_device_info(0);
-	int *d_row_offsets, *d_column_indices;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	uint64_t *d_row_offsets;
+  VertexId* d_column_indices;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
 	CompT *d_comp;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_comp, sizeof(CompT) * m));
 	CUDA_SAFE_CALL(cudaMemcpy(d_comp, h_comp, m * sizeof(CompT), cudaMemcpyHostToDevice));
@@ -87,7 +91,7 @@ void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	t.Stop();
 
 	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", CC_VARIANT, t.Millisecs());
+	printf("\truntime [cuda_warp] = %f ms.\n", t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(h_comp, d_comp, sizeof(CompT) * m, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));

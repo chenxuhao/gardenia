@@ -1,6 +1,7 @@
-// Copyright 2016, National University of Defense Technology
-// Contact: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020, MIT
+// Contact: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
+#include "csr_graph.h"
 /*
 GARDENIA Benchmark Suite
 Kernel: Connected Components (CC)
@@ -24,6 +25,6 @@ cc_base: one thread per vertex using CUDA
 cc_warp: one warp per vertex using CUDA
 */
 
-void CCSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, CompT *comp, bool is_directed);
-void CCVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, CompT *comp, bool is_directed);
+void CCSolver(Graph &g, CompT *comp);
+void CCVerifier(Graph &g, CompT *comp);
 IndexT SampleFrequentElement(int m, IndexT *comp, int64_t num_samples = 1024);

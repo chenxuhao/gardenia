@@ -32,19 +32,18 @@ IndexT SampleFrequentElement(int m, IndexT *comp, int64_t num_samples) {
 	return most_frequent->first;
 }
 
-int serial_solver(int m, IndexT *row_offsets, IndexT *column_indices, CompT *components) {
+int serial_solver(Graph &g, CompT *components) {
 	std::stack<int> DFS;
 	int num_comps = 0;
-	for(int src = 0; src < m; src ++) {
-		if(components[src] == -1) {
+	for (int src = 0; src < g.V(); src ++) {
+		if (components[src] == -1) {
 			DFS.push(src);
 			components[src] = num_comps;
-			while(!DFS.empty()) {
+			while (!DFS.empty()) {
 				int top = DFS.top();
 				DFS.pop();
-				for(IndexT offset = row_offsets[top]; offset < row_offsets[top + 1]; offset ++) {
-					IndexT dst = column_indices[offset];
-					if(components[dst] == -1) {
+				for (auto dst : g.N(top)) {
+					if (components[dst] == -1) {
 						DFS.push(dst);
 						components[dst] = num_comps;
 					}
@@ -60,12 +59,13 @@ int serial_solver(int m, IndexT *row_offsets, IndexT *column_indices, CompT *com
 // - Asserts search does not reach a vertex with a different component label
 // - If the graph is directed, it performs the search as if it was undirected
 // - Asserts every vertex is visited (degree-0 vertex should have own label)
-void CCVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *row_offsets, IndexT *column_indices, CompT *comp_test, bool is_directed) {
+void CCVerifier(Graph &g, CompT *comp_test) {
+  auto m = g.V();
 	CompT *comp = (CompT *)malloc(m * sizeof(CompT));
 	for (int i = 0; i < m; i ++) comp[i] = -1;
 	Timer t;
 	t.Start();
-	serial_solver(m, row_offsets, column_indices, comp);
+	serial_solver(g, comp);
 	t.Stop();
 	
 	printf("Verifying...\n");
@@ -87,10 +87,7 @@ void CCVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT
 		vector<int>::iterator it;
 		for (it = frontier.begin(); it != frontier.end(); it++) {
 			int src = *it;
-			IndexT row_begin = row_offsets[src];
-			IndexT row_end = row_offsets[src+1];
-			for (IndexT offset = row_begin; offset < row_end; ++ offset) {
-				IndexT dst = column_indices[offset];
+      for (auto dst : g.N(src)) {
 				if (comp_test[dst] != curr_label) {
 					printf("Wrong\n");
 					return;
@@ -100,11 +97,8 @@ void CCVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT
 					frontier.push_back(dst);
 				}
 			}
-			if (is_directed) {
-				IndexT row_begin = in_row_offsets[src];
-				IndexT row_end = in_row_offsets[src+1];
-				for (IndexT offset = row_begin; offset < row_end; ++ offset) {
-					IndexT dst = in_column_indices[offset];
+			if (g.is_directed()) {
+        for (auto dst : g.N(src)) {
 					if (comp_test[dst] != curr_label) {
 						printf("Wrong\n");
 						return;
