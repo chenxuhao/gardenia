@@ -1,11 +1,14 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "spmv.h"
-#include <omp.h>
 #include "timer.h"
-#define SPMV_VARIANT "omp_base"
+#include "spmv_util.h"
 
-void SpmvSolver(int num_rows, int nnz, IndexT *Ap, IndexT *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degree) {
+void SpmvSolver(Graph &g, const ValueT* Ax, const ValueT *x, ValueT *y) {
+  auto m = g.V();
+  auto nnz = g.E();
+	auto Ap = g.in_rowptr();
+	auto Aj = g.in_colidx();
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -17,19 +20,24 @@ void SpmvSolver(int num_rows, int nnz, IndexT *Ap, IndexT *Aj, ValueT *Ax, Value
 	t.Start();
 
 	#pragma omp parallel for
-	for (int i = 0; i < num_rows; i++){
-		const IndexT row_begin = Ap[i];
-		const IndexT row_end   = Ap[i+1];
+	for (int i = 0; i < m; i++){
+		auto row_begin = Ap[i];
+		auto row_end   = Ap[i+1];
 		ValueT sum = y[i];
 		//#pragma omp simd reduction(+:sum)
-		for (IndexT jj = row_begin; jj < row_end; jj++) {
-			const IndexT j = Aj[jj];  //column index
+		for (auto jj = row_begin; jj < row_end; jj++) {
+			auto j = Aj[jj];  //column index
 			sum += x[j] * Ax[jj];
 		}
 		y[i] = sum; 
 	}
 	t.Stop();
 
-	printf("\truntime [%s] = %f ms.\n", SPMV_VARIANT, t.Millisecs());
+	double time = t.Millisecs();
+	float gbyte = bytes_per_spmv(m, nnz);
+	float GFLOPs = (time == 0) ? 0 : (2 * nnz / time) / 1e6;
+	float GBYTEs = (time == 0) ? 0 : (gbyte / time) / 1e6;
+	printf("\truntime [omp_base] = %.4f ms ( %5.2f GFLOP/s %5.1f GB/s)\n", time, GFLOPs, GBYTEs);
 	return;
 }
+

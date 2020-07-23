@@ -1,7 +1,6 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "spmv.h"
-#include <omp.h>
 #include "timer.h"
 #include "immintrin.h"
 #define SPMV_VARIANT "omp_simd"
@@ -17,26 +16,26 @@ inline float hsum_avx(__m256 in256) {
 	return *sum;
 }
 
-void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *y, int *degree) {
+void SpmvSolver(int m, int nnz, IndexT *ApT, IndexT *AjT, ValueT *AxT, IndexT *h_Ap, IndexT *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *y, int *degrees) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
 		num_threads = omp_get_num_threads();
 	}
-	int *Ap = (int *) _mm_malloc((num_rows+1)*sizeof(int), 64);
+	int *Ap = (int *) _mm_malloc((m+1)*sizeof(int), 64);
 	int *Aj = (int *) _mm_malloc(nnz*sizeof(int), 64);
 	ValueT *Ax = (ValueT *) _mm_malloc(nnz*sizeof(ValueT), 64);
-	ValueT *x = (ValueT *) _mm_malloc(num_rows*sizeof(ValueT), 64);
-	for (int i = 0; i < num_rows+1; i ++) Ap[i] = h_Ap[i];
+	ValueT *x = (ValueT *) _mm_malloc(m*sizeof(ValueT), 64);
+	for (int i = 0; i < m+1; i ++) Ap[i] = h_Ap[i];
 	for (int i = 0; i < nnz; i ++) Aj[i] = h_Aj[i];
 	for (int i = 0; i < nnz; i ++) Ax[i] = h_Ax[i];
-	for (int i = 0; i < num_rows; i ++) x[i] = h_x[i];
+	for (int i = 0; i < m; i ++) x[i] = h_x[i];
 	printf("Launching OpenMP SpMV solver (%d threads) ...\n", num_threads);
 	
 	Timer t;
 	t.Start();
 	#pragma omp parallel for
-	for (int i = 0; i < num_rows; i++){
+	for (int i = 0; i < m; i++){
 		int row_begin = Ap[i];
 		int row_end   = Ap[i+1];
 		__m256 sum = _mm256_setzero_ps();// Returns an vector whose bytes are set to zero

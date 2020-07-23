@@ -9,7 +9,7 @@
 #endif
 #define SPMV_VARIANT "omp_base"
 
-void SpmvSolver(int num_rows, int nnz, IndexType *Ap, IndexType *Aj, ValueType *Ax, ValueType *x, ValueType *y, int *degree) {
+void SpmvSolver(int m, int nnz, IndexT *ApT, IndexT *AjT, ValueT *AxT, IndexT *Ap, IndexT *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degrees) {
 	int num_threads = 1;
 #ifdef SIM
 	omp_set_num_threads(4);
@@ -24,14 +24,14 @@ void SpmvSolver(int num_rows, int nnz, IndexType *Ap, IndexType *Aj, ValueType *
 	Timer t;
 	t.Start();
 #ifdef SIM
-	Bitmap hub(num_rows);
+	Bitmap hub(m);
 	hub.reset();
-	int num_hubs = set_hub(num_rows, nnz, degree, hub);
+	int num_hubs = set_hub(m, nnz, degrees, hub);
 	m5_checkpoint(0,0);
-	set_addr_bounds(1,(uint64_t)Ap,(uint64_t)&Ap[num_rows+1],4);
+	set_addr_bounds(1,(uint64_t)Ap,(uint64_t)&Ap[m+1],4);
 	set_addr_bounds(2,(uint64_t)Aj,(uint64_t)&Aj[nnz],8);
-	set_addr_bounds(3,(uint64_t)x,(uint64_t)&x[num_rows],8);
-	//set_addr_bounds(1,(uint64_t)y,(uint64_t)&y[num_rows],4);
+	set_addr_bounds(3,(uint64_t)x,(uint64_t)&x[m],8);
+	//set_addr_bounds(1,(uint64_t)y,(uint64_t)&y[m],4);
 	set_addr_bounds(5,(uint64_t)Ax,(uint64_t)&Ax[nnz],8);
 	set_addr_bounds(6,(uint64_t)hub.start_,(uint64_t)hub.end_,8);
 	printf("Begin of ROI\n");
@@ -39,7 +39,7 @@ void SpmvSolver(int num_rows, int nnz, IndexType *Ap, IndexType *Aj, ValueType *
 #endif
 
 	#pragma omp parallel for
-	for (int i = 0; i < num_rows; i++){
+	for (int i = 0; i < m; i++){
 		const IndexType row_begin = Ap[i];
 		const IndexType row_end   = Ap[i+1];
 		ValueType sum = y[i];

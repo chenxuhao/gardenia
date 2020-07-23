@@ -6,7 +6,7 @@
 #include <string.h>
 #define SPMV_VARIANT "ocl_base"
 
-void SpmvSolver(int m, int nnz, int *Ap, int *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degrees) {
+void SpmvSolver(int m, int nnz, IndexT *ApT, IndexT *AjT, ValueT *AxT, int *Ap, int *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degrees) {
 	//print_device_info();
 
 	//load OpenCL kernel file

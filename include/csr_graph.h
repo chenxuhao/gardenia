@@ -81,7 +81,7 @@ private:
     if (m != n) {
       printf("Warning, m(%d) != n(%d)\n", m, n);
     }
-    std::cout << "original |V| " << m << " |E| " << nnz << "\n";
+    //std::cout << "original |V| " << m << " |E| " << nnz << "\n";
     n_vertices = m;
     n_edges = 0;
     string line;
@@ -109,10 +109,10 @@ private:
   void fill_data(bool symmetrize, bool need_reverse, bool sorted, bool remove_redundents) {
     //sort the neighbor list
     if (sorted) {
-      printf("Sorting the neighbor lists...");
+      //printf("Sorting the neighbor lists...");
       for(int i = 0; i < n_vertices; i++)
         std::sort(adj_lists[i].begin(), adj_lists[i].end());
-      printf(" Done\n");
+      //printf(" Done\n");
     }
     // remove redundent
     int num_redundents = 0;
@@ -239,30 +239,35 @@ public:
         bool need_reverse = false) {
     if (filetype == "mtx") {
       std::string filename = prefix + ".mtx";
-      if (!symmetrize && need_reverse) {
-        directed = true;
-        printf("This graph maintains both incomming and outgoing edge-list\n"); 
-      }
       read_mtx_file(filename, symmetrize, need_reverse);
-      if (symmetrize) {
-        printf("This graph is symmetrized\n");
-        reverse_vertices = vertices;
-        reverse_edges = edges;
-      }
     } else if (filetype == "bin") {
       std::ifstream f_meta((prefix + ".meta.txt").c_str());
       assert(f_meta);
       max_degree = 0;
       int vid_size;
       f_meta >> n_vertices >> n_edges >> vid_size >> max_degree;
+      std::cout << "|V| " << n_vertices << " |E| " << n_edges << "\n";
       assert(sizeof(VertexId) == vid_size);
       f_meta.close();
       if(map_vertices) map_file(prefix + ".vertex.bin", vertices, n_vertices+1);
       else read_bin_file(prefix + ".vertex.bin", vertices, n_vertices+1);
       if(map_edges) map_file(prefix + ".edge.bin", edges, n_edges);
       else read_bin_file(prefix + ".edge.bin", edges, n_edges);
+      if (!symmetrize && need_reverse) {
+        std::cout << "Symmetrizing binary file not supported yet\n";
+        exit(0);
+      }
     }
-    std::cout << "max_degree: " << max_degree << "\n";
+    if (!symmetrize && need_reverse) {
+      directed = true;
+      printf("This graph maintains both incomming and outgoing edge-list\n"); 
+    }
+    if (symmetrize) {
+      printf("This graph is symmetrized\n");
+      reverse_vertices = vertices;
+      reverse_edges = edges;
+    }
+    //std::cout << "max_degree: " << max_degree << "\n";
     if (max_degree == 0 || max_degree>=n_vertices) exit(1);
     //if (use_dag) orientation();
   }

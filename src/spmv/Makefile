@@ -1,12 +1,12 @@
 include ../common.mk
 SRC=main.cc
 OBJS=vector.o omp_base.o verifier.o main.o
-INCLUDES += -I${MKLROOT}/include
+INCLUDES += -I${MKLROOT}/include -I$(CUB_DIR)
 LIBS += -L${MKLROOT}/lib/intel64
-all: $(OBJS) spmv_vector spmv_omp_base
+all: $(OBJS) spmv_vector spmv_omp_base spmv_warp spmv_base
 
 %.o: %.cpp
-	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -march=core-avx2 -c $<
+	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -march=core-avx2 -D__PURE_INTEL_C99_HEADERS__ -c $<
 
 ifeq ($(HOST),X86)
 %.o: %.cc
@@ -21,6 +21,14 @@ endif
 
 spmv_omp_base: omp_base.o main.o verifier.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_base.o verifier.o -o $@ -lgomp
+	mv $@ $(BIN)
+
+spmv_omp_pb: omp_pb.o main.o verifier.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_pb.o verifier.o -o $@ -lgomp
+	mv $@ $(BIN)
+
+spmv_omp_push: omp_push.o main.o verifier.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) main.o omp_push.o verifier.o -o $@ -lgomp
 	mv $@ $(BIN)
 
 spmv_omp_base_sim: omp_base.o main.o verifier.o
@@ -49,6 +57,14 @@ spmv_warp: main.o warp.o verifier.o
 
 spmv_vector: main.o vector.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o vector.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+spmv_push: main.o push.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o push.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+spmv_push_tile: main.o push_tile.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o push_tile.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 spmv_partition: main.o partition.o verifier.o

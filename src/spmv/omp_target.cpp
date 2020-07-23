@@ -6,7 +6,7 @@
 #include "omp_target_config.h"
 #define SPMV_VARIANT "omp_target"
 
-void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degree) {
+void SpmvSolver(int m, int nnz, IndexT *ApT, IndexT *AjT, ValueT *AxT, IndexT *Ap, IndexT *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degrees) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -17,13 +17,13 @@ void SpmvSolver(int num_rows, int nnz, int *Ap, int *Aj, ValueT *Ax, ValueT *x, 
 	Timer t;
 	t.Start();
 	double t1, t2;
-	#pragma omp target data device(0) map(tofrom:y[0:num_rows]) map(to:num_rows,Ap[0:(num_rows+1)],x[0:num_rows]) map(to:Aj[0:nnz],Ax[0:nnz])
-	//#pragma omp target device(0) map(tofrom:y[0:num_rows]) map(to:num_rows,Ap[0:(num_rows+1)],x[0:num_rows]) map(to:Aj[0:nnz],Ax[0:nnz])
+	#pragma omp target data device(0) map(tofrom:y[0:m]) map(to:m,Ap[0:(m+1)],x[0:m]) map(to:Aj[0:nnz],Ax[0:nnz])
+	//#pragma omp target device(0) map(tofrom:y[0:m]) map(to:m,Ap[0:(m+1)],x[0:m]) map(to:Aj[0:nnz],Ax[0:nnz])
 	{
 	t1 = omp_get_wtime();
 	#pragma omp target device(0)
 	#pragma omp parallel for
-	for (int i = 0; i < num_rows; i++){
+	for (int i = 0; i < m; i++){
 		int row_begin = Ap[i];
 		int row_end   = Ap[i+1];
 		ValueT sum = y[i];

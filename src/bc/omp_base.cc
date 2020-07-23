@@ -11,7 +11,7 @@
 
 #define BC_VARIANT "omp_base"
 
-void PBFS(int m, IndexT *row_offsets, IndexT *column_indices, int source, vector<int> &path_counts,  vector<int> &depths,
+void PBFS(Graph &g, int source, vector<int> &path_counts,  vector<int> &depths,
 	Bitmap &succ, vector<SlidingQueue<IndexT>::iterator> &depth_index, SlidingQueue<IndexT> &queue) {
 	depths[source] = 0;
 	path_counts[source] = 1;
@@ -29,10 +29,8 @@ void PBFS(int m, IndexT *row_offsets, IndexT *column_indices, int source, vector
 			#pragma omp for schedule(dynamic, 64)
 			for (IndexT *q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
 				IndexT src = *q_iter;
-				IndexT row_begin = row_offsets[src];
-				IndexT row_end = row_offsets[src + 1];
-				for (IndexT offset = row_begin; offset < row_end; offset ++) {
-					IndexT dst = column_indices[offset];
+        auto offset = g.edge_begin(src);
+        for (auto dst : g.N(src)) {
 					if (depths[dst] == -1  && (compare_and_swap(depths[dst], -1, depth))) {
 						lqueue.push_back(dst);
 					}
@@ -40,6 +38,7 @@ void PBFS(int m, IndexT *row_offsets, IndexT *column_indices, int source, vector
 						succ.set_bit_atomic(offset);
 						fetch_and_add(path_counts[dst], path_counts[src]);
 					}
+          offset ++;
 				}
 			}
 			lqueue.flush();
@@ -51,8 +50,9 @@ void PBFS(int m, IndexT *row_offsets, IndexT *column_indices, int source, vector
 	depth_index.push_back(queue.begin());
 }
 
-void BCSolver(int m, int nnz, int source, IndexT *row_offsets, IndexT *column_indices, ScoreT *scores) {
-	//omp_set_num_threads(12);
+void BCSolver(Graph &g, int source, ScoreT *scores) {
+	auto m = g.V();
+	auto nnz = g.E();
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -72,24 +72,23 @@ void BCSolver(int m, int nnz, int source, IndexT *row_offsets, IndexT *column_in
 		depth_index.resize(0);
 		queue.reset();
 		succ.reset();
-		PBFS(m, row_offsets, column_indices, source, path_counts, depths, succ, depth_index, queue);
-		//printf("depth_index_size = %ld\n", depth_index.size());
+		PBFS(g, source, path_counts, depths, succ, depth_index, queue);
 		vector<ScoreT> deltas(m, 0);
 		for (int d = depth_index.size()-2; d >= 0; d --) {
 			#pragma omp parallel for schedule(dynamic, 64)
 			for (IndexT *it = depth_index[d]; it < depth_index[d+1]; it++) {
 				IndexT src = *it;
-				IndexT row_begin = row_offsets[src];
-				IndexT row_end = row_offsets[src + 1];
-				for (IndexT offset = row_begin; offset < row_end; offset ++) {
-					IndexT dst = column_indices[offset];
-					//if (depths[dst] == depths[src] + 1) {
+				ScoreT delta_src = 0;
+        auto offset = g.edge_begin(src);
+        for (auto dst : g.N(src)) {
 					if (succ.get_bit(offset)) {
-						deltas[src] += static_cast<ScoreT>(path_counts[src]) /
+						delta_src += static_cast<ScoreT>(path_counts[src]) /
 							static_cast<ScoreT>(path_counts[dst]) * (1 + deltas[dst]);
 					}
+          offset ++;
 				}
-				scores[src] += deltas[src];
+				deltas[src] = delta_src;
+				scores[src] += delta_src;
 			}
 		}
 	}

@@ -1,6 +1,7 @@
-// Copyright 2016, National University of Defense Technology
-// Contact: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Contact: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
+#include "csr_graph.h"
 /*
 GARDENIA Benchmark Suite
 Kernel: Betweenness Centrality (BC)
@@ -32,5 +33,6 @@ bc_linear_base: data-driven GPU implementation, one thread per vertex using CUDA
 bc_linear_lb: data-driven GPU implementation, one thread per edge using CUDA
 */
 
-void BCSolver(int m, int nnz, int source, IndexT *row_offsets, IndexT *column_indices, ScoreT *scores);
-void BCVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices, int num_iters, ScoreT *scores_to_test);
+void BCSolver(Graph &g, int source, ScoreT *scores);
+void BCVerifier(Graph &g, int source, int num_iters, ScoreT *scores_to_test);
+

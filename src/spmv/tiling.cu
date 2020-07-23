@@ -1,15 +1,14 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#include <stdio.h>
-#include <algorithm>
-#define SPMV_VARIANT "tiling"
 #include "spmv.h"
-#include "cuda_launch_config.hpp"
-#include "cutil_subset.h"
 #include "timer.h"
+#include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
+#include <algorithm>
 #define GPU_BLOCKING
 #include "blocking.h"
 //#define ENABLE_WARP
+#define SPMV_VARIANT "tiling"
 
 template<typename T>
 __global__ void initialize(int m, T *sums) {
@@ -74,7 +73,7 @@ __global__ void spmv_warp(int m, const IndexT * Ap, const IndexT * Aj, const Val
 	}
 }
 
-void SpmvSolver(int m, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degree) { 
+void SpmvSolver(int m, int nnz, IndexT *ApT, IndexT *AjT, ValueT *AxT, IndexT *h_Ap, IndexT *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degrees) { 
 	//print_device_info(0);
 	column_blocking(m, h_Ap, h_Aj, h_Ax);
 
@@ -112,7 +111,6 @@ void SpmvSolver(int m, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x,
 	for (int bid = 0; bid < num_subgraphs; bid ++) {
 		//Timer tt;
 		//tt.Start();
-		int nnz = nnzs_of_subgraphs[bid];
 #ifdef ENABLE_WARP
 		spmv_warp<<<nblocks, nthreads>>>(m, d_Ap_blocked[bid], d_Aj_blocked[bid], d_Ax_blocked[bid], d_x, d_y);
 #else

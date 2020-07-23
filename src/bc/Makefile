@@ -8,7 +8,7 @@ SRC=main.cc
 OBJS=omp_base.o linear_lb.o main.o verifier.o
 
 #all: $(OBJS) bc_linear_base bc_linear_lb bc_topo_base bc_topo_lb bc_omp_base
-all: $(OBJS) bc_omp_base bc_linear_lb
+all: $(OBJS) bc_omp_base bc_linear_base bc_topo_base bc_linear_lb bc_topo_lb 
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
@@ -48,12 +48,32 @@ bc_linear_lb: linear_lb.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear_lb.o verifier.o -o $@ $(LIBS)
 	mv $@  $(BIN)
 
+bc_linear_pb: linear_pb.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear_pb.o verifier.o -o $@ $(LIBS)
+	mv $@  $(BIN)
+
 bc_topo_base: topo_base.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo_base.o verifier.o -o $@ $(LIBS)
 	mv $@  $(BIN)
 
 bc_topo_lb: topo_lb.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo_lb.o verifier.o -o $@ $(LIBS)
+	mv $@  $(BIN)
+
+bc_topo_pb: topo_pb.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo_pb.o verifier.o -o $@ $(LIBS)
+	mv $@  $(BIN)
+
+bc_hybrid_base: hybrid_base.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o hybrid_base.o verifier.o -o $@ $(LIBS)
+	mv $@  $(BIN)
+
+bc_hybrid_lb: hybrid_lb.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o hybrid_lb.o verifier.o -o $@ $(LIBS)
+	mv $@  $(BIN)
+
+bc_hybrid_tile: hybrid_tile.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o hybrid_tile.o verifier.o -o $@ $(LIBS)
 	mv $@  $(BIN)
 
 clean:

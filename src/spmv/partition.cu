@@ -1,15 +1,17 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
-#include <stdio.h>
-#include <algorithm>
-#define SPMV_VARIANT "partition"
 #include "spmv.h"
-#include "cuda_launch_config.hpp"
-#include "cutil_subset.h"
 #include "timer.h"
+#include "spmv_util.h"
+#include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
+#include <cub/cub.cuh>
 #define GPU_SEGMENTING
 #include "segmenting.h"
 //#define ENABLE_WARP
+#define SPMV_VARIANT "partition"
+
+typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
 template<typename T>
 __global__ void initialize(int m, T *sums) {
@@ -30,16 +32,109 @@ __device__ __inline__ void st_glb_cs(T value, T *addr) {
 	asm("st.cs.global.f32 [%0], %1;" :: "l"(addr), "f"(value));
 }
 
-__global__ void spmv_base(int m, const IndexT * Ap, const IndexT * Aj, const ValueT * Ax, const ValueT * x, ValueT * partial_sums) {
+__device__ __forceinline__ void expandByCta(int m, const IndexT *Ap, const IndexT *Aj, const ValueT *Ax, const ValueT * x, ValueT *partial_sums, int *processed) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	__shared__ typename BlockReduce::TempStorage temp_storage;
+	__shared__ int owner;
+	__shared__ int row;
+	owner = -1;
+	int size = 0;
+	if(id < m) size = Ap[id+1] - Ap[id];
+	while(true) {
+		if(size > BLOCK_SIZE)
+			owner = threadIdx.x;
+		__syncthreads();
+		if(owner == -1) break;
+		__syncthreads();
+		if(owner == threadIdx.x) {
+			row = id;
+			processed[id] = 1;
+			owner = -1;
+			size = 0;
+		}
+		__syncthreads();
+		int row_begin = Ap[row];
+		int row_end = Ap[row+1];
+		int neighbor_size = row_end - row_begin;
+		int num = ((neighbor_size + blockDim.x - 1) / blockDim.x) * blockDim.x;
+		ValueT sum = 0;
+		for(int i = threadIdx.x; i < num; i += blockDim.x) {
+			int offset = row_begin + i;
+			if(i < neighbor_size) {
+				//sum += Ax[offset] * x[Aj[offset]];
+				sum += Ax[offset] * __ldg(x+Aj[offset]);
+			}
+		}
+		ValueT block_sum = BlockReduce(temp_storage).Sum(sum);
+		if(threadIdx.x == 0) partial_sums[row] = block_sum;
+	}
+}
+
+__device__ __forceinline__ unsigned LaneId() {
+	unsigned ret;
+	asm("mov.u32 %0, %laneid;" : "=r"(ret));
+	return ret;
+}
+
+__device__ __forceinline__ void expandByWarp(int m, const IndexT *Ap, const IndexT *Aj, const ValueT *Ax, const ValueT * x, ValueT *partial_sums, int *processed) {
+	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
+	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
+	unsigned lane_id = LaneId();
+	__shared__ int owner[NUM_WARPS];
+	__shared__ int sh_vertex[NUM_WARPS];
+	__shared__ ScoreT sdata[BLOCK_SIZE + 16];
+	owner[warp_id] = -1;
+	int size = 0;
+	if(id < m && !processed[id]) {
+		size = Ap[id+1] - Ap[id];
+	}
+	//while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
+	while(__any(size) >= WARP_SIZE) {
+		if(size >= WARP_SIZE)
+			owner[warp_id] = lane_id;
+		if(owner[warp_id] == lane_id) {
+			sh_vertex[warp_id] = id;
+			processed[id] = 1;
+			owner[warp_id] = -1;
+			size = 0;
+		}
+		int winner = sh_vertex[warp_id];
+		int row_begin = Ap[winner];
+		int row_end = Ap[winner+1];
+		int neighbor_size = row_end - row_begin;
+		int num = ((neighbor_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+		ScoreT sum = 0;
+		for(int i = lane_id; i < num; i+= WARP_SIZE) {
+			int offset = row_begin + i;
+			if(i < neighbor_size) {
+				//sum += Ax[offset] * x[Aj[offset]];
+				sum += Ax[offset] * __ldg(x+Aj[offset]);
+			}
+		}
+		sdata[threadIdx.x] = sum; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x + 16]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  8]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  4]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  2]; __syncthreads();
+		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; __syncthreads();
+		if(lane_id == 0) partial_sums[winner] += sdata[threadIdx.x];
+	}
+}
+
+__global__ void spmv_base(int m, const IndexT * Ap, const IndexT * Aj, const ValueT * Ax, const ValueT * x, ValueT * partial_sums, int *processed) {
+	expandByCta(m, Ap, Aj, Ax, x, partial_sums, processed);
+	expandByWarp(m, Ap, Aj, Ax, x, partial_sums, processed);
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
-	if(row < m) {
+	if(row < m && !processed[row]) {
 		int row_begin = Ap[row];
 		int row_end = Ap[row+1];
 		ValueT sum = 0;
-		for (int offset = row_begin; offset < row_end; offset ++){
+		for (int offset = row_begin; offset < row_end; offset ++) {
+			int col = Aj[offset];
+			//int col = __ldg(Aj+offset);
 			//sum += Ax[offset] * x[Aj[offset]];
-			sum += Ax[offset] * __ldg(x+Aj[offset]);
-			//sum += ld_glb_cs<ValueT>(Ax+offset) * __ldg(x+Aj[offset]);
+			//sum += Ax[offset] * __ldg(x+Aj[offset]);
+			sum += ld_glb_cs<ValueT>(Ax+offset) * __ldg(x+col);
 		}
 		//partial_sums[row] = sum;
 		st_glb_cs<ValueT>(sum, partial_sums+row);
@@ -106,10 +201,13 @@ __global__ void merge_cta(int m, int num_subgraphs, IndexT** range_indices, Inde
 	}
 }
 
-void SpmvSolver(int m, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degree) { 
+void SpmvSolver(int m, int nnz, IndexT *ApT, IndexT *AjT, ValueT *AxT, IndexT *h_Ap, IndexT *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degrees) { 
 	//print_device_info(0);
 	segmenting(m, h_Ap, h_Aj, h_Ax);
-
+	ValueT *y_copy = (ValueT *)malloc(m * sizeof(ValueT));
+	for(int i = 0; i < m; i ++) y_copy[i] = h_y[i];
+	SpmvSerial(m, nnz, h_Ap, h_Aj, h_Ax, h_x, y_copy);
+	
 	ValueT *d_x, *d_y;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * m));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueT) * m));
@@ -148,13 +246,12 @@ void SpmvSolver(int m, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x,
 	CUDA_SAFE_CALL(cudaMemcpy(d_range_indices_ptr, d_range_indices, num_subgraphs * sizeof(IndexT*), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_idx_map_ptr, d_idx_map, num_subgraphs * sizeof(IndexT*), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_partial_sums_ptr, d_partial_sums, num_subgraphs * sizeof(ValueT*), cudaMemcpyHostToDevice));
-	bool *d_processed;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_processed, m * sizeof(bool)));
-	CUDA_SAFE_CALL(cudaMemset(d_processed, 0, m * sizeof(bool)));
+	int *d_processed;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_processed, m * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemset(d_processed, 0, m * sizeof(int)));
 
 	const int nthreads = BLOCK_SIZE;
 	int mblocks = (m - 1) / nthreads + 1;
-	initialize<bool> <<<mblocks, nthreads>>> (m, d_processed);
 	for (int bid = 0; bid < num_subgraphs; bid ++) {
 		int msub = ms_of_subgraphs[bid];
 		mblocks = (msub - 1) / nthreads + 1;
@@ -179,8 +276,9 @@ void SpmvSolver(int m, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x,
 		nblocks = std::min(max_blocks, DIVIDE_INTO(msub, WARPS_PER_BLOCK));
 		spmv_warp<<<nblocks, nthreads>>>(msub, d_Ap_blocked[bid], d_Aj_blocked[bid], d_Ax_blocked[bid], d_x, d_partial_sums[bid]);
 #else
+		CUDA_SAFE_CALL(cudaMemset(d_processed, 0, m * sizeof(int)));
 		int bblocks = (msub - 1) / nthreads + 1;
-		spmv_base<<<bblocks, nthreads>>>(msub, d_Ap_blocked[bid], d_Aj_blocked[bid], d_Ax_blocked[bid], d_x, d_partial_sums[bid]);
+		spmv_base<<<bblocks, nthreads>>>(msub, d_Ap_blocked[bid], d_Aj_blocked[bid], d_Ax_blocked[bid], d_x, d_partial_sums[bid], d_processed);
 #endif
 		//CUDA_SAFE_CALL(cudaDeviceSynchronize());
 		//tt.Stop();
@@ -192,8 +290,14 @@ void SpmvSolver(int m, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x,
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 
-	printf("\truntime [%s] = %f ms.\n", SPMV_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueT) * m, cudaMemcpyDeviceToHost));
+	double time = t.Millisecs();
+	float gbyte = bytes_per_spmv(m, nnz);
+	float GFLOPs = (time == 0) ? 0 : (2 * nnz / time) / 1e6;
+	float GBYTEs = (time == 0) ? 0 : (gbyte / time) / 1e6;
+	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, m * sizeof(ValueT), cudaMemcpyDeviceToHost));
+	double error = l2_error(m, y_copy, h_y);
+	printf("\truntime [%s] = %.4f ms ( %5.2f GFLOP/s %5.1f GB/s) [L2 error %f]\n", SPMV_VARIANT, time, GFLOPs, GBYTEs, error);
+
 	CUDA_SAFE_CALL(cudaFree(d_x));
 	CUDA_SAFE_CALL(cudaFree(d_y));
 }

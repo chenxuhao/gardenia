@@ -1,16 +1,13 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
-#include <stdio.h>
+// Copyright 2020
+// Authors: Xuhao Chen <cxh@mit.edu>
+#include "spmv.h"
+#include "timer.h"
+#include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
 #include <algorithm>
 #define SPMV_VARIANT "vector"
-#include "spmv.h"
-#include "cuda_launch_config.hpp"
-#include "cutil_subset.h"
-#include "timer.h"
 
 // CSR SpMV kernels based on a vector model (one vector per row)
-//
-// spmv_csr_vector_device
 //   Each row of the CSR matrix is assigned to a vector.  The vector computes
 //   y[i] = A[i,:] * x, i.e. the dot product of the i-th row of A with 
 //   the x vector, in parallel.  This division of work implies that 
@@ -27,7 +24,9 @@ void bind_x(const float * x) { CUDA_SAFE_CALL(cudaBindTexture(NULL, tex_x, x)); 
 void unbind_x(const float * x) { CUDA_SAFE_CALL(cudaUnbindTexture(tex_x)); }
 
 template <int VECTORS_PER_BLOCK, int THREADS_PER_VECTOR>
-__global__ void spmv_vector_kernel(int num_rows, const int * Ap,  const int * Aj, const ValueT * Ax, const ValueT * x, ValueT * y) {
+__global__ void spmv_vector_kernel(int m, const uint64_t* Ap,
+                                   const VertexId * Aj, const ValueT * Ax, 
+                                   const ValueT * x, ValueT * y) {
 	__shared__ ValueT sdata[VECTORS_PER_BLOCK * THREADS_PER_VECTOR + THREADS_PER_VECTOR / 2]; // padded to avoid reduction ifs
 	__shared__ int ptrs[VECTORS_PER_BLOCK][2];
 
@@ -37,17 +36,17 @@ __global__ void spmv_vector_kernel(int num_rows, const int * Ap,  const int * Aj
 	const int vector_lane = threadIdx.x / THREADS_PER_VECTOR;     // vector index within the CTA
 	const int num_vectors = VECTORS_PER_BLOCK * gridDim.x;        // total number of active vectors
 
-	for(int row = vector_id; row < num_rows; row += num_vectors) {
+	for(auto row = vector_id; row < m; row += num_vectors) {
 		// use two threads to fetch Ap[row] and Ap[row+1]
 		// this is considerably faster than the straightforward version
 		if(thread_lane < 2)
 			ptrs[vector_lane][thread_lane] = Ap[row + thread_lane];
-		const int row_start = ptrs[vector_lane][0];                   //same as: row_start = Ap[row];
-		const int row_end   = ptrs[vector_lane][1];                   //same as: row_end   = Ap[row+1];
+		auto row_start = ptrs[vector_lane][0];                   //same as: row_start = Ap[row];
+		auto row_end   = ptrs[vector_lane][1];                   //same as: row_end   = Ap[row+1];
 
 		// compute local sum
 		ValueT sum = 0;
-		for(int offset = row_start + thread_lane; offset < row_end; offset += THREADS_PER_VECTOR)
+		for(auto offset = row_start + thread_lane; offset < row_end; offset += THREADS_PER_VECTOR)
 			//sum += Ax[offset] * x[Aj[offset]];
 			sum += Ax[offset] * tex1Dfetch(tex_x, Aj[offset]);
 
@@ -67,52 +66,55 @@ __global__ void spmv_vector_kernel(int num_rows, const int * Ap,  const int * Aj
 
 size_t nSM;
 template <int THREADS_PER_VECTOR>
-void spmv_vector(int num_rows, int *d_Ap, int *d_Aj, ValueT *d_Ax, ValueT *d_x, ValueT *d_y) {
+void spmv_vector(int m, uint64_t *d_Ap, VertexId *d_Aj, ValueT *d_Ax, ValueT *d_x, ValueT *d_y) {
 	const int VECTORS_PER_BLOCK = BLOCK_SIZE / THREADS_PER_VECTOR;
 	//const size_t max_blocks_per_SM = maximum_residency(spmv_vector_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR>, BLOCK_SIZE, 0);
 	//const size_t max_blocks = max_blocks_per_SM * nSM;
-	const int nblocks = std::min(MAX_BLOCKS, DIVIDE_INTO(num_rows, VECTORS_PER_BLOCK));
-	//printf("Launching CUDA SpMV solver (%ld CTAs, %d threads/CTA) ...\n", nblocks, BLOCK_SIZE);
-	//printf("vector size: %d\n", THREADS_PER_VECTOR);
-	spmv_vector_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR> <<<nblocks, BLOCK_SIZE>>>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);
+	const int nblocks = std::min(MAX_BLOCKS, DIVIDE_INTO(m, VECTORS_PER_BLOCK));
+	spmv_vector_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR> <<<nblocks, BLOCK_SIZE>>>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
 	CudaTest("solving failed");
 }
 
-void SpmvSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, ValueT *h_Ax, ValueT *h_x, ValueT *h_y, int *degree) { 
+void SpmvSolver(Graph &g, const ValueT* h_Ax, const ValueT *h_x, ValueT *h_y) {
+  auto m = g.V();
+  auto nnz = g.E();
+	auto h_Ap = g.in_rowptr();
+	auto h_Aj = g.in_colidx();	
 	//print_device_info(0);
-	int *d_Ap, *d_Aj;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (num_rows + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	uint64_t *d_Ap;
+  VertexId *d_Aj;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (m + 1) * sizeof(uint64_t)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(VertexId)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
 	ValueT *d_Ax, *d_x, *d_y;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueT) * nnz));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * num_rows));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueT) * num_rows));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * m));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueT) * m));
 	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, m * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, m * sizeof(ValueT), cudaMemcpyHostToDevice));
 
 	cudaDeviceProp deviceProp;
 	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
 	nSM = deviceProp.multiProcessorCount;
-	int nnz_per_row = nnz / num_rows;
+	int nnz_per_row = nnz / m;
 	printf("Launching CUDA SpMV solver (%d threads/CTA) ...\n", BLOCK_SIZE);
 
 	Timer t;
 	t.Start();
 	bind_x(d_x);
-	if (nnz_per_row <=  2) spmv_vector<2>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	else if (nnz_per_row <=  4) spmv_vector<4>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	else if (nnz_per_row <=  8) spmv_vector<8>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	else if (nnz_per_row <= 16) spmv_vector<16>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	else spmv_vector<32>(num_rows, d_Ap, d_Aj, d_Ax, d_x, d_y);
+	if (nnz_per_row <=  2) spmv_vector<2>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+	else if (nnz_per_row <=  4) spmv_vector<4>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+	else if (nnz_per_row <=  8) spmv_vector<8>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+	else if (nnz_per_row <= 16) spmv_vector<16>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+	else spmv_vector<32>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
 	unbind_x(d_x);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 
 	printf("\truntime [%s] = %f ms.\n", SPMV_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueT) * num_rows, cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueT) * m, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_Ap));
 	CUDA_SAFE_CALL(cudaFree(d_Aj));
 	CUDA_SAFE_CALL(cudaFree(d_Ax));

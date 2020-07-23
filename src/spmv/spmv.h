@@ -1,6 +1,7 @@
-// Copyright 2016, National University of Defense Technology
-// Contact: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Contact: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
+#include "csr_graph.h"
 /*
 GARDENIA Benchmark Suite
 Kernel: Sparse Matrix-Vector Multiplication (SpMV)
@@ -25,5 +26,5 @@ spmv_warp: one warp per row (vertex) using CUDA
 spmv_vector: one vector per row (vertex) using CUDA
 */
 
-void SpmvSolver(int m, int nnz, IndexT *Ap, IndexT *Aj, ValueT *Ax, ValueT *x, ValueT *y, int *degree);
-void SpmvVerifier(int m, int nnz, IndexT *Ap, IndexT *Aj, ValueT *Ax, ValueT *x, ValueT *y, ValueT *test_y);
+void SpmvSolver(Graph &g, const ValueT* Ax, const ValueT *x, ValueT *y);
+void SpmvVerifier(Graph &g, const ValueT* Ax, const ValueT *x, ValueT *y, ValueT *test_y);
