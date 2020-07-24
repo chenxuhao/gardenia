@@ -4,7 +4,10 @@
 #include "timer.h"
 #define SYMGS_VARIANT "omp_base"
 
-void gauss_seidel(IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, int row_start, int row_stop, int row_step) {
+void gauss_seidel(uint64_t *Ap, IndexT *Aj, 
+                  int *indices, ValueT *Ax, 
+                  ValueT *x, ValueT *b, 
+                  int row_start, int row_stop, int row_step) {
 	#pragma omp parallel for
 	for (int i = row_start; i < row_stop; i += row_step) {
 		int inew = indices[i];
@@ -21,20 +24,23 @@ void gauss_seidel(IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, V
 	}
 }
 
-void SymGSSolver(int num_rows, int nnz, IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, std::vector<int> color_offsets) {
-	int num_threads = 1;
-	#pragma omp parallel
-	{
-		num_threads = omp_get_num_threads();
-	}
-	printf("Launching OpenMP SymGS solver (%d threads) ...\n", num_threads);
-	Timer t;
-	t.Start();
-	for(size_t i = 0; i < color_offsets.size()-1; i++)
-		gauss_seidel(Ap, Aj, indices, Ax, x, b, color_offsets[i], color_offsets[i+1], 1);
-	for(size_t i = color_offsets.size()-1; i > 0; i--)
-		gauss_seidel(Ap, Aj, indices, Ax, x, b, color_offsets[i-1], color_offsets[i], 1);
-	t.Stop();
-	printf("\truntime [%s] = %f ms.\n", SYMGS_VARIANT, t.Millisecs());
-	return;
+void SymGSSolver(Graph &g, int *indices, ValueT *Ax, ValueT *x, ValueT *b, std::vector<int> color_offsets) {
+  auto Ap = g.in_rowptr();
+  auto Aj = g.in_colidx();
+  int num_threads = 1;
+  #pragma omp parallel
+  {
+    num_threads = omp_get_num_threads();
+  }
+  printf("Launching OpenMP SymGS solver (%d threads) ...\n", num_threads);
+  Timer t;
+  t.Start();
+  for(size_t i = 0; i < color_offsets.size()-1; i++)
+    gauss_seidel(Ap, Aj, indices, Ax, x, b, color_offsets[i], color_offsets[i+1], 1);
+  for(size_t i = color_offsets.size()-1; i > 0; i--)
+    gauss_seidel(Ap, Aj, indices, Ax, x, b, color_offsets[i-1], color_offsets[i], 1);
+  t.Stop();
+  printf("\truntime [%s] = %f ms.\n", SYMGS_VARIANT, t.Millisecs());
+  return;
 }
+

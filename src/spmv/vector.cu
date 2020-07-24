@@ -78,47 +78,48 @@ void spmv_vector(int m, uint64_t *d_Ap, VertexId *d_Aj, ValueT *d_Ax, ValueT *d_
 void SpmvSolver(Graph &g, const ValueT* h_Ax, const ValueT *h_x, ValueT *h_y) {
   auto m = g.V();
   auto nnz = g.E();
-	auto h_Ap = g.in_rowptr();
-	auto h_Aj = g.in_colidx();	
-	//print_device_info(0);
-	uint64_t *d_Ap;
+  auto h_Ap = g.in_rowptr();
+  auto h_Aj = g.in_colidx();	
+  //print_device_info(0);
+  uint64_t *d_Ap;
   VertexId *d_Aj;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (m + 1) * sizeof(uint64_t)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(VertexId)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
-	ValueT *d_Ax, *d_x, *d_y;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueT) * nnz));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * m));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueT) * m));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, m * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, m * sizeof(ValueT), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (m + 1) * sizeof(uint64_t)));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(VertexId)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
 
-	cudaDeviceProp deviceProp;
-	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
-	nSM = deviceProp.multiProcessorCount;
-	int nnz_per_row = nnz / m;
-	printf("Launching CUDA SpMV solver (%d threads/CTA) ...\n", BLOCK_SIZE);
+  ValueT *d_Ax, *d_x, *d_y;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueT) * nnz));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * m));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_y, sizeof(ValueT) * m));
+  CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueT), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, m * sizeof(ValueT), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_y, h_y, m * sizeof(ValueT), cudaMemcpyHostToDevice));
 
-	Timer t;
-	t.Start();
-	bind_x(d_x);
-	if (nnz_per_row <=  2) spmv_vector<2>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	else if (nnz_per_row <=  4) spmv_vector<4>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	else if (nnz_per_row <=  8) spmv_vector<8>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	else if (nnz_per_row <= 16) spmv_vector<16>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	else spmv_vector<32>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
-	unbind_x(d_x);
-	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	t.Stop();
+  cudaDeviceProp deviceProp;
+  CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
+  nSM = deviceProp.multiProcessorCount;
+  int nnz_per_row = nnz / m;
+  printf("Launching CUDA SpMV solver (%d threads/CTA) ...\n", BLOCK_SIZE);
 
-	printf("\truntime [%s] = %f ms.\n", SPMV_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueT) * m, cudaMemcpyDeviceToHost));
-	CUDA_SAFE_CALL(cudaFree(d_Ap));
-	CUDA_SAFE_CALL(cudaFree(d_Aj));
-	CUDA_SAFE_CALL(cudaFree(d_Ax));
-	CUDA_SAFE_CALL(cudaFree(d_x));
-	CUDA_SAFE_CALL(cudaFree(d_y));
+  Timer t;
+  t.Start();
+  bind_x(d_x);
+  if (nnz_per_row <=  2) spmv_vector<2>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+  else if (nnz_per_row <=  4) spmv_vector<4>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+  else if (nnz_per_row <=  8) spmv_vector<8>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+  else if (nnz_per_row <= 16) spmv_vector<16>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+  else spmv_vector<32>(m, d_Ap, d_Aj, d_Ax, d_x, d_y);
+  unbind_x(d_x);
+  CUDA_SAFE_CALL(cudaDeviceSynchronize());
+  t.Stop();
+
+  printf("\truntime [%s] = %f ms.\n", SPMV_VARIANT, t.Millisecs());
+  CUDA_SAFE_CALL(cudaMemcpy(h_y, d_y, sizeof(ValueT) * m, cudaMemcpyDeviceToHost));
+  CUDA_SAFE_CALL(cudaFree(d_Ap));
+  CUDA_SAFE_CALL(cudaFree(d_Aj));
+  CUDA_SAFE_CALL(cudaFree(d_Ax));
+  CUDA_SAFE_CALL(cudaFree(d_x));
+  CUDA_SAFE_CALL(cudaFree(d_y));
 }
 

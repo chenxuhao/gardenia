@@ -47,7 +47,10 @@ bool check_almost_equal(const T * A, const T * B, const size_t N) {
 	return is_almost_equal;
 }
 
-void gs_serial(IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, int row_start, int row_stop, int row_step) {
+void gs_serial(uint64_t *Ap, IndexT *Aj, 
+               int *indices, ValueT *Ax, 
+               ValueT *x, ValueT *b, 
+               int row_start, int row_stop, int row_step) {
 	//printf("Solving, num_rows=%d\n", row_stop-row_start);
 	for (int i = row_start; i != row_stop; i += row_step) {
 		int inew = indices[i];
@@ -64,26 +67,29 @@ void gs_serial(IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, Valu
 	}
 }
 
-void SymGSVerifier(int num_rows, IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *test_x, ValueT *x_host, ValueT *b, std::vector<int> color_offsets) {
-	printf("Verifying...\n");
-	ValueT *x = (ValueT *)malloc(num_rows * sizeof(ValueT));
-	for(int i = 0; i < num_rows; i++)
-		x[i] = x_host[i];
-	Timer t;
-	t.Start();
-	for(size_t i = 0; i < color_offsets.size()-1; i++)
-		gs_serial(Ap, Aj, indices, Ax, x, b, color_offsets[i], color_offsets[i+1], 1);
-	for(size_t i = color_offsets.size()-1; i > 0; i--)
-		gs_serial(Ap, Aj, indices, Ax, x, b, color_offsets[i-1], color_offsets[i], 1);
-	t.Stop();
-	printf("\truntime [verify] = %f ms.\n", t.Millisecs());
+void SymGSVerifier(Graph &g, int *indices, ValueT *Ax, ValueT *test_x, ValueT *x_host, ValueT *b, std::vector<int> color_offsets) {
+  printf("Verifying...\n");
+  auto num_rows = g.V();
+  auto Ap = g.in_rowptr();
+  auto Aj = g.in_colidx();
+  ValueT *x = (ValueT *)malloc(num_rows * sizeof(ValueT));
+  for(int i = 0; i < num_rows; i++)
+    x[i] = x_host[i];
+  Timer t;
+  t.Start();
+  for(size_t i = 0; i < color_offsets.size()-1; i++)
+    gs_serial(Ap, Aj, indices, Ax, x, b, color_offsets[i], color_offsets[i+1], 1);
+  for(size_t i = color_offsets.size()-1; i > 0; i--)
+    gs_serial(Ap, Aj, indices, Ax, x, b, color_offsets[i-1], color_offsets[i], 1);
+  t.Stop();
+  printf("\truntime [verify] = %f ms.\n", t.Millisecs());
 
-	//for(int i = 0; i <10; i ++) printf("x_test[%d]=%f, x_ref[%d]=%f\n", i, test_x[i], i, x[i]);
-	ValueT max_error = maximum_relative_error<ValueT>(test_x, x, num_rows);
-	printf("\t[max error %9f]\n", max_error);
-	//if ( max_error > 5 * std::sqrt( std::numeric_limits<ValueT>::epsilon() ) )
-	if(!check_almost_equal<ValueT>(test_x, x, num_rows))
-		printf("POSSIBLE FAILURE\n");
-	else
-		printf("Correct\n");
+  //for(int i = 0; i <10; i ++) printf("x_test[%d]=%f, x_ref[%d]=%f\n", i, test_x[i], i, x[i]);
+  ValueT max_error = maximum_relative_error<ValueT>(test_x, x, num_rows);
+  printf("\t[max error %9f]\n", max_error);
+  //if ( max_error > 5 * std::sqrt( std::numeric_limits<ValueT>::epsilon() ) )
+  if(!check_almost_equal<ValueT>(test_x, x, num_rows))
+    printf("POSSIBLE FAILURE\n");
+  else
+    printf("Correct\n");
 }

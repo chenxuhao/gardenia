@@ -1,6 +1,5 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu> and Pingfan Li <lipingfan@163.com>
-#define VC_VARIANT "linear_bitset"
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include <cub/cub.cuh>
 #include "vc.h"
 #include "timer.h"
@@ -40,7 +39,9 @@ __device__ __forceinline__ void assignColor(unsigned int *forbiddenColors, int *
 //*/
 }
 
-__global__ void first_fit(int m, int *row_offsets, int *column_indices, Worklist2 inwl, int *colors) {
+__global__ void first_fit(int m, uint64_t *row_offsets, 
+                          int *column_indices, 
+                          Worklist2 inwl, int *colors) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned forbiddenColors[MAXCOLOR/32+1];
 	int vertex;
@@ -58,7 +59,11 @@ __global__ void first_fit(int m, int *row_offsets, int *column_indices, Worklist
 	}
 }
 
-__global__ void conflict_resolve(int m, int *row_offsets, int *column_indices, Worklist2 inwl, Worklist2 outwl, int *colors) {
+__global__ void conflict_resolve(int m, uint64_t *row_offsets, 
+                                 int *column_indices, 
+                                 Worklist2 inwl, 
+                                 Worklist2 outwl, 
+                                 int *colors) {
 	//typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
@@ -79,17 +84,25 @@ __global__ void conflict_resolve(int m, int *row_offsets, int *column_indices, W
 	if(conflicted) outwl.push(vertex);
 }
 
-int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
-	int num_colors = 0, iter = 0;
-	int *d_row_offsets, *d_column_indices, *d_colors;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
+int VCSolver(Graph &g, int *colors) {
+  auto m = g.V();
+  auto nnz = g.E();
+  auto h_row_offsets = g.out_rowptr();
+  auto h_column_indices = g.out_colidx();	
+  //print_device_info(0);
+  uint64_t *d_row_offsets;
+  VertexId *d_column_indices;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+ 
+	int *d_colors;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_colors, m * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_colors, colors, m * sizeof(int), cudaMemcpyHostToDevice));
 
 	int nitems = m;
+	int num_colors = 0, iter = 0;
 	Worklist2 inwl(m), outwl(m);
 	Worklist2 *inwlptr = &inwl, *outwlptr = &outwl;
 	for(int i = 0; i < m; i ++) inwl.h_queue[i] = i;
@@ -121,7 +134,7 @@ int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors)
 		num_colors = max(num_colors, colors[n]);
 	num_colors ++;
     printf("\titerations = %d.\n", iter);
-    printf("\truntime[%s] = %f ms, num_colors = %d.\n", VC_VARIANT, t.Millisecs(), num_colors);
+    printf("\truntime[cuda_linear_bitset] = %f ms, num_colors = %d.\n", t.Millisecs(), num_colors);
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_colors));

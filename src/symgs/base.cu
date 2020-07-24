@@ -7,9 +7,11 @@
 #include "cutil_subset.h"
 #include "timer.h"
 
-__global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueT * Ax, ValueT * x, ValueT * b) {
+__global__ void gs_kernel(int m, uint64_t * Ap, int * Aj, 
+                          int* indices, ValueT * Ax, 
+                          ValueT * x, ValueT * b) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	if(id < num_rows) {
+	if(id < m) {
 		int inew = indices[id];
 		int row_begin = Ap[inew];
 		int row_end = Ap[inew+1];
@@ -24,29 +26,41 @@ __global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueT
 	}
 }
 
-void gauss_seidel(int *d_Ap, int *d_Aj, int *d_indices, ValueT *d_Ax, ValueT *d_x, ValueT *d_b, int row_start, int row_stop, int row_step) {
-	int num_rows = row_stop - row_start;
-	const size_t NUM_BLOCKS = (num_rows - 1) / BLOCK_SIZE + 1;
-	//printf("num_rows=%d, nblocks=%ld, nthreads=%ld\n", num_rows, NUM_BLOCKS, BLOCK_SIZE);
-	gs_kernel<<<NUM_BLOCKS, BLOCK_SIZE>>>(num_rows, d_Ap, d_Aj, d_indices+row_start, d_Ax, d_x, d_b);
+void gauss_seidel(uint64_t *d_Ap, int *d_Aj, 
+                  int *d_indices, ValueT *d_Ax, 
+                  ValueT *d_x, ValueT *d_b, 
+                  int row_start, int row_stop, int row_step) {
+	int m = row_stop - row_start;
+	const size_t NUM_BLOCKS = (m - 1) / BLOCK_SIZE + 1;
+	//printf("m=%d, nblocks=%ld, nthreads=%ld\n", m, NUM_BLOCKS, BLOCK_SIZE);
+	gs_kernel<<<NUM_BLOCKS, BLOCK_SIZE>>>(m, d_Ap, d_Aj, d_indices+row_start, d_Ax, d_x, d_b);
 }
 
-void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, ValueT *h_Ax, ValueT *h_x, ValueT *h_b, std::vector<int> color_offsets) {
-	//print_device_info(0);
-	int *d_Ap, *d_Aj, *d_indices;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (num_rows + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_indices, num_rows * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_indices, h_indices, num_rows * sizeof(int), cudaMemcpyHostToDevice));
+void SymGSSolver(Graph &g, int *h_indices, 
+                 ValueT *h_Ax, ValueT *h_x, 
+                 ValueT *h_b, std::vector<int> color_offsets) {
+  auto m = g.V();
+  auto nnz = g.E();
+  auto h_Ap = g.in_rowptr();
+  auto h_Aj = g.in_colidx();	
+  //print_device_info(0);
+  uint64_t *d_Ap;
+  VertexId *d_Aj;
+	int *d_indices;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (m + 1) * sizeof(uint64_t)));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(VertexId)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_indices, m * sizeof(int)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_indices, h_indices, m * sizeof(int), cudaMemcpyHostToDevice));
+
 	ValueT *d_Ax, *d_x, *d_b;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueT) * nnz));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * num_rows));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_b, sizeof(ValueT) * num_rows));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * m));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_b, sizeof(ValueT) * m));
 	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_b, h_b, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, m * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_b, h_b, m * sizeof(ValueT), cudaMemcpyHostToDevice));
 	printf("Launching CUDA SymGS solver (%d threads/CTA) ...\n", BLOCK_SIZE);
 
 	Timer t;
@@ -61,7 +75,7 @@ void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, Va
 	t.Stop();
 
 	printf("\truntime [%s] = %f ms.\n", SYMGS_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_x, d_x, sizeof(ValueT) * num_rows, cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(h_x, d_x, sizeof(ValueT) * m, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_Ap));
 	CUDA_SAFE_CALL(cudaFree(d_Aj));
 	CUDA_SAFE_CALL(cudaFree(d_indices));

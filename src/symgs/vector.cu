@@ -1,14 +1,15 @@
-// Copyright 2016, National University of Defense Technology
-// Author: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020
+// Author: Xuhao Chen <cxh@mit.edu>
 #include <stdio.h>
-#define SYMGS_VARIANT "vector"
 #include "symgs.h"
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include "timer.h"
 
 template <int VECTORS_PER_BLOCK, int THREADS_PER_VECTOR>
-__global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueT * Ax, ValueT * x, ValueT * b) {
+__global__ void gs_kernel(int m, uint64_t * Ap, int * Aj, 
+                          int* indices, ValueT * Ax, 
+                          ValueT * x, ValueT * b) {
 	__shared__ ValueT sdiags[VECTORS_PER_BLOCK];
 	__shared__ ValueT sdata[VECTORS_PER_BLOCK * THREADS_PER_VECTOR + THREADS_PER_VECTOR / 2];  // padded to avoid reduction conditionals
 	__shared__ IndexT ptrs[VECTORS_PER_BLOCK][2];
@@ -21,7 +22,7 @@ __global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueT
 	const IndexT vector_lane = threadIdx.x /  THREADS_PER_VECTOR;               // vector index within the block
 	const IndexT num_vectors = VECTORS_PER_BLOCK * gridDim.x;                   // total number of active vectors
 
-	for(IndexT index = vector_id; index < num_rows; index += num_vectors)
+	for(IndexT index = vector_id; index < m; index += num_vectors)
 	{
 		if(thread_lane == 0) sdiags[vector_lane] = 0; __syncthreads();
 		IndexT row = indices[index];
@@ -85,18 +86,23 @@ __global__ void gs_kernel(int num_rows, int * Ap, int * Aj, int* indices, ValueT
 }
 size_t nSM;
 template <int THREADS_PER_VECTOR>
-void gs_gpu(int *d_Ap, int *d_Aj, int *d_indices, ValueT *d_Ax, ValueT *d_x, ValueT *d_b, int row_start, int row_stop) {
-	int num_rows = row_stop - row_start;
+void gs_gpu(uint64_t *d_Ap, int *d_Aj, 
+            int *d_indices, ValueT *d_Ax, 
+            ValueT *d_x, ValueT *d_b, 
+            int row_start, int row_stop) {
+	int m = row_stop - row_start;
 	const int VECTORS_PER_BLOCK = BLOCK_SIZE / THREADS_PER_VECTOR;
 	//const size_t max_blocks_per_SM = maximum_residency(gs_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR>, BLOCK_SIZE, 0);
 	//const size_t max_blocks = max_blocks_per_SM * nSM;
-	const int nblocks = std::min(MAX_BLOCKS, DIVIDE_INTO(num_rows, VECTORS_PER_BLOCK));
-	//printf("num_rows=%d, nblocks=%d, nthreads=%d, vector_size=%d\n", num_rows, nblocks, BLOCK_SIZE, THREADS_PER_VECTOR);
-	gs_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR> <<<nblocks, BLOCK_SIZE>>>(num_rows, d_Ap, d_Aj, d_indices+row_start, d_Ax, d_x, d_b);
+	const int nblocks = std::min(MAX_BLOCKS, DIVIDE_INTO(m, VECTORS_PER_BLOCK));
+	//printf("m=%d, nblocks=%d, nthreads=%d, vector_size=%d\n", m, nblocks, BLOCK_SIZE, THREADS_PER_VECTOR);
+	gs_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR> <<<nblocks, BLOCK_SIZE>>>(m, d_Ap, d_Aj, d_indices+row_start, d_Ax, d_x, d_b);
 }
 
-void gauss_seidel(int num_rows, int nnz, int *d_Ap, int *d_Aj, int *d_indices, ValueT *d_Ax, ValueT *d_x, ValueT *d_b, int row_start, int row_stop, int row_step) {
-	int nnz_per_row = nnz / num_rows;
+void gauss_seidel(int m, int nnz, uint64_t *d_Ap, int *d_Aj, 
+                  int *d_indices, ValueT *d_Ax, ValueT *d_x, 
+                  ValueT *d_b, int row_start, int row_stop, int row_step) {
+	int nnz_per_row = nnz / m;
 	if (nnz_per_row <=  2) gs_gpu<2>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
 	else if (nnz_per_row <=  4) gs_gpu<4>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
 	else if (nnz_per_row <=  8) gs_gpu<8>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
@@ -104,22 +110,31 @@ void gauss_seidel(int num_rows, int nnz, int *d_Ap, int *d_Aj, int *d_indices, V
 	else gs_gpu<32>(d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, row_start, row_stop);
 }
 
-void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, ValueT *h_Ax, ValueT *h_x, ValueT *h_b, std::vector<int> color_offsets) {
-	//print_device_info(0);
-	int *d_Ap, *d_Aj, *d_indices;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (num_rows + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_indices, num_rows * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_indices, h_indices, num_rows * sizeof(int), cudaMemcpyHostToDevice));
+void SymGSSolver(Graph &g, int *h_indices, 
+                 ValueT *h_Ax, ValueT *h_x, 
+                 ValueT *h_b, std::vector<int> color_offsets) {
+  auto m = g.V();
+  auto nnz = g.E();
+  auto h_Ap = g.in_rowptr();
+  auto h_Aj = g.in_colidx();	
+  //print_device_info(0);
+  uint64_t *d_Ap;
+  VertexId *d_Aj;
+	int *d_indices;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ap, (m + 1) * sizeof(uint64_t)));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_Aj, nnz * sizeof(VertexId)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_indices, m * sizeof(int)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_Ap, h_Ap, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_Aj, h_Aj, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_indices, h_indices, m * sizeof(int), cudaMemcpyHostToDevice));
+
 	ValueT *d_Ax, *d_x, *d_b;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_Ax, sizeof(ValueT) * nnz));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * num_rows));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_b, sizeof(ValueT) * num_rows));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_x, sizeof(ValueT) * m));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_b, sizeof(ValueT) * m));
 	CUDA_SAFE_CALL(cudaMemcpy(d_Ax, h_Ax, nnz * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_b, h_b, num_rows * sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_x, h_x, m* sizeof(ValueT), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_b, h_b, m* sizeof(ValueT), cudaMemcpyHostToDevice));
 	cudaDeviceProp deviceProp;
 	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
 	nSM = deviceProp.multiProcessorCount;
@@ -129,15 +144,15 @@ void SymGSSolver(int num_rows, int nnz, int *h_Ap, int *h_Aj, int *h_indices, Va
 	t.Start();
 	//printf("Forward\n");
 	for(size_t i = 0; i < color_offsets.size()-1; i++)
-		gauss_seidel(num_rows, nnz, d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, color_offsets[i], color_offsets[i+1], 1);
+		gauss_seidel(m, nnz, d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, color_offsets[i], color_offsets[i+1], 1);
 	//printf("Backward\n");
 	for(size_t i = color_offsets.size()-1; i > 0; i--)
-		gauss_seidel(num_rows, nnz, d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, color_offsets[i-1], color_offsets[i], 1);
+		gauss_seidel(m, nnz, d_Ap, d_Aj, d_indices, d_Ax, d_x, d_b, color_offsets[i-1], color_offsets[i], 1);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 
-	printf("\truntime [%s] = %f ms.\n", SYMGS_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_x, d_x, sizeof(ValueT) * num_rows, cudaMemcpyDeviceToHost));
+	printf("\truntime [cuda_vector] = %f ms.\n", t.Millisecs());
+	CUDA_SAFE_CALL(cudaMemcpy(h_x, d_x, sizeof(ValueT) * m, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_Ap));
 	CUDA_SAFE_CALL(cudaFree(d_Aj));
 	CUDA_SAFE_CALL(cudaFree(d_indices));

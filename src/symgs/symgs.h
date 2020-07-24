@@ -1,6 +1,7 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
+#include "csr_graph.h"
 #include <vector>
 /*
 GARDENIA Benchmark Suite
@@ -26,5 +27,5 @@ symgs_warp:   one warp per row (vertex) using CUDA
 symgs_vector: one vector per row (vertex) using CUDA
 */
 
-void SymGSSolver(int m, int nnz, IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *x, ValueT *b, std::vector<int> color_offsets);
-void SymGSVerifier(int num_rows, IndexT *Ap, IndexT *Aj, int *indices, ValueT *Ax, ValueT *test_x, ValueT *x_host, ValueT *b, std::vector<int> color_offsets);
+void SymGSSolver(Graph &g, int *indices, ValueT *Ax, ValueT *x, ValueT *b, std::vector<int> color_offsets);
+void SymGSVerifier(Graph &g, int *indices, ValueT *Ax, ValueT *test_x, ValueT *x_host, ValueT *b, std::vector<int> color_offsets);

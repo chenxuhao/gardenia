@@ -1,6 +1,8 @@
-// Copyright 2016, National University of Defense Technology
-// Contact: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Contact: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
+#include "csr_graph.h"
+
 /*
 GARDENIA Benchmark Suite
 Kernel: Vertex Coloring (VC)
@@ -23,8 +25,8 @@ vc_topo_base: topology-driven GPU implementation, one thread per vertex using CU
 vc_topo_bitset: topology-driven GPU implementation using bitset operations, one thread per vertex using CUDA
 vc_linear_base: data-driven GPU implementation, one thread per vertex using CUDA
 vc_linear_bitset: data-driven GPU implementation using bitset operations, one thread per vertex using CUDA
-*
 */
 
-int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors);
-void VCVerifier(int m, int *row_offsets, int *column_indices, int *colors);
+int VCSolver(Graph &g, int *colors);
+void VCVerifier(Graph &g, int *colors);
+

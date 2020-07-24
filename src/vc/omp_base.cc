@@ -1,44 +1,38 @@
-// Copyright 2016, National University of Defense Technology
-// Author: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Author: Xuhao Chen <cxh@mit.edu>
 #include "vc.h"
 #include <omp.h>
 #include "timer.h"
 #include "worklist.h"
-#define VC_VARIANT "openmp"
 
-void first_fit(int m, int *row_offsets, int *column_indices, Worklist &inwl, int *colors) {
-	int start = inwl.start;
-	int end = inwl.end;
+void first_fit(Graph &g, Worklist &inwl, int *colors) {
+  auto m = g.V();
+	auto start = inwl.start;
+	auto end = inwl.end;
 	#pragma omp parallel for
-	for (int i = start; i < end; i++) {
-		int vertex = inwl.getItem(i);
+	for (auto i = start; i < end; i++) {
+		auto u = inwl.getItem(i);
 		int forbiddenColors[MAXCOLOR];
-		for(int i = 0; i < MAXCOLOR; i++) forbiddenColors[i] = m + 1;
-		int row_begin = row_offsets[vertex];
-		int row_end = row_offsets[vertex + 1];
-		for (int offset = row_begin; offset < row_end; offset++) {
-			int neighbor = column_indices[offset];
-			int color = colors[neighbor];
-			forbiddenColors[color] = vertex;
-		}
+		for (int i = 0; i < MAXCOLOR; i++)
+      forbiddenColors[i] = m + 1;
+    for (auto v : g.N(u))
+			forbiddenColors[colors[v]] = u;
 		int vertex_color = 0;
-		while (vertex_color < MAXCOLOR && forbiddenColors[vertex_color] == vertex)
+		while (vertex_color < MAXCOLOR && 
+           forbiddenColors[vertex_color] == u)
 			vertex_color++;
 		assert(vertex_color < MAXCOLOR);
-		colors[vertex] = vertex_color;
+		colors[u] = vertex_color;
 	}
 }
 
-void conflict_resolve(int m, int *row_offsets, int *column_indices, Worklist &inwl, Worklist &outwl, int *colors) {
-	int start = inwl.start;
-	int end = inwl.end;
+void conflict_resolve(Graph &g, Worklist &inwl, Worklist &outwl, int *colors) {
+	auto start = inwl.start;
+	auto end = inwl.end;
 	#pragma omp parallel for
-	for (int id = start; id < end; id ++) {
-		int src = inwl.getItem(id);
-		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
-		for (int offset = row_begin; offset < row_end; offset ++) {
-			int dst = column_indices[offset];
+	for (auto id = start; id < end; id ++) {
+		auto src = inwl.getItem(id);
+    for (auto dst : g.N(src)) {
 			if (src < dst && colors[src] == colors[dst]) {
 				outwl.push(src);
 				break;
@@ -47,7 +41,7 @@ void conflict_resolve(int m, int *row_offsets, int *column_indices, Worklist &in
 	}
 }
 
-int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors) {
+int VCSolver(Graph &g, int *colors) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -56,6 +50,7 @@ int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors)
 	printf("Launching OpenMP VC solver (%d threads) ...\n", num_threads);
 	Worklist inwl, outwl, *inwlptr, *outwlptr, *tmp;
 	int iter = 0;
+  auto m = g.V();
 	inwl.ensureSpace(m);
 	outwl.ensureSpace(m);
 	inwlptr = &inwl;
@@ -64,13 +59,13 @@ int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors)
 	for (int j = 0; j < m; j++) range[j] = j;
 	Timer t;
 	t.Start();
-	inwl.pushRange((unsigned *)range, (unsigned)m);
+	inwl.pushRange((unsigned *)range, (VertexId)m);
 	int wlsz = inwl.getSize();
 	while (wlsz) {
 		++ iter;
 		//printf("iteration=%d, wlsz=%d\n", iteration, wlsz);
-		first_fit(m, row_offsets, column_indices, *inwlptr, colors);
-		conflict_resolve(m, row_offsets, column_indices, *inwlptr, *outwlptr, colors);
+		first_fit(g, *inwlptr, colors);
+		conflict_resolve(g, *inwlptr, *outwlptr, colors);
 		wlsz = outwlptr->getSize();
 		tmp = inwlptr; inwlptr = outwlptr; outwlptr = tmp;
 		outwlptr->clear();
@@ -81,8 +76,8 @@ int VCSolver(int m, int nnz, int *row_offsets, int *column_indices, int *colors)
 	for (int n = 0; n < m; n ++)
 		max_color = max(max_color, colors[n]);
 	int num_colors = max_color+1;
-	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms, num_colors = %d.\n", VC_VARIANT, t.Millisecs(), num_colors);
+	//printf("\titerations = %d.\n", iter);
+	printf("\truntime [omp_base] = %f ms, num_colors = %d.\n", t.Millisecs(), num_colors);
 	return num_colors;
 }
 

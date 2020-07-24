@@ -2,8 +2,9 @@ include ../common.mk
 CXXFLAGS+=-std=c++11
 SRC=main.cc
 OBJS=vector.o omp_base.o verifier.o main.o
+INCLUDES+=-I/org/centers/cdgc/cuda/cuda-10.2/include
 
-all: $(OBJS) symgs_omp_base symgs_vector
+all: $(OBJS) symgs_omp_base symgs_base symgs_vector
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<

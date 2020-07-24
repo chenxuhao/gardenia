@@ -10,10 +10,14 @@ int main(int argc, char *argv[]) {
     std::cout << "Example: " << argv[0] << " mtx web-Google 0 1\n";
     exit(1);
   }
-  Graph g(argv[2], argv[1], atoi(argv[3]), atoi(argv[4]));
-
+  bool symmetrize = false;
+  bool need_reverse = false;
+  if (argc > 3) symmetrize = atoi(argv[3]);
+  if (argc > 4) need_reverse = atoi(argv[4]);
+  Graph g(argv[2], argv[1], symmetrize, need_reverse);
   auto m = g.V();
   auto nnz = g.E();
+
   //ValueT *h_x = (ValueT *)aligned_alloc(PAGE_SIZE, m * sizeof(ValueT));
   auto h_x = custom_alloc_global<ValueT>(m);
   auto h_y = custom_alloc_global<ValueT>(m);
