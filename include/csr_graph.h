@@ -149,32 +149,36 @@ private:
     }
     // generate the reverse (transposed) graph for directed graph
     if (!symmetrize && need_reverse) {
-      std::vector<VertexList> reverse_adj_lists(n_vertices);
-      for (VertexId v = 0; v < n_vertices; v++) {
-        for (auto u : adj_lists[v]) {
-          reverse_adj_lists[u].push_back(v);
-        }
-      }
-      reverse_vertices = custom_alloc_global<uint64_t>(n_vertices+1);
-      reverse_vertices[0] = 0;
-      for (VertexId i = 1; i < n_vertices+1; i++) {
-        auto degree = reverse_adj_lists[i-1].size();
-        reverse_vertices[i] = reverse_vertices[i-1] + degree;
-      }
-      reverse_edges = custom_alloc_global<VertexId>(n_edges);
-      //#pragma omp parallel for
-      for (VertexId i = 0; i < n_vertices; i++) {
-        auto begin = reverse_vertices[i];
-        std::copy(reverse_adj_lists[i].begin(), 
-                  reverse_adj_lists[i].end(), &reverse_edges[begin]);
-      }
-      for (VertexId i = 0; i < n_vertices; i++)
-        reverse_adj_lists[i].clear();
-      reverse_adj_lists.clear();
+      build_reverse_graph();
     }
     for (VertexId i = 0; i < n_vertices; i++)
       adj_lists[i].clear();
     adj_lists.clear();
+  }
+  void build_reverse_graph() {
+    std::vector<VertexList> reverse_adj_lists(n_vertices);
+    for (VertexId v = 0; v < n_vertices; v++) {
+      //for (auto u : adj_lists[v]) {
+      for (auto u : N(v)) {
+        reverse_adj_lists[u].push_back(v);
+      }
+    }
+    reverse_vertices = custom_alloc_global<uint64_t>(n_vertices+1);
+    reverse_vertices[0] = 0;
+    for (VertexId i = 1; i < n_vertices+1; i++) {
+      auto degree = reverse_adj_lists[i-1].size();
+      reverse_vertices[i] = reverse_vertices[i-1] + degree;
+    }
+    reverse_edges = custom_alloc_global<VertexId>(n_edges);
+    //#pragma omp parallel for
+    for (VertexId i = 0; i < n_vertices; i++) {
+      auto begin = reverse_vertices[i];
+      std::copy(reverse_adj_lists[i].begin(), 
+                reverse_adj_lists[i].end(), &reverse_edges[begin]);
+    }
+    for (VertexId i = 0; i < n_vertices; i++)
+      reverse_adj_lists[i].clear();
+    reverse_adj_lists.clear();
   }
 
   template<typename T>
@@ -254,10 +258,8 @@ public:
       else read_bin_file(prefix + ".vertex.bin", vertices, n_vertices+1);
       if(map_edges) map_file(prefix + ".edge.bin", edges, n_edges);
       else read_bin_file(prefix + ".edge.bin", edges, n_edges);
-      if (!symmetrize && need_reverse) {
-        std::cout << "Symmetrizing binary file not supported yet\n";
-        exit(0);
-      }
+      if (!symmetrize && need_reverse)
+        build_reverse_graph();
     }
     directed = false;
     has_reverse = false;

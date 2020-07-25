@@ -1,5 +1,5 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 // Topology-driven Minimum Spanning Tree using CUDA
 #include "common.h"
 #include "timer.h"
@@ -9,7 +9,10 @@
 #include "cuda_launch_config.hpp"
 #define MST_TYPE unsigned
 
-__global__ void dinit(int m, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners, bool *processinnextiteration, unsigned *goaheadnodeofcomponent) {
+__global__ void dinit(int m, MST_TYPE *eleminwts, 
+                      MST_TYPE *minwtcomponent, unsigned *partners, 
+                      bool *processinnextiteration, 
+                      unsigned *goaheadnodeofcomponent) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		eleminwts[id] = MYINFINITY;
@@ -20,7 +23,11 @@ __global__ void dinit(int m, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsi
 	}
 }
 
-__global__ void dfindelemin(int m, int *row_offsets, int *column_indices, WeightT *weight, MST_TYPE *mstwt, ComponentSpace cs, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners) {
+__global__ void dfindelemin(int m, int *row_offsets, 
+                            int *column_indices, WeightT *weight, 
+                            MST_TYPE *mstwt, ComponentSpace cs, 
+                            MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, 
+                            unsigned *partners) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		unsigned src = id;
@@ -48,12 +55,17 @@ __global__ void dfindelemin(int m, int *row_offsets, int *column_indices, Weight
 	}
 }
 
-__global__ void dfindelemin2(int m, int *row_offsets, int *column_indices, WeightT *weight, ComponentSpace cs, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners, unsigned *goaheadnodeofcomponent) {
+__global__ void dfindelemin2(int m, int *row_offsets, 
+                             int *column_indices, WeightT *weight, 
+                             ComponentSpace cs, MST_TYPE *eleminwts, 
+                             MST_TYPE *minwtcomponent, unsigned *partners, 
+                             unsigned *goaheadnodeofcomponent) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		unsigned src = id;
 		unsigned srcboss = cs.find(src);
-		if(eleminwts[id] == minwtcomponent[srcboss] && srcboss != partners[id] && partners[id] != m) {
+		if(eleminwts[id] == minwtcomponent[srcboss] && 
+       srcboss != partners[id] && partners[id] != m) {
 			unsigned row_begin = row_offsets[src];
 			unsigned row_end = row_offsets[src + 1];
 			for (unsigned offset = row_begin; offset < row_end; ++ offset) {
@@ -70,7 +82,11 @@ __global__ void dfindelemin2(int m, int *row_offsets, int *column_indices, Weigh
 	}
 }
 
-__global__ void verify_min_elem(int m, int *row_offsets, int *column_indices, WeightT *weight, ComponentSpace cs, MST_TYPE *minwtcomponent, unsigned *partners, bool *processinnextiteration, unsigned *goaheadnodeofcomponent) {
+__global__ void verify_min_elem(int m, int *row_offsets, 
+                                int *column_indices, WeightT *weight, 
+                                ComponentSpace cs, MST_TYPE *minwtcomponent, 
+                                unsigned *partners, bool *processinnextiteration, 
+                                unsigned *goaheadnodeofcomponent) {
 	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < m) {
 		if(cs.isBoss(id)) {
@@ -98,40 +114,6 @@ __global__ void verify_min_elem(int m, int *row_offsets, int *column_indices, We
 	}
 }
 
-/*
-__global__ void elim_dups(int m, ComponentSpace cs, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners, bool *processinnextiteration, unsigned *goaheadnodeofcomponent, unsigned inpid) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
-	if (inpid < m) id = inpid;
-	if (id < m) {
-		if(processinnextiteration[id]) {
-			unsigned srcc = cs.find(id);
-			unsigned dstc = partners[id];
-			if(minwtcomponent[dstc] == eleminwts[id]) {
-				if(id < goaheadnodeofcomponent[dstc]) {
-					processinnextiteration[id] = false;
-				}
-			}
-		}
-	}
-}
-
-__global__ void dfindcompmin(int m, ComponentSpace cs, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners, bool *processinnextiteration, unsigned *goaheadnodeofcomponent) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
-	if (id < m) {
-		if(partners[id] == m)
-			return;
-		unsigned srcboss = cs.find(id);
-		unsigned dstboss = cs.find(partners[id]);
-		if (id != partners[id] && srcboss != dstboss && eleminwts[id] != MYINFINITY && minwtcomponent[srcboss] == eleminwts[id] && dstboss != id && goaheadnodeofcomponent[srcboss] == id) {
-			if(!processinnextiteration[id]);
-		}
-		else {
-			if(processinnextiteration[id]);
-		}
-	}
-}
-*/
-
 __device__ volatile int g_mutex;
 __device__ void __gpu_sync_atomic(int goalVal) {
 	int tid = threadIdx.x * blockDim.y + threadIdx.y;
@@ -144,31 +126,10 @@ __device__ void __gpu_sync_atomic(int goalVal) {
 	__syncthreads();
 }
 
-/*
-__device__ void __gpu_sync_lockfree(int goalVal, volatile int *Arrayin, volatile int *Arrayout) {
-	int tid_in_blk = threadIdx.x * blockDim.y + threadIdx.y;
-	int nBlockNum = gridDim.x * gridDim.y;
-	int bid = blockIdx.x * gridDim.y + blockIdx.y;
-	if (tid_in_blk == 0) {
-		Arrayin[bid] = goalVal;
-	}
-	if (bid == 1) {
-		if (tid_in_blk < nBlockNum) {
-			while (Arrayin[tid_in_blk] != goalVal) { }
-		}
-		__syncthreads();
-		if (tid_in_blk < nBlockNum) {
-			Arrayout[tid_in_blk] = goalVal;
-		}
-	}
-	if (tid_in_blk == 0) {
-		while (Arrayout[bid] != goalVal) { }
-	}
-	__syncthreads();
-}
-//*/
-
-__global__ void dfindcompmintwo(int m, unsigned *mstwt, ComponentSpace csw, MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, unsigned *partners, bool *processinnextiteration, GlobalBarrier gb, bool *repeat, unsigned *count) {
+__global__ void dfindcompmintwo(int m, unsigned *mstwt, ComponentSpace csw, 
+                                MST_TYPE *eleminwts, MST_TYPE *minwtcomponent, 
+                                unsigned *partners, bool *processinnextiteration, 
+                                GlobalBarrier gb, bool *repeat, unsigned *count) {
 	unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned id, nthreads = blockDim.x * gridDim.x;
 	unsigned up = (m + nthreads - 1) / nthreads * nthreads;

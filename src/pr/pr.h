@@ -1,6 +1,7 @@
-// Copyright 2016, National University of Defense Technology
-// Contact: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Contact: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
+#include "csr_graph.h"
 #define EPSILON 0.0001
 const float kDamp = 0.85;
 const float epsilon = 0.0000001;
@@ -27,5 +28,6 @@ pr_base: topology-driven GPU implementation using pull approach, one thread per 
 pr_push: topology-driven GPU implementation using push approach, one thread per edge using CUDA
 */
 
-void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores);
-void PRVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores, double target_error);
+void PRSolver(Graph &g, ScoreT *scores);
+void PRVerifier(Graph &g, ScoreT *scores, double target_error);
+

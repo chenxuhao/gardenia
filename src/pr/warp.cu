@@ -1,13 +1,13 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
-#define PR_VARIANT "pull_warp"
-#include <cub/cub.cuh>
+// Copyright 2020
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "pr.h"
 #include "timer.h"
-#include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
+#include <cub/cub.cuh>
+
 //#define SHFL
-#define FUSED 0
+//#define FUSED
 typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
 __global__ void contrib(int m, ScoreT *scores, int *degree, ScoreT *outgoing_contrib) {
@@ -29,7 +29,9 @@ __global__ void l1norm(int m, ScoreT *scores, ScoreT *sums, float *diff, ScoreT 
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
-__global__ void pull_step(int m, const IndexT *row_offsets, const IndexT *column_indices, ScoreT *sums, const ScoreT *outgoing_contrib) {
+__global__ void pull_step(int m, const uint64_t *row_offsets, 
+                          const VertexId *column_indices, 
+                          ScoreT *sums, const ScoreT *outgoing_contrib) {
 #ifndef SHFL
 	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
 #endif
@@ -50,7 +52,8 @@ __global__ void pull_step(int m, const IndexT *row_offsets, const IndexT *column
 		// compute local sum
 		ScoreT sum = 0;
 		for (int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
-			int src = column_indices[offset];
+			//int src = column_indices[offset];
+			int src = __ldg(column_indices+offset);
 			//int src = __ldg(column_indices+offset);
 			sum += __ldg(outgoing_contrib+src);
 		}
@@ -77,7 +80,10 @@ __global__ void pull_step(int m, const IndexT *row_offsets, const IndexT *column
 }
 
 // pull operation needs incoming neighbor list
-__global__ void pull_fused(int m, int *row_offsets, int *column_indices, ScoreT *scores, ScoreT *outgoing_contrib, float *diff, ScoreT base_score) {
+__global__ void pull_fused(int m, const uint64_t *row_offsets, 
+                           const VertexId *column_indices, 
+                           ScoreT *scores, ScoreT *outgoing_contrib, 
+                           float *diff, ScoreT base_score) {
 	__shared__ typename BlockReduce::TempStorage temp_storage;
 	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
@@ -122,16 +128,24 @@ __global__ void pull_fused(int m, int *row_offsets, int *column_indices, ScoreT 
 	if(threadIdx.x == 0) atomicAdd(diff, block_sum);
 }
 
-void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores) {
-	//print_device_info(0);
-	IndexT *d_row_offsets, *d_column_indices;
+void PRSolver(Graph &g, ScoreT *scores) {
+  auto m = g.V();
+  auto nnz = g.E();
+  auto h_row_offsets = g.in_rowptr();
+  auto h_column_indices = g.in_colidx();	
+  //print_device_info(0);
+  uint64_t *d_row_offsets;
+  VertexId *d_column_indices;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+
+  std::vector<VertexId> degrees(m);
+  for (VertexId i = 0; i < m; i ++) degrees[i] = g.get_degree(i);
 	int *d_degrees;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(IndexT)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(IndexT)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_degrees, m * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, in_row_offsets, (m + 1) * sizeof(IndexT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, in_column_indices, nnz * sizeof(IndexT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_degrees, degrees, m * sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_degrees, &degrees[0], m * sizeof(int), cudaMemcpyHostToDevice));
 	ScoreT *d_scores, *d_sums, *d_contrib;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_scores, m * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_sums, m * sizeof(ScoreT)));
@@ -148,7 +162,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	cudaDeviceProp deviceProp;
 	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
 	const int nSM = deviceProp.multiProcessorCount;
-#if FUSED
+#ifdef FUSED
 	const int max_blocks_per_SM = maximum_residency(pull_fused, nthreads, 0);
 #else
 	const int max_blocks_per_SM = maximum_residency(pull_step, nthreads, 0);
@@ -165,7 +179,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 		CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(float), cudaMemcpyHostToDevice));
 		contrib <<<nblocks, nthreads>>>(m, d_scores, d_degrees, d_contrib);
 		CudaTest("solving kernel contrib failed");
-#if FUSED
+#ifdef FUSED
 		pull_fused <<<mblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_scores, d_contrib, d_diff, base_score);
 #else
 		pull_step <<<mblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_sums, d_contrib);
@@ -179,7 +193,7 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 	t.Stop();
 
 	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", PR_VARIANT, t.Millisecs());
+	printf("\truntime [cuda_pull_warp] = %f ms.\n", t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(scores, d_scores, m * sizeof(ScoreT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));

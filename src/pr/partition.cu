@@ -1,17 +1,23 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #define PR_VARIANT "partition"
-#include <cub/cub.cuh>
 #include "pr.h"
 #include "timer.h"
-#include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
+#include <cub/cub.cuh>
 #define GPU_SEGMENTING
 #include "segmenting.h"
 //#define ENABLE_WARP
 #define ENABLE_CTA
 
+typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
 typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
+
+__global__ void initialize(int m, ScoreT *sums) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < m) sums[id] = 0;
+}
 
 __global__ void contrib(int m, ScoreT *scores, int *degree, ScoreT *outgoing_contrib) {
 	int u = blockIdx.x * blockDim.x + threadIdx.x;
@@ -38,9 +44,7 @@ __device__ __forceinline__ void expandByCta(int m, const IndexT *row_offsets, co
 	owner = -1;
 	int size = 0;
 	int dst = id;
-	if(dst < m && !processed[dst]) {
-		size = row_offsets[dst+1] - row_offsets[dst];
-	}
+	if(dst < m) size = row_offsets[dst+1] - row_offsets[dst];
 	while(true) {
 		if(size > BLOCK_SIZE)
 			owner = threadIdx.x;
@@ -62,8 +66,10 @@ __device__ __forceinline__ void expandByCta(int m, const IndexT *row_offsets, co
 		for(int i = threadIdx.x; i < num; i += blockDim.x) {
 			int edge = row_begin + i;
 			if(i < neighbor_size) {
-				int src = column_indices[edge];
-				sum += outgoing_contrib[src];
+				//int src = column_indices[edge];
+				int src = __ldg(column_indices+edge);
+				//sum += outgoing_contrib[src];
+				sum += __ldg(outgoing_contrib+src);
 			}
 		}
 		ScoreT block_sum = BlockReduce(temp_storage).Sum(sum);
@@ -90,7 +96,8 @@ __device__ __forceinline__ void expandByWarp(int m, const IndexT *row_offsets, c
 	if(dst < m && !processed[dst]) {
 		size = row_offsets[dst+1] - row_offsets[dst];
 	}
-	while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
+	//while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
+	while(__any(size) >= WARP_SIZE) {
 		if(size >= WARP_SIZE)
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {
@@ -108,8 +115,10 @@ __device__ __forceinline__ void expandByWarp(int m, const IndexT *row_offsets, c
 		for(int i = lane_id; i < num; i+= WARP_SIZE) {
 			int edge = row_begin + i;
 			if(i < neighbor_size) {
-				int src = column_indices[edge];
-				sum += outgoing_contrib[src];
+				//int src = column_indices[edge];
+				int src = __ldg(column_indices+edge);
+				//sum += outgoing_contrib[src];
+				sum += __ldg(outgoing_contrib+src);
 			}
 		}
 		sdata[threadIdx.x] = sum; __syncthreads();
@@ -118,13 +127,13 @@ __device__ __forceinline__ void expandByWarp(int m, const IndexT *row_offsets, c
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  4]; __syncthreads();
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  2]; __syncthreads();
 		sdata[threadIdx.x] = sum = sum + sdata[threadIdx.x +  1]; __syncthreads();
-		if(lane_id == 0) sums[dst] += sdata[threadIdx.x];
+		if(lane_id == 0) sums[winner] += sdata[threadIdx.x];
 	}
 }
 
 __global__ void pull_base(int m, const __restrict__ IndexT *row_offsets, const __restrict__ IndexT *column_indices, ScoreT *partial_sums, const __restrict__ ScoreT *outgoing_contrib, bool *processed) {
 	expandByCta(m, row_offsets, column_indices, partial_sums, outgoing_contrib, processed);
-	//expandByWarp(m, row_offsets, column_indices, partial_sums, outgoing_contrib, processed);
+	expandByWarp(m, row_offsets, column_indices, partial_sums, outgoing_contrib, processed);
 	int dst = blockIdx.x * blockDim.x + threadIdx.x;
 	//if (dst < m) {
 	if (dst < m && !processed[dst]) {
@@ -145,6 +154,54 @@ __global__ void pull_base(int m, const __restrict__ IndexT *row_offsets, const _
 		//partial_sums[dst] = incoming_total;
 		st_glb_cs<ScoreT>(incoming_total, partial_sums+dst);
 	}
+}
+
+__global__ void pull_lb(int m, const __restrict__ IndexT *row_offsets, const __restrict__ IndexT *column_indices, ScoreT *partial_sums, const __restrict__ ScoreT *outgoing_contrib, bool *processed) {
+	expandByCta(m, row_offsets, column_indices, partial_sums, outgoing_contrib, processed);
+	expandByWarp(m, row_offsets, column_indices, partial_sums, outgoing_contrib, processed);
+	int dst = blockIdx.x * blockDim.x + threadIdx.x;
+	int tx = threadIdx.x;
+	__shared__ BlockScan::TempStorage temp_storage;
+	__shared__ int gather_offsets[BLOCK_SIZE];
+	__shared__ int dst_idx[BLOCK_SIZE];
+	__shared__ ScoreT sh_total[BLOCK_SIZE];
+	gather_offsets[tx] = 0;
+	dst_idx[tx] = 0;
+	sh_total[tx] = 0;
+	int neighbor_size = 0;
+	int neighbor_offset = 0;
+	int scratch_offset = 0;
+	int total_edges = 0;
+	if (dst < m && !processed[dst]) {
+		neighbor_offset = row_offsets[dst];
+		neighbor_size = row_offsets[dst+1] - neighbor_offset;
+	}
+	BlockScan(temp_storage).ExclusiveSum(neighbor_size, scratch_offset, total_edges);
+	int done = 0;
+	int neighbors_done = 0;
+	while (total_edges > 0) {
+		__syncthreads();
+		int i;
+		for(i = 0; neighbors_done + i < neighbor_size && (scratch_offset + i - done) < BLOCK_SIZE; i++) {
+			int j = scratch_offset + i - done;
+			gather_offsets[j] = neighbor_offset + neighbors_done + i;
+			dst_idx[j] = tx;
+		}
+		neighbors_done += i;
+		scratch_offset += i;
+		__syncthreads();
+		if(tx < total_edges) {
+			int offset = gather_offsets[tx];
+			int src = column_indices[offset];
+			atomicAdd(&sh_total[dst_idx[tx]], outgoing_contrib[src]); 
+		}
+		total_edges -= BLOCK_SIZE;
+		done += BLOCK_SIZE;
+	}
+	__syncthreads();
+	if (dst < m && !processed[dst])
+		partial_sums[dst] = sh_total[tx];
+		//st_glb_cs<ScoreT>(sh_total, partial_sums+dst);
 }
 
 __global__ void pull_warp_kernel(int m, const __restrict__ IndexT *row_offsets, const __restrict__ IndexT *column_indices, ScoreT *partial_sums, const __restrict__ ScoreT *outgoing_contrib) {
@@ -197,7 +254,7 @@ __global__ void pull_vector_kernel(int m, const __restrict__ IndexT *row_offsets
 		const int row_end   = ptrs[vector_lane][1];                   //same as: row_end   = row_offsets[row+1];
 
 		// compute local sum
-		ValueT sum = 0;
+		ScoreT sum = 0;
 		for(int offset = row_start + thread_lane; offset < row_end; offset += THREADS_PER_VECTOR) {
 			//int src = column_indices[offset];
 			int src = __ldg(column_indices+offset);
@@ -284,27 +341,13 @@ __global__ void l1norm(int m, ScoreT *scores, ScoreT *sums, float *diff, ScoreT 
 }
 
 template <int THREADS_PER_VECTOR>
-void pull_vector(int m, const __restrict__ IndexT *row_offsets, const __restrict__ IndexT *column_indices, ScoreT *partial_sums, ScoreT *outgoing_contrib) {
-	cudaDeviceProp deviceProp;
-	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
-	const int nSM = deviceProp.multiProcessorCount;
+void pull_vector(int m, int nSM, const __restrict__ IndexT *row_offsets, const __restrict__ IndexT *column_indices, ScoreT *partial_sums, ScoreT *outgoing_contrib) {
 	const int VECTORS_PER_BLOCK = BLOCK_SIZE / THREADS_PER_VECTOR;
 	const int max_blocks_per_SM = maximum_residency(pull_vector_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR>, BLOCK_SIZE, 0);
 	const int max_blocks = max_blocks_per_SM * nSM;
 	const int nblocks = std::min(max_blocks, DIVIDE_INTO(m, VECTORS_PER_BLOCK));
 	pull_vector_kernel<VECTORS_PER_BLOCK, THREADS_PER_VECTOR> <<<nblocks, BLOCK_SIZE>>>(m, row_offsets, column_indices, partial_sums, outgoing_contrib);
 	CudaTest("solving failed");
-}
-
-void pull_warp(int m, const __restrict__ IndexT *row_offsets, const __restrict__ IndexT *column_indices, ScoreT *partial_sums, ScoreT *outgoing_contrib) {
-	int nthreads = BLOCK_SIZE;
-	cudaDeviceProp deviceProp;
-	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
-	const int nSM = deviceProp.multiProcessorCount;
-	const int max_blocks_per_SM = maximum_residency(pull_warp_kernel, nthreads, 0);
-	const int max_blocks = max_blocks_per_SM * nSM;
-	int nblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
-	pull_warp_kernel <<<nblocks, nthreads>>>(m, row_offsets, column_indices, partial_sums, outgoing_contrib);
 }
 
 void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores) {
@@ -363,6 +406,14 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 #ifndef ENABLE_CTA
 	int mblocks = (num_ranges - 1) / nthreads + 1;
 #endif
+#ifdef ENABLE_WARP
+	cudaDeviceProp deviceProp;
+	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
+	const int nSM = deviceProp.multiProcessorCount;
+	const int max_blocks_per_SM = maximum_residency(pull_warp_kernel, nthreads, 0);
+	const int max_blocks = max_blocks_per_SM * nSM;
+#endif
+	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	printf("Launching CUDA PR solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
 
 	Timer t;
@@ -378,24 +429,29 @@ void PRSolver(int m, int nnz, IndexT *in_row_offsets, IndexT *in_column_indices,
 			//tt.Start();
 			int n_vertices = ms_of_subgraphs[bid];
 			int nnz = nnzs_of_subgraphs[bid];
+			int bblocks = (n_vertices - 1) / nthreads + 1;
 			CUDA_SAFE_CALL(cudaMemset(d_processed, 0, n_vertices * sizeof(bool)));
 #ifndef ENABLE_WARP
-			int bblocks = (n_vertices - 1) / nthreads + 1;
 			pull_base <<<bblocks, nthreads>>>(n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib, d_processed);
 #else
-			CUDA_SAFE_CALL(cudaMemset(d_partial_sums[bid], 0, n_vertices * sizeof(ScoreT)));
-			//pull_warp(n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
+			initialize <<<bblocks, nthreads>>> (n_vertices, d_partial_sums[bid]);
+			///*
+			int wblocks = std::min(max_blocks, DIVIDE_INTO(n_vertices, WARPS_PER_BLOCK));
+			pull_warp_kernel <<<wblocks, nthreads>>> (n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib); 
+			//*/
+			/*
 			int nnz_per_row = nnz / n_vertices;
 			if (nnz_per_row <=  2)
-				pull_vector<2>(n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
+				pull_vector<2>(n_vertices, nSM, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
 			else if (nnz_per_row <=  4)
-				pull_vector<4>(n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
+				pull_vector<4>(n_vertices, nSM, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
 			else if (nnz_per_row <=  8)
-				pull_vector<8>(n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
+				pull_vector<8>(n_vertices, nSM, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
 			else if (nnz_per_row <= 16)
-				pull_vector<16>(n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
+				pull_vector<16>(n_vertices, nSM, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
 			else
-				pull_vector<32>(n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
+				pull_vector<32>(n_vertices, nSM, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_partial_sums[bid], d_contrib);
+			//*/
 #endif
 			//CUDA_SAFE_CALL(cudaDeviceSynchronize());
 			//tt.Stop();

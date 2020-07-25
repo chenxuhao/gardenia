@@ -1,14 +1,13 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 // Verifies by asserting a single serial iteration in push direction has
 //   error < target_error
 #include "pr.h"
 #include "timer.h"
-//#include <vector>
-#include <stdlib.h>
 
-void PRVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degree, ScoreT *scores_to_test, double target_error) {
-	printf("Verifying...\n");
+void PRVerifier(Graph &g, ScoreT *scores_to_test, double target_error) {
+	std::cout << "Verifying...\n";
+  auto m = g.V();
 	const ScoreT base_score = (1.0f - kDamp) / m;
 	const ScoreT init_score = 1.0f / m;
 	ScoreT *scores = (ScoreT *) malloc(m * sizeof(ScoreT));
@@ -21,15 +20,11 @@ void PRVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT
 	for (iter = 0; iter < MAX_ITER; iter ++) {
 		double error = 0;
 		for (int n = 0; n < m; n ++)
-			outgoing_contrib[n] = scores[n] / degree[n];
+			outgoing_contrib[n] = scores[n] / g.get_degree(n);
 		for (int src = 0; src < m; src ++) {
 			ScoreT incoming_total = 0;
-			const IndexT row_begin = in_row_offsets[src];
-			const IndexT row_end = in_row_offsets[src + 1];
-			for (IndexT offset = row_begin; offset < row_end; offset ++) {
-				IndexT dst = in_column_indices[offset];
+      for (auto dst : g.in_neigh(src)) 
 				incoming_total += outgoing_contrib[dst];
-			}
 			ScoreT old_score = scores[src];
 			scores[src] = base_score + kDamp * incoming_total;
 			error += fabs(scores[src] - old_score);
@@ -38,20 +33,17 @@ void PRVerifier(int m, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT
 		if (error < EPSILON) break;
 	}
 	t.Stop();
-	printf("\titerations = %d.\n", iter+1);
-	//printf("\truntime [serial] = %f ms.\n", t.Millisecs());
+	if (iter < MAX_ITER) iter ++;
+	printf("\titerations = %d.\n", iter);
+	printf("\truntime [serial] = %f ms.\n", t.Millisecs());
 	
 	ScoreT *incomming_sums = (ScoreT *)malloc(m * sizeof(ScoreT));
 	for(int i = 0; i < m; i ++) incomming_sums[i] = 0;
 	double error = 0;
 	for (int src = 0; src < m; src ++) {
-		ScoreT outgoing_contrib = scores_to_test[src] / degree[src];
-		const IndexT row_begin = out_row_offsets[src];
-		const IndexT row_end = out_row_offsets[src + 1];
-		for (IndexT offset = row_begin; offset < row_end; ++ offset) {
-			IndexT dst = out_column_indices[offset];
+		ScoreT outgoing_contrib = scores_to_test[src] / g.get_degree(src);
+    for (auto dst : g.out_neigh(src)) 
 			incomming_sums[dst] += outgoing_contrib;
-		}
 	}
 	for (int i = 0; i < m; i ++) {
 		ScoreT new_score = base_score + kDamp * incomming_sums[i];

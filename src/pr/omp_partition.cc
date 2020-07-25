@@ -1,15 +1,13 @@
 // Copyright 2016, National University of Defense Technology
 // Authors: Xuhao Chen <cxh@illinois.edu>
 #include "pr.h"
-#include <omp.h>
-#include <stdlib.h>
 #include "timer.h"
 #define PR_VARIANT "omp_partition"
 
 #define PARTITION
 
 #ifdef PARTITION
-#include "partition.h"
+#include "segmenting.h"
 #endif
 
 void PRSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *degrees, ScoreT *scores) {
@@ -21,7 +19,7 @@ void PRSolver(int m, int nnz, IndexT *row_offsets, IndexT *column_indices, Index
 	printf("Launching OpenMP PR solver (%d threads) ...\n", num_threads);
 
 #ifdef PARTITION
-	column_blocking(m, row_offsets, column_indices, NULL);
+	segmenting(m, row_offsets, column_indices, NULL);
 #endif
 	const ScoreT base_score = (1.0f - kDamp) / m;
 	ScoreT *outgoing_contrib = (ScoreT *) malloc(m * sizeof(ScoreT));
