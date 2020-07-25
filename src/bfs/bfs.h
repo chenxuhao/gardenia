@@ -1,6 +1,7 @@
-// Copyright 2016, National University of Defense Technology
-// Contact: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Contact: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
+#include "csr_graph.h"
 
 /*
 GARDENIA Benchmark Suite
@@ -39,7 +40,6 @@ bfs_fusion: data-driven GPU implementation with kernel fusion, one thread per ed
 bfs_hybrid: one thread per vertex using CUDA, using Beamer's Direction-Optimizing approach using CUDA
 */
 
-//void BFSSolver(int m, int nnz, int *row_offsets, int *column_indices, int *degree, DistT *dist);
-void BFSSolver(int m, int nnz, int source, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *in_degree,int *out_degree, DistT *dist);
-void BFSVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices, DistT *dist);
-//void write_solution(const char *fname, int m, DistT *dist);
+void BFSSolver(Graph &g, int source, DistT *dist);
+void BFSVerifier(Graph &g, int source, DistT *dist);
+

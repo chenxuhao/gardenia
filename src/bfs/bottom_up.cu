@@ -1,35 +1,38 @@
 // Copyright 2016, National University of Defense Technology
 // Author: Xuhao Chen <cxh@illinois.edu>
-#define BFS_VARIANT "bottom_up"
-#include <thrust/fill.h>
-#include <thrust/execution_policy.h>
 #include "bfs.h"
-#include "cuda_launch_config.hpp"
-#include "cutil_subset.h"
 #include "timer.h"
+#include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
+#define BFS_VARIANT "bottom_up"
 
-__global__ void bottom_up_kernel(int m, int *row_offsets, int *column_indices, DistT *depths, bool *changed, bool *front, bool *next, int depth) {
-	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	int dst = tid;
+__global__ void bottom_up_kernel(int m, const IndexT *row_offsets, const IndexT *column_indices, const int *front, int *next, DistT *depths, bool *changed, int depth) {
+	int dst = blockIdx.x * blockDim.x + threadIdx.x;
 	if(dst < m && depths[dst] == MYINFINITY) { // not visited
-		int row_begin = row_offsets[dst];
-		int row_end = row_offsets[dst + 1];
-		for (int offset = row_begin; offset < row_end; ++ offset) {
-			int src = column_indices[offset];
-			if(front[src]) { // if the parent is in the current frontier
-				//depths[dst] = depths[src] + 1;
+		IndexT row_begin = row_offsets[dst];
+		IndexT row_end = row_offsets[dst+1];
+		for (IndexT offset = row_begin; offset < row_end; ++ offset) {
+			IndexT src = column_indices[offset];
+			if(__ldg(front+src)) { // if the parent is in the current frontier
+			//if(front[src]) {
 				depths[dst] = depth;
-				next[dst] = true; // put this vertex into the next frontier
+				next[dst] = 1; // put this vertex into the next frontier
 				*changed = true;
+				break;
 			}
 		}
 	}
 }
 
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *in_degree, int *h_degree, DistT *h_depths) {
+__global__ void insert(int source, int *front) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if(id == 0) front[source] = 1;
+}
+
+void BFSSolver(int m, int nnz, int source, IndexT *in_row_offsets, IndexT *in_column_indices, IndexT *out_row_offsets, IndexT *out_column_indices, int *in_degrees, int *out_degrees, DistT *h_depths) {
 	//print_device_info(0);
 	DistT zero = 0;
-	int *d_row_offsets, *d_column_indices;
+	IndexT *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, in_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
@@ -42,17 +45,18 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
 	//int *d_num_frontier;
 	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_num_frontier, sizeof(int)));
-	bool *front, *next;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&front, m * sizeof(bool)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&next, m * sizeof(bool)));
-	CUDA_SAFE_CALL(cudaMemset(front, 0, m * sizeof(bool)));
-	CUDA_SAFE_CALL(cudaMemset(next, 0, m * sizeof(bool)));
-	thrust::fill(thrust::device, front + source, front + source + 1, 1); // set the source vertex
+	int *front, *next;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&front, m * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&next, m * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemset(front, 0, m * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemset(next, 0, m * sizeof(int)));
 
 	int iter = 0;
 	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	//int h_num_frontier = 1;
+	insert<<<1, 1>>>(source, front); // set the source vertex
+	printf("Launching CUDA BFS solver (%d threads/CTA, %d blocks) ...\n", nthreads, nblocks);
 
 	Timer t;
 	t.Start();
@@ -61,27 +65,28 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 		h_changed = false;
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(bool), cudaMemcpyHostToDevice));
 		//CUDA_SAFE_CALL(cudaMemcpy(d_num_frontier, &zero, sizeof(int), cudaMemcpyHostToDevice));
-		bottom_up_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_depths, d_changed, front, next, iter);
+		bottom_up_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, front, next, d_depths, d_changed, iter);
 		CudaTest("solving failed");
 		// swap the queues
-		bool *temp = front;
+		int *temp = front;
 		front = next;
 		next = temp;
-		thrust::fill(thrust::device, next, next + m, 0);
+		CUDA_SAFE_CALL(cudaMemset(next, 0, m * sizeof(int)));
 		CUDA_SAFE_CALL(cudaMemcpy(&h_changed, d_changed, sizeof(bool), cudaMemcpyDeviceToHost));
 		//CUDA_SAFE_CALL(cudaMemcpy(&h_num_frontier, d_num_frontier, sizeof(int), cudaMemcpyDeviceToHost));
 		//printf("iteration=%d, num_frontier=%d\n", iter, h_num_frontier);
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
+
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
-
 	CUDA_SAFE_CALL(cudaMemcpy(h_depths, d_depths, m * sizeof(DistT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
-	CUDA_SAFE_CALL(cudaFree(d_depths));
 	CUDA_SAFE_CALL(cudaFree(d_changed));
-	//CUDA_SAFE_CALL(cudaFree(d_num_frontier));
+	CUDA_SAFE_CALL(cudaFree(d_depths));
+	CUDA_SAFE_CALL(cudaFree(front));
+	CUDA_SAFE_CALL(cudaFree(next));
 	return;
 }

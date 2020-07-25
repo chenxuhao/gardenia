@@ -3,7 +3,7 @@
 #include "bc.h"
 
 int main(int argc, char *argv[]) {
-  printf("Betweenness Centrality by Xuhao Chen\n");
+  std::cout << "Betweenness Centrality by Xuhao Chen\n";
   if (argc < 3) {
     std::cout << "Usage: " << argv[0] << " <filetype> <graph-prefix> "
               << "[symmetrize(0/1)] [reverse(0/1)] [source_id(0)]\n";

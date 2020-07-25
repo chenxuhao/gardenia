@@ -7,7 +7,7 @@ SRC=main.cc
 OBJS= linear_lb.o main.o verifier.o omp_base.o omp_beamer.o
 
 #all: $(OBJS) bfs_linear_base bfs_linear_lb bfs_topo_base bfs_topo_lb bfs_omp_beamer bfs_omp_base bfs_hybrid_lb
-all: $(OBJS) bfs_linear_lb bfs_omp_beamer bfs_omp_base
+all: $(OBJS) bfs_linear_base bfs_linear_lb bfs_omp_beamer bfs_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
@@ -51,6 +51,10 @@ bfs_linear_base: linear_base.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear_base.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
+bfs_linear_pb: linear_pb.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear_pb.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
 bfs_linear_vector: linear_vector.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o linear_vector.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
@@ -71,6 +75,10 @@ bfs_topo_lb: topo_lb.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo_lb.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
+bfs_topo_pb: topo_pb.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o topo_pb.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
 bfs_fusion: fusion.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o fusion.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
@@ -85,6 +93,10 @@ bfs_hybrid_vector: hybrid_vector.o main.o verifier.o
 
 bfs_hybrid_lb: hybrid_lb.o main.o verifier.o
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o hybrid_lb.o verifier.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+bfs_hybrid_tile: hybrid_tile.o main.o verifier.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o hybrid_tile.o verifier.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 bfs_afree: atomic_free.o main.o verifier.o

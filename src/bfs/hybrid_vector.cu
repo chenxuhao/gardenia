@@ -79,12 +79,11 @@ __global__ void insert(int source, Worklist2 queue) {
 	return;
 }
 
-__global__ void QueueToBitmap(int m, Worklist2 queue, int *bm) {
+__global__ void QueueToBitmap(int num, Worklist2 queue, int *bm) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	if(tid < m) {
+	if(tid < num) {
 		int src;
 		if(queue.pop_id(tid, src)) bm[src] = 1;
-		else bm[src] = 0;
 	}
 }
 
@@ -148,7 +147,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	do {
 		if(scout_count > edges_to_check / alpha) {
 			int awake_count, old_awake_count;
-			QueueToBitmap<<<((m-1)/512+1), 512>>>(m, *in_frontier, front);
+			QueueToBitmap<<<((nitems-1)/512+1), 512>>>(nitems, *in_frontier, front);
 			awake_count = nitems;
 			do {
 				++ iter;

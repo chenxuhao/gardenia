@@ -34,6 +34,7 @@ struct Edge {
 class Graph {
 private:
   bool directed;
+  bool has_reverse;
   VertexId n_vertices, *edges, *reverse_edges;
   uint64_t n_edges, *vertices, *reverse_vertices;
   VertexId max_degree;
@@ -258,14 +259,18 @@ public:
         exit(0);
       }
     }
+    directed = false;
+    has_reverse = false;
     if (!symmetrize && need_reverse) {
       directed = true;
       printf("This graph maintains both incomming and outgoing edge-list\n"); 
+      has_reverse = true;
     }
     if (symmetrize) {
       printf("This graph is symmetrized\n");
       reverse_vertices = vertices;
       reverse_edges = edges;
+      has_reverse = true;
     }
     //std::cout << "max_degree: " << max_degree << "\n";
     if (max_degree == 0 || max_degree>=n_vertices) exit(1);
@@ -322,6 +327,7 @@ public:
 	VertexId getEdgeDst(uint64_t e) { return edges[e]; }
 	VertexId get_max_degree() { return max_degree; }
   bool is_directed() { return directed; }
+  bool has_reverse_graph() { return has_reverse; }
   uint64_t* out_rowptr() { return vertices; }
   VertexId* out_colidx() { return edges; }
   uint64_t* in_rowptr() { return reverse_vertices; }

@@ -1,13 +1,15 @@
-// Copyright 2016, National University of Defense Technology
-// Author: Xuhao Chen <cxh@illinois.edu>
-#define BFS_VARIANT "linear_base"
+// Copyright 2020 MIT
+// Author: Xuhao Chen <cxh@mit.edu>
 #include "bfs.h"
-#include "worklistc.h"
-#include "cuda_launch_config.hpp"
-#include "cutil_subset.h"
 #include "timer.h"
+#include "worklistc.h"
+#include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
 
-__global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *dist, Worklist2 in_queue, Worklist2 out_queue) {
+__global__ void bfs_kernel(int m, const uint64_t *row_offsets, 
+                           const IndexT *column_indices, 
+                           DistT *dists, Worklist2 in_queue, 
+                           Worklist2 out_queue) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
 	if (in_queue.pop_id(tid, src)) {
@@ -15,10 +17,8 @@ __global__ void bfs_kernel(int m, int *row_offsets, int *column_indices, DistT *
 		int row_end = row_offsets[src+1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
-			//DistT new_dist = dist[src] + 1;
-			if ((dist[dst] == MYINFINITY) && (atomicCAS(&dist[dst], MYINFINITY, dist[src]+1) == MYINFINITY)) {
-			//if (dist[dst] == MYINFINITY) {//Not visited
-			//	dist[dst] = new_dist;
+			if ((dists[dst] == MYINFINITY) && 
+          (atomicCAS(&dists[dst], MYINFINITY, dists[src]+1) == MYINFINITY)) {
 				assert(out_queue.push(dst));
 			}
 		}
@@ -31,52 +31,60 @@ __global__ void insert(int source, Worklist2 queue) {
 	return;
 }
 
-void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *h_row_offsets, int *h_column_indices, int *in_degree, int *h_degree, DistT *h_dist) {
-	//print_device_info(0);
-	DistT zero = 0;
-	int *d_row_offsets, *d_column_indices;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	DistT * d_dist;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaDeviceSynchronize());
+void BFSSolver(Graph &g, int source, DistT *h_dists) {
+  auto m = g.V();
+  auto nnz = g.E();
+  auto h_row_offsets = g.out_rowptr();
+  auto h_column_indices = g.out_colidx();	
+  //print_device_info(0);
+  uint64_t *d_row_offsets;
+  VertexId *d_column_indices;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
 
-	Worklist2 queue1(m), queue2(m);
-	Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
-	int iter = 0;
-	int nitems = 1;
-	int nthreads = BLOCK_SIZE;
-	int nblocks = (m - 1) / nthreads + 1;
-	printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", nthreads);
+  DistT zero = 0;
+  DistT * d_dists;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_dists, m * sizeof(DistT)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_dists, h_dists, m * sizeof(DistT), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(&d_dists[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
-	Timer t;
-	t.Start();
-	insert<<<1, nthreads>>>(source, *in_frontier);
-	nitems = in_frontier->nitems();
-	do {
-		++ iter;
-		nblocks = (nitems - 1) / nthreads + 1;
-		//printf("iteration %d: frontier_size = %d\n", iter, nitems);
-		bfs_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_dist, *in_frontier, *out_frontier);
-		CudaTest("solving failed");
-		nitems = out_frontier->nitems();
-		Worklist2 *tmp = in_frontier;
-		in_frontier = out_frontier;
-		out_frontier = tmp;
-		out_frontier->reset();
-	} while (nitems > 0);
-	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	t.Stop();
+  Worklist2 queue1(m), queue2(m);
+  Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
+  int iter = 0;
+  int nitems = 1;
+  int nthreads = BLOCK_SIZE;
+  int nblocks = (m - 1) / nthreads + 1;
+  printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", nthreads);
 
-	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
-	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
-	CUDA_SAFE_CALL(cudaFree(d_column_indices));
-	CUDA_SAFE_CALL(cudaFree(d_dist));
-	return;
+  Timer t;
+  t.Start();
+  insert<<<1, nthreads>>>(source, *in_frontier);
+  nitems = in_frontier->nitems();
+  do {
+    ++ iter;
+    nblocks = (nitems - 1) / nthreads + 1;
+    //printf("iteration %d: frontier_size = %d\n", iter, nitems);
+    bfs_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, 
+        d_dists, *in_frontier, *out_frontier);
+    CudaTest("solving bfs_kernel failed");
+    nitems = out_frontier->nitems();
+    Worklist2 *tmp = in_frontier;
+    in_frontier = out_frontier;
+    out_frontier = tmp;
+    out_frontier->reset();
+  } while (nitems > 0);
+  CUDA_SAFE_CALL(cudaDeviceSynchronize());
+  t.Stop();
+
+  printf("\titerations = %d.\n", iter);
+  printf("\truntime [cuda_linear_base] = %f ms.\n", t.Millisecs());
+  CUDA_SAFE_CALL(cudaMemcpy(h_dists, d_dists, m * sizeof(DistT), cudaMemcpyDeviceToHost));
+  CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+  CUDA_SAFE_CALL(cudaFree(d_column_indices));
+  CUDA_SAFE_CALL(cudaFree(d_dists));
+  return;
 }
+

@@ -1,22 +1,22 @@
 // Copyright 2016, National University of Defense Technology
 // Author: Xuhao Chen <cxh@illinois.edu>
-#define BFS_VARIANT "hybrid_base"
-#include <thrust/fill.h>
-#include <thrust/execution_policy.h>
 #include "bfs.h"
-#include "cuda_launch_config.hpp"
-#include "cutil_subset.h"
-#include "worklistc.h"
 #include "timer.h"
+#include "worklistc.h"
+#include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
+//#include <thrust/fill.h>
+#include <thrust/execution_policy.h>
+#define BFS_VARIANT "hybrid_base"
 
-__global__ void bottom_up_kernel(int m, int *row_offsets, int *column_indices, DistT *depths, int *front, int *next, int depth) {
+__global__ void bottom_up_kernel(int m, const IndexT *row_offsets, const IndexT *column_indices, const int *front, int *next, DistT *depths, int depth) {
 	int dst = blockIdx.x * blockDim.x + threadIdx.x;
 	if(dst < m && depths[dst] == MYINFINITY) { // not visited
 		int row_begin = row_offsets[dst];
 		int row_end = row_offsets[dst+1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int src = column_indices[offset];
-			if(front[src] == 1) { // if the parent is in the current frontier
+			if(__ldg(front+src) == 1) { // if the parent is in the current frontier
 				depths[dst] = depth;
 				next[dst] = 1; // put this vertex into the next frontier
 				break;
@@ -25,17 +25,17 @@ __global__ void bottom_up_kernel(int m, int *row_offsets, int *column_indices, D
 	}
 }
 
-__global__ void top_down_kernel(int m, int *row_offsets, int *column_indices, int *degree, DistT *depths, int *scout_count, Worklist2 in_queue, Worklist2 out_queue) {
+__global__ void top_down_kernel(int m, const IndexT *row_offsets, const IndexT *column_indices, int *degrees, DistT *depths, int *scout_count, Worklist2 in_queue, Worklist2 out_queue) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
 	if(in_queue.pop_id(tid, src)) {
 		int row_begin = row_offsets[src];
-		int row_end = row_offsets[src + 1];
+		int row_end = row_offsets[src+1];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int dst = column_indices[offset];
 			if ((depths[dst] == MYINFINITY) && (atomicCAS(&depths[dst], MYINFINITY, depths[src]+1)==MYINFINITY)) {
 				assert(out_queue.push(dst));
-				atomicAdd(scout_count, degree[dst]);
+				atomicAdd(scout_count, __ldg(degrees+dst));
 			}
 		}
 	}
@@ -47,12 +47,11 @@ __global__ void insert(int source, Worklist2 queue) {
 	return;
 }
 
-__global__ void QueueToBitmap(int m, Worklist2 queue, int *bm) {
+__global__ void QueueToBitmap(int num, Worklist2 queue, int *bm) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	if(tid < m) {
+	if(tid < num) {
 		int src;
 		if(queue.pop_id(tid, src)) bm[src] = 1;
-		else bm[src] = 0;
 	}
 }
 
@@ -105,12 +104,12 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	do {
 		if(scout_count > edges_to_check / alpha) {
 			int awake_count, old_awake_count;
-			QueueToBitmap<<<((m-1)/512+1), 512>>>(m, *in_frontier, front);
+			QueueToBitmap<<<((nitems-1)/512+1), 512>>>(nitems, *in_frontier, front);
 			awake_count = nitems;
 			do {
 				++ iter;
 				old_awake_count = awake_count;
-				bottom_up_kernel <<<nblocks, nthreads>>> (m, d_in_row_offsets, d_in_column_indices, d_depths, front, next, iter);
+				bottom_up_kernel <<<nblocks, nthreads>>> (m, d_in_row_offsets, d_in_column_indices, front, next, d_depths, iter);
 				CudaTest("solving bottom_up failed");
 				awake_count = thrust::reduce(thrust::device, next, next + m, 0, thrust::plus<int>());
 				//printf("BU: (awake_count=%d) ", awake_count);
@@ -119,7 +118,8 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 				int *temp = front;
 				front = next;
 				next = temp;
-				thrust::fill(thrust::device, next, next + m, 0);
+				//thrust::fill(thrust::device, next, next + m, 0);
+				CUDA_SAFE_CALL(cudaMemset(next, 0, m * sizeof(int)));
 			} while((awake_count >= old_awake_count) || (awake_count > m / beta));
 			in_frontier->reset();
 			BitmapToQueue<<<((m-1)/512+1), 512>>>(m, front, *in_frontier);

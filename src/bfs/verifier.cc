@@ -1,11 +1,13 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include <iostream>
 #include <vector>
 #include "bfs.h"
 #include "timer.h"
-void BFSVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices, DistT *depth_to_test) {
-	printf("Verifying...\n");
+
+void BFSVerifier(Graph &g, int source, DistT *depth_to_test) {
+	std::cout << "Verifying...\n";
+  auto m = g.V();
 	vector<DistT> depth(m, MYINFINITY);
 	vector<int> to_visit;
 	Timer t;
@@ -15,10 +17,7 @@ void BFSVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices,
 	to_visit.push_back(source);
 	for (std::vector<int>::iterator it = to_visit.begin(); it != to_visit.end(); it++) {
 		int src = *it;
-		const IndexT row_begin = row_offsets[src];
-		const IndexT row_end = row_offsets[src + 1]; 
-		for (IndexT offset = row_begin; offset < row_end; ++ offset) {
-			IndexT dst = column_indices[offset];
+    for (auto dst : g.N(src)) {
 			if (depth[dst] == MYINFINITY) {
 				depth[dst] = depth[src] + 1;
 				to_visit.push_back(dst);
@@ -39,15 +38,4 @@ void BFSVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices,
 	if(all_ok) printf("Correct\n");
 	else printf("Wrong\n");
 }
-/*
-void write_solution(const char *fname, int m, DistT *dist) {
-	assert(dist != NULL);
-	printf("Writing solution to %s\n", fname);
-	FILE *f = fopen(fname, "w");
-	fprintf(f, "Computed solution (source dist): [");
-	for(int n = 0; n < m; n ++) {
-		fprintf(f, "%d:%d\n ", n, dist[n]);
-	}
-	fprintf(f, "]");
-}
-*/
+

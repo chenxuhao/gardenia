@@ -5,11 +5,18 @@
 #include "cutil_subset.h"
 #include "cuda_launch_config.hpp"
 #include <cub/cub.cuh>
-#define BFS_VARIANT "topo_lb"
+#include <thrust/execution_policy.h>
+#define BFS_VARIANT "topo_pb"
 
 typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
 
-__device__ void expandByCta(int m, int *row_offsets, int *column_indices, int *front, DistT *dist, int depth, bool *processed) {
+__device__ __forceinline__ unsigned LaneId() {
+	unsigned ret;
+	asm("mov.u32 %0, %laneid;" : "=r"(ret));
+	return ret;
+}
+
+__device__ __forceinline__ void expandByCta(int m, const IndexT *row_offsets, const IndexT *column_indices, const int *front, bool *visited, bool *processed) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	__shared__ int owner;
 	__shared__ int sh_src;
@@ -36,22 +43,16 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, int *f
 		int neighbor_size = row_end - row_begin;
 		int num = ((neighbor_size + blockDim.x - 1) / blockDim.x) * blockDim.x;
 		for(int i = threadIdx.x; i < num; i += blockDim.x) {
-			int edge = row_begin + i;
+			int offset = row_begin + i;
 			if(i < neighbor_size) {
-				int dst = column_indices[edge];
-				if (dist[dst] > depth) dist[dst] = depth;
+				int dst = column_indices[offset];
+				visited[dst] = true;
 			}
 		}
 	}
 }
 
-__device__ __forceinline__ unsigned LaneId() {
-	unsigned ret;
-	asm("mov.u32 %0, %laneid;" : "=r"(ret));
-	return ret;
-}
-
-__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, int *front, DistT *dist, int depth, bool *processed) {
+__device__ __forceinline__ void expandByWarp(int m, const IndexT *row_offsets, const IndexT *column_indices, const int *front, bool *visited, bool *processed) {
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
 	unsigned lane_id = LaneId();
@@ -77,18 +78,41 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 		int neighbor_size = row_end - row_begin;
 		int num = ((neighbor_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 		for(int i = lane_id; i < num; i+= WARP_SIZE) {
-			int edge = row_begin + i;
+			int offset = row_begin + i;
 			if(i < neighbor_size) {
-				int dst = column_indices[edge];
-				if (dist[dst] > depth) dist[dst] = depth;
+				int dst = column_indices[offset];
+				visited[dst] = true;
 			}
 		}
 	}
 }
 
-__global__ void bfs_step(int m, int *row_offsets, int *column_indices, int *front, DistT *dist, int depth, bool *processed) {
-	expandByCta(m, row_offsets, column_indices, front, dist, depth, processed);
-	expandByWarp(m, row_offsets, column_indices, front, dist, depth, processed);
+__global__ void push_base(int m, const IndexT *row_offsets, const IndexT *column_indices, const int *front, bool *visited) {
+	int src = blockIdx.x * blockDim.x + threadIdx.x;
+	if(src < m && front[src]) {
+		int row_begin = row_offsets[src];
+		int row_end = row_offsets[src+1];
+		for (int offset = row_begin; offset < row_end; ++ offset) {
+			int dst = column_indices[offset];
+			visited[dst] = true;
+		}
+	}
+}
+
+__global__ void update(int m, DistT *depths, bool *visited, int *front, bool *changed, int depth) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < m) {
+		if(depths[id] == MYINFINITY && visited[id]) {
+			depths[id] = depth;
+			front[id] = 1;
+			*changed = true;
+		}
+	}
+}
+
+__global__ void push_lb(int m, const IndexT *row_offsets, const IndexT *column_indices, const int *front, bool *visited, bool *processed) {
+	expandByCta(m, row_offsets, column_indices, front, visited, processed);
+	expandByWarp(m, row_offsets, column_indices, front, visited, processed);
 	int src = blockIdx.x * blockDim.x + threadIdx.x;
 	const int SCRATCHSIZE = BLOCK_SIZE;
 	__shared__ BlockScan::TempStorage temp_storage;
@@ -114,24 +138,13 @@ __global__ void bfs_step(int m, int *row_offsets, int *column_indices, int *fron
 		neighbors_done += i;
 		scratch_offset += i;
 		__syncthreads();
-		int edge = gather_offsets[threadIdx.x];
+		int offset = gather_offsets[threadIdx.x];
 		if(threadIdx.x < total_edges) {
-			int dst = column_indices[edge];
-			if (dist[dst] > depth) dist[dst] = depth;
+			int dst = column_indices[offset];
+			visited[dst] = true;
 		}
 		total_edges -= BLOCK_SIZE;
 		done += BLOCK_SIZE;
-	}
-}
-
-__global__ void update(int m, DistT *depths, bool *visited, int *front, bool *changed) {
-	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	if (id < m) {
-		if(depths[id] != MYINFINITY && !visited[id]) {
-			visited[id] = true;
-			front[id] = 1;
-			*changed = true;
-		}
 	}
 }
 
@@ -148,10 +161,10 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(DistT), cudaMemcpyHostToDevice));
-	bool *d_changed, h_changed, *d_visited, *d_expanded;
+	bool *d_changed, h_changed, *d_visited, *d_processed;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_changed, sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_visited, m * sizeof(bool)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_expanded, m * sizeof(bool)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_processed, m * sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMemset(d_visited, 0, m * sizeof(bool)));
 	CUDA_SAFE_CALL(cudaMemcpy(&d_visited[source], &one, sizeof(bool), cudaMemcpyHostToDevice));
 	int *d_front;
@@ -161,6 +174,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
 	int iter = 0;
+	int nitems = 0;
 	int nthreads = BLOCK_SIZE;
 	int nblocks = (m - 1) / nthreads + 1;
 	printf("Launching CUDA BFS solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
@@ -171,12 +185,13 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 		++ iter;
 		h_changed = false;
 		CUDA_SAFE_CALL(cudaMemcpy(d_changed, &h_changed, sizeof(bool), cudaMemcpyHostToDevice));
-		CUDA_SAFE_CALL(cudaMemset(d_expanded, 0, m * sizeof(bool)));
-		bfs_step <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_front, d_dist, iter, d_expanded);
-		CudaTest("solving bfs_step failed");
+		//nitems = thrust::reduce(thrust::device, d_front, d_front + m, 0, thrust::plus<int>());
+		//printf("iteration=%d, num_frontier=%d\n", iter, nitems);
+		CUDA_SAFE_CALL(cudaMemset(d_processed, 0, m * sizeof(bool)));
+		push_lb <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_front, d_visited, d_processed);
 		CUDA_SAFE_CALL(cudaMemset(d_front, 0, m * sizeof(int)));
-		update <<<nblocks, nthreads>>> (m, d_dist, d_visited, d_front, d_changed);
-		CudaTest("solving update failed");
+		update <<<nblocks, nthreads>>> (m, d_dist, d_visited, d_front, d_changed, iter);
+		CudaTest("solving failed");
 		CUDA_SAFE_CALL(cudaMemcpy(&h_changed, d_changed, sizeof(bool), cudaMemcpyDeviceToHost));
 	} while (h_changed);
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
@@ -188,9 +203,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_dist));
-	CUDA_SAFE_CALL(cudaFree(d_front));
 	CUDA_SAFE_CALL(cudaFree(d_changed));
-	CUDA_SAFE_CALL(cudaFree(d_visited));
-	CUDA_SAFE_CALL(cudaFree(d_expanded));
+	CUDA_SAFE_CALL(cudaFree(d_front));
 	return;
 }

@@ -7,8 +7,10 @@
 #include "cuda_launch_config.hpp"
 #include <cub/cub.cuh>
 #include <thrust/execution_policy.h>
-#define BFS_VARIANT "hybrid_lb"
-//#define LB_BU
+#define GPU_SEGMENTING
+#include "segmenting.h"
+#define BFS_VARIANT "hybrid_tile"
+#define ENABLE_TILE
 
 typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
 
@@ -16,47 +18,6 @@ __device__ __forceinline__ unsigned LaneId() {
 	unsigned ret;
 	asm("mov.u32 %0, %laneid;" : "=r"(ret));
 	return ret;
-}
-
-__device__ __forceinline__ void bu_expand_warp(int m, const IndexT *row_offsets, const IndexT *column_indices, DistT *depths, int *front, int *next, int depth) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
-	unsigned warp_id = threadIdx.x >> LOG_WARP_SIZE;
-	unsigned lane_id = LaneId();
-	__shared__ int owner[NUM_WARPS];
-	__shared__ int sh_vertex[NUM_WARPS];
-	owner[warp_id] = -1;
-	int size = 0;
-	int dst = id;
-	if(dst < m && depths[dst] == MYINFINITY) {
-		size = row_offsets[dst+1] - row_offsets[dst];
-	}
-	while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
-		if(size >= WARP_SIZE)
-			owner[warp_id] = lane_id;
-		if(owner[warp_id] == lane_id) {
-			sh_vertex[warp_id] = dst;
-			owner[warp_id] = -1;
-			size = 0;
-		}
-		int winner = sh_vertex[warp_id];
-		int row_begin = row_offsets[winner];
-		int row_end = row_offsets[winner+1];
-		int neighbor_size = row_end - row_begin;
-		int num = ((neighbor_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-		for(int i = lane_id; i < num; i+= WARP_SIZE) {
-			bool changed = false;
-			int edge = row_begin + i;
-			if(i < neighbor_size) {
-				int src = column_indices[edge];
-				if (front[src] == 1) {
-					depths[dst] = depth;
-					next[dst] = 1;
-					changed = true;
-				}
-			}
-			if(__any_sync(0xFFFFFFFF, changed)) break;
-		}
-	}
 }
 
 __global__ void bottom_up_base(int m, const IndexT *row_offsets, const IndexT *column_indices, DistT *depths, int *front, int *next, int depth) {
@@ -76,55 +37,39 @@ __global__ void bottom_up_base(int m, const IndexT *row_offsets, const IndexT *c
 	}
 }
 
-__global__ void bottom_up_lb(int m, const IndexT *row_offsets, const IndexT *column_indices, DistT *depths, int *front, int *next, int depth) {
-	//bu_expand_CTA(m, row_offsets, column_indices, depths, front, next, depth);
-	bu_expand_warp(m, row_offsets, column_indices, depths, front, next, depth);
+__global__ void prepare(int m, DistT *depths, int *next) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	int tx = threadIdx.x;
-	int dst = tid;
-	const int SCRATCHSIZE = BLOCK_SIZE;
-	__shared__ BlockScan::TempStorage temp_storage;
-	__shared__ int gather_offsets[SCRATCHSIZE];
-	__shared__ int dst_id[BLOCK_SIZE];
-	__shared__ bool dstDone[BLOCK_SIZE];
-	gather_offsets[tx] = 0;
-	dst_id[tx] = 0;
-	dstDone[tx] = false;
-	
-	int neighbor_size = 0;
-	int neighbor_offset = 0;
-	int scratch_offset = 0;
-	int total_edges = 0;
-	if(dst < m && depths[dst] == MYINFINITY) {
-		neighbor_offset = row_offsets[dst];
-		neighbor_size = row_offsets[dst+1] - neighbor_offset;
+	if (tid < m && depths[tid] != MYINFINITY) {
+		next[tid] = 2;
 	}
-	BlockScan(temp_storage).ExclusiveSum(neighbor_size, scratch_offset, total_edges);
-	int done = 0;
-	int neighbors_done = 0;
-	while(total_edges > 0) {
-		__syncthreads();
-		int i;
-		for(i = 0; !dstDone[dst%BLOCK_SIZE] && neighbors_done + i < neighbor_size && (scratch_offset + i - done) < SCRATCHSIZE; i++) {
-			int j = scratch_offset + i - done;
-			gather_offsets[j] = neighbor_offset + neighbors_done + i;
-			dst_id[j] = dst;
-		}
-		neighbors_done += i;
-		scratch_offset += i;
-		__syncthreads();
-		if(tx < total_edges) {
-			int edge = gather_offsets[tx];
-			int dst = dst_id[tx];
-			int src = column_indices[edge];
-			if (front[src] == 1) {
-				depths[dst] = depth;
-				next[dst] = 1;
-				dstDone[dst%BLOCK_SIZE] = true;
+}
+
+__global__ void bottom_up_tile(int m, const IndexT *row_offsets, const IndexT *column_indices, IndexT* idx_map, int *front, int *next) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	if(tid < m) {
+		int dst = idx_map[tid];
+		if (next[dst] == 0) {
+			int row_begin = row_offsets[tid];
+			int row_end = row_offsets[tid+1];
+			for (int offset = row_begin; offset < row_end; ++ offset) {
+				int src = column_indices[offset];
+				if (front[src] == 1) {
+					next[dst] = 1;
+					break;
+				}
 			}
 		}
-		total_edges -= BLOCK_SIZE;
-		done += BLOCK_SIZE;
+	}
+}
+
+__global__ void update(int m, int *next, DistT *depths, int depth) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	if(tid < m) {
+		if (next[tid] == 1) {
+			depths[tid] = depth;
+		} else if (next[tid] == 2) {
+			next[tid] = 0;
+		}
 	}
 }
 
@@ -301,15 +246,29 @@ __global__ void BitmapToQueue(int m, int *bm, Worklist2 queue) {
 
 void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_indices, int *out_row_offsets, int *out_column_indices, int *in_degree, int *h_degrees, DistT *h_depths) {
 	//print_device_info(0);
-	DistT zero = 0;
+#ifdef ENABLE_TILE
+	segmenting(m, in_row_offsets, in_column_indices, NULL);
+	int num_subgraphs = (m - 1) / SUBGRAPH_SIZE + 1;
+	vector<IndexT *> d_row_offsets_blocked(num_subgraphs), d_column_indices_blocked(num_subgraphs), d_idx_map(num_subgraphs);
+	for (int bid = 0; bid < num_subgraphs; bid ++) {
+		CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets_blocked[bid], (ms_of_subgraphs[bid] + 1) * sizeof(IndexT)));
+		CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices_blocked[bid], nnzs_of_subgraphs[bid] * sizeof(IndexT)));
+		CUDA_SAFE_CALL(cudaMalloc((void **)&d_idx_map[bid], ms_of_subgraphs[bid] * sizeof(IndexT)));
+		CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets_blocked[bid], rowptr_blocked[bid], (ms_of_subgraphs[bid] + 1) * sizeof(IndexT), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpy(d_column_indices_blocked[bid], colidx_blocked[bid], nnzs_of_subgraphs[bid] * sizeof(IndexT), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpy(d_idx_map[bid], idx_map[bid], ms_of_subgraphs[bid] * sizeof(IndexT), cudaMemcpyHostToDevice));
+	}
+#else
 	int *d_in_row_offsets, *d_in_column_indices;
-	int *d_out_row_offsets, *d_out_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_in_row_offsets, (m + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_in_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_in_row_offsets, in_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_in_column_indices, in_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+#endif
+	DistT zero = 0;
+	int *d_out_row_offsets, *d_out_column_indices;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_row_offsets, (m + 1) * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_out_column_indices, nnz * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_out_row_offsets, out_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_out_column_indices, out_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	int *d_degrees;
@@ -326,7 +285,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	CUDA_SAFE_CALL(cudaMalloc((void **)&next, m * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemset(front, 0, m * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemset(next, 0, m * sizeof(int)));
-	
+
 	int iter = 0;
 	Worklist2 queue1(m), queue2(m);
 	Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
@@ -353,8 +312,15 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 			do {
 				++ iter;
 				old_awake_count = awake_count;
-#ifdef LB_BU
-				bottom_up_lb <<<nblocks, nthreads>>> (m, d_in_row_offsets, d_in_column_indices, d_depths, front, next, iter);
+#ifdef ENABLE_TILE
+				prepare <<<nblocks, nthreads>>> (m, d_depths, next);
+				for (int bid = 0; bid < num_subgraphs; bid ++) {
+					int n_vertices = ms_of_subgraphs[bid];
+					int nnz = nnzs_of_subgraphs[bid];
+					int bblocks = (n_vertices - 1) / nthreads + 1;
+					bottom_up_tile <<<bblocks, nthreads>>> (n_vertices, d_row_offsets_blocked[bid], d_column_indices_blocked[bid], d_idx_map[bid], front, next);
+				}
+				update <<<nblocks, nthreads>>> (m, next, d_depths, iter);
 #else
 				bottom_up_base <<<nblocks, nthreads>>> (m, d_in_row_offsets, d_in_column_indices, d_depths, front, next, iter);
 #endif
@@ -398,8 +364,8 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	printf("\titerations = %d.\n", iter);
 	printf("\truntime [%s] = %f ms.\n", BFS_VARIANT, t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(h_depths, d_depths, m * sizeof(DistT), cudaMemcpyDeviceToHost));
-	CUDA_SAFE_CALL(cudaFree(d_in_row_offsets));
-	CUDA_SAFE_CALL(cudaFree(d_in_column_indices));
+	//CUDA_SAFE_CALL(cudaFree(d_in_row_offsets));
+	//CUDA_SAFE_CALL(cudaFree(d_in_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_out_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_out_column_indices));
 	CUDA_SAFE_CALL(cudaFree(d_depths));

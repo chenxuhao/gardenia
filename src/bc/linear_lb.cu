@@ -20,7 +20,11 @@ __global__ void initialize(int m, int *depths) {
 }
 
 // Shortest path calculation by forward BFS
-__global__ void bc_forward(const IndexT *row_offsets, const IndexT *column_indices, int *path_counts, int *depths, int depth, Worklist2 in_queue, Worklist2 out_queue) {
+__global__ void bc_forward(const IndexT *row_offsets, 
+                           const IndexT *column_indices, 
+                           int *path_counts, int *depths, 
+                           int depth, Worklist2 in_queue, 
+                           Worklist2 out_queue) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
 	if (in_queue.pop_id(tid, src)) {
@@ -39,7 +43,11 @@ __global__ void bc_forward(const IndexT *row_offsets, const IndexT *column_indic
 }
 
 // Dependency accumulation by back propagation
-__global__ void bc_reverse(int num, const IndexT *row_offsets, const IndexT *column_indices, int start, const IndexT *frontiers, ScoreT *scores, const int *path_counts, int *depths, int depth, ScoreT *deltas) {
+__global__ void bc_reverse(int num, const IndexT *row_offsets, 
+                           const IndexT *column_indices, 
+                           int start, const IndexT *frontiers, 
+                           ScoreT *scores, const int *path_counts, 
+                           int *depths, int depth, ScoreT *deltas) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	if (tid < num) {
 		int src = frontiers[start + tid];
@@ -56,7 +64,10 @@ __global__ void bc_reverse(int num, const IndexT *row_offsets, const IndexT *col
 	}
 }
 
-__device__ __forceinline__ void process_edge(int value, int depth, int offset, const IndexT *column_indices, int *path_counts, int *depths, Worklist2 &out_queue) {
+__device__ __forceinline__ void process_edge(int value, int depth, int offset, 
+                                             const IndexT *column_indices, 
+                                             int *path_counts, int *depths, 
+                                             Worklist2 &out_queue) {
 	int dst = column_indices[offset];
 	if ((depths[dst] == -1) && (atomicCAS(&depths[dst], -1, depth) == -1)) {
 		assert(out_queue.push(dst));
