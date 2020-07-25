@@ -40,11 +40,17 @@ Setup CUB library:
 
     $ git submodule update --init --recursive
 
+Setup environment variables:
+
+    $ cd src
+	$ cp common.mk.example common.mk
+	$ vim common.mk // modify this file to setup the compilation
+
 Build the project (you will need to install gcc and nvcc first):
 
     $ make
 
-Or go to each sub-directory, e.g. bfs, and then
+Or go to each sub-directory, e.g. src/bfs, and then
 
     $ make
 
@@ -55,11 +61,19 @@ Download datasets from the UFSMC or SNAP website:
 Decompress the dataset file and put it in the 'datasets' sub-directory:
 
     $ tar zxvf soc-LiveJournal1.tar.gz
+    $ mv soc-LiveJournal1.mtx datasets/
+
+Find out commandline format by running executable without argument:
+
+    $ cd bin
+    $ ./bfs_linear_base
+    Breadth-first Search by Xuhao Chen
+    Usage: ./bfs_linear_base <filetype> <graph-prefix> [symmetrize(0/1)] [reverse(0/1)] [source_id(0)]
 
 Run BFS on a directed graph starting from vertex 0:
 
     $ cd bin
-    $ ./bfs_linear_base ../datasets/soc-LiveJournal1.mtx 0 1
+    $ ./bfs_linear_base mtx ../datasets/soc-LiveJournal1 0 0 0
 
 To run on CPU or Intel Xeon Phi coprocessor, set the following environment variable:
 
