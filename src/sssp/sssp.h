@@ -1,6 +1,7 @@
-// Copyright 2016, National University of Defense Technology
-// Contact: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Contact: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
+#include "csr_graph.h"
 /*
 GARDENIA Benchmark Suite
 Kernel: Single-source Shortest Paths (SSSP)
@@ -23,12 +24,16 @@ thread-local bin into the shared bin.
 
 Once a vertex is added to a bin, it is not removed, even if its distance is
 later updated and it now appears in a lower bin. We find ignoring vertices if
-their current distance is less than the min distance for the bin to remove
-enough redundant work that this is faster than removing the vertex from older
-bins.
+their current distance is less than the min distance for the bin to remove enough 
+redundant work that this is faster than removing the vertex from older bins.
 
-[1] Ulrich Meyer and Peter Sanders. "δ-stepping: a parallelizable shortest path
-	algorithm." Journal of Algorithms, 49(1):114–152, 2003.
+[1] Ulrich Meyer and Peter Sanders. "δ-stepping: a parallelizable shortest
+	path algorithm." Journal of Algorithms, 49(1):114–152, 2003.
+
+[2] A. Davidson, S. Baxter, M. Garland, and J. D. Owens, “Work-efficient
+	parallel gpu methods for single-source shortest paths,” in Proceedings
+	of the IEEE 28th International Parallel and Distributed Processing
+	Symposium (IPDPS), pp. 349–359, May 2014
 
 sssp_omp: OpenMP implementation using delta-stepping algorithm, one thread per vertex
 sssp_topo_base: topology-driven GPU implementation, one thread per vertex using CUDA
@@ -39,5 +44,6 @@ sssp_linear_lb: data-driven GPU implementation, one thread per edge using CUDA
 
 //const DistT kDistInf = numeric_limits<DistT>::max()/2;
 #define kDistInf UINT_MAX/2
-void SSSPSolver(int m, int nnz, int source, IndexT *row_offsets, IndexT *column_indices, DistT *weight, DistT *dist, int delta);
-void SSSPVerifier(int m, int source, IndexT *row_offsets, IndexT *column_indices, DistT *weight, DistT *dist);
+void SSSPSolver(Graph &g, int source, DistT *weight, DistT *dist, int delta);
+void SSSPVerifier(Graph &g, int source, DistT *weight, DistT *dist);
+

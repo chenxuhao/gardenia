@@ -1,6 +1,5 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
-#define SSSP_VARIANT "linear_base"
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "sssp.h"
 #include "timer.h"
 #include "worklistc.h"
@@ -26,7 +25,11 @@ Naive CUDA implementation of the Bellman-Ford algorithm for SSSP
  * @param[in] d_in_queue        Device pointer of VertexId to the incoming frontier queue
  * @param[out]d_out_queue       Device pointer of VertexId to the outgoing frontier queue
  */
-__global__ void bellman_ford(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 in_frontier, Worklist2 out_frontier) {
+__global__ void bellman_ford(int m, const uint64_t *row_offsets, 
+                             const VertexId*column_indices, 
+                             DistT *weight, DistT *dist, 
+                             Worklist2 in_frontier, 
+                             Worklist2 out_frontier) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	int src;
 	if(in_frontier.pop_id(tid, src)) {
@@ -58,17 +61,25 @@ __global__ void insert(int source, Worklist2 in_frontier) {
  * @param[in] h_weight          Host pointer of DistT to the edge weight queue
  * @param[out]h_dist            Host pointer of DistT to the distance queue
  */
-void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist, int delta) {
+
+void SSSPSolver(Graph &g, int source, DistT *h_weight, DistT *h_dist, int delta) {
+  auto m = g.V();
+  auto nnz = g.E();
+  auto h_row_offsets = g.out_rowptr();
+  auto h_column_indices = g.out_colidx();	
+  //print_device_info(0);
+  uint64_t *d_row_offsets;
+  VertexId *d_column_indices;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+
 	DistT zero = 0;
-	int *d_row_offsets, *d_column_indices;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	DistT *d_weight;
+	DistT * d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_weight, nnz * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(DistT), cudaMemcpyHostToDevice));
-	DistT * d_dist;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
@@ -103,7 +114,7 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 	t.Stop();
 
 	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, t.Millisecs());
+	printf("\truntime [cuda_linear_base] = %f ms.\n", t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
@@ -111,3 +122,4 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 	CUDA_SAFE_CALL(cudaFree(d_dist));
 	return;
 }
+

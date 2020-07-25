@@ -1,54 +1,31 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "sssp.h"
-#include "graph_io.h"
 
 int main(int argc, char *argv[]) {
-	printf("Single Source Shortest Path by Xuhao Chen\n");
-	int source = 0;
-	bool is_directed = true;
-	bool symmetrize = false;
+	std::cout << "Single Source Shortest Path by Xuhao Chen\n";
+  if (argc < 3) {
+    std::cout << "Usage: " << argv[0] << " <filetype> <graph-prefix> "
+              << "[symmetrize(0/1)] [reverse(0/1)] [source_id(0)] [delta(1)]\n";
+    std::cout << "Example: " << argv[0] << " mtx web-Google 0 1\n";
+    exit(1);
+  }
 	int delta = 1;
-	if (argc < 2) {
-		printf("Usage: %s <graph> [source] [is_directed(0/1)] [delta]\n", argv[0]);
-		exit(1);
-	} else if (argc> 2) {
-		source = atoi(argv[2]);
-		printf("Source vertex: %d\n", source);
-		if(argc > 3) {
-			is_directed = atoi(argv[3]);
-			if(is_directed) printf("This is a directed graph\n");
-			else printf("This is an undirected graph\n");
-		}
-		if(argc > 4) {
-			delta = atoi(argv[4]);
-			printf("Delta: %d\n", delta);
-		}
-	}
-	if(!is_directed) symmetrize = true;
-
-	// CSR data structures
-	int m, n, nnz;
-	IndexT *h_row_offsets = NULL, *h_column_indices = NULL;
-	int *h_degree = NULL;
-	WeightT *h_weight = NULL;
-	read_graph(argc, argv, m, n, nnz, h_row_offsets, h_column_indices, h_degree, h_weight, symmetrize);
-	//readMatrix(argv[1], &m, &n, &h_row_offsets, &h_column_indices, &h_weight);
-
-	DistT *h_wt = (DistT *) malloc(nnz * sizeof(DistT));
-	DistT *h_dist = (DistT *) malloc(m * sizeof(DistT));
-	for(int i = 0; i < nnz; i ++) h_wt[i] = (DistT) h_weight[i];
-	for(int i = 0; i < m; i ++) h_dist[i] = kDistInf;
-	free(h_weight);
-
-	SSSPSolver(m, nnz, source, h_row_offsets, h_column_indices, h_wt, h_dist, delta);
-#ifndef SIM
-	SSSPVerifier(m, source, h_row_offsets, h_column_indices, h_wt, h_dist);
-	free(h_row_offsets);
-	free(h_column_indices);
-	free(h_wt);
-	free(h_dist);
-	if(h_degree) free(h_degree);
-#endif
-	return 0;
+  bool symmetrize = false;
+  bool need_reverse = false;
+  if (argc > 3) symmetrize = atoi(argv[3]);
+  if (argc > 4) need_reverse = atoi(argv[4]);
+  Graph g(argv[2], argv[1], symmetrize, need_reverse);
+  int source = 0;
+  if (argc > 5) source = atoi(argv[5]);
+  if (argc > 6) delta = atoi(argv[6]);
+	//printf("Delta: %d\n", delta);
+  auto m = g.V();
+  auto nnz = g.E();
+  std::vector<DistT> distances(m, kDistInf);
+	std::vector<DistT> wt(nnz, DistT(1));
+  SSSPSolver(g, source, &wt[0], &distances[0], delta);
+  SSSPVerifier(g, source, &wt[0], &distances[0]);
+  return 0;
 }
+

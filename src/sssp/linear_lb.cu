@@ -1,21 +1,19 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
-#define SSSP_VARIANT "linear_lb"
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "sssp.h"
+#include "gbar.h"
 #include "timer.h"
 #include "worklistc.h"
-#include "gbar.h"
-#include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
+#include "cuda_launch_config.hpp"
 #include <cub/cub.cuh>
-/*
-[1] A. Davidson, S. Baxter, M. Garland, and J. D. Owens, “Work-efficient
-	parallel gpu methods for single-source shortest paths,” in Proceedings
-	of the IEEE 28th International Parallel and Distributed Processing
-	Symposium (IPDPS), pp. 349–359, May 2014
-*/
 
-__device__ __forceinline__ void process_edge(int src, int edge, int *column_indices, DistT *weight, DistT *dist, Worklist2 &outwl) {
+typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
+
+__device__ __forceinline__ void process_edge(int src, int edge, 
+                                             const VertexId *column_indices, 
+                                             DistT *weight, DistT *dist, 
+                                             Worklist2 &outwl) {
 	int dst = column_indices[edge];
 	DistT new_dist = dist[src] + weight[edge];
 	if (new_dist < dist[dst]) {
@@ -24,8 +22,10 @@ __device__ __forceinline__ void process_edge(int src, int edge, int *column_indi
 	}
 }
 
-typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
-__device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 &inwl, Worklist2 &outwl) {
+__device__ void expandByCta(int m, const uint64_t *row_offsets, 
+                            const VertexId *column_indices, 
+                            DistT *weight, DistT *dist, 
+                            Worklist2 &inwl, Worklist2 &outwl) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int vertex;
 	__shared__ int owner;
@@ -54,10 +54,18 @@ __device__ void expandByCta(int m, int *row_offsets, int *column_indices, DistT 
 		int neighbor_size = row_end - row_begin;
 		int num = ((neighbor_size + blockDim.x - 1) / blockDim.x) * blockDim.x;
 		for(int i = threadIdx.x; i < num; i += blockDim.x) {
-			int edge = row_begin + i;
+			int dst = 0;
+			int ncnt = 0;
 			if(i < neighbor_size) {
-				process_edge(sh_vertex, edge, column_indices, weight, dist, outwl);
+				int offset = row_begin + i;
+				dst = column_indices[offset];
+				DistT new_dist = dist[sh_vertex] + weight[offset];
+				if (new_dist < dist[dst]) {
+					atomicMin(&dist[dst], new_dist);
+					ncnt = 1;
+				}
 			}
+			outwl.push_1item<BlockScan>(ncnt, dst, BLOCK_SIZE);
 		}
 	}
 }
@@ -68,7 +76,10 @@ __device__ __forceinline__ unsigned LaneId() {
 	return ret;
 }
 
-__device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 &inwl, Worklist2 &outwl) {
+__device__ __forceinline__ void expandByWarp(int m, const uint64_t *row_offsets, 
+                                             const VertexId *column_indices,
+                                             DistT *weight, DistT *dist, 
+                                             Worklist2 &inwl, Worklist2 &outwl) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int warp_id = threadIdx.x >> LOG_WARP_SIZE;
 	unsigned lane_id = LaneId();
@@ -81,7 +92,7 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 		if (vertex != -1)
 			size = row_offsets[vertex + 1] - row_offsets[vertex];
 	}
-	while(__any(size) >= WARP_SIZE) {
+	while(__any_sync(0xFFFFFFFF, size) >= WARP_SIZE) {
 		if(size >= WARP_SIZE)
 			owner[warp_id] = lane_id;
 		if(owner[warp_id] == lane_id) {
@@ -104,7 +115,10 @@ __device__ __forceinline__ void expandByWarp(int m, int *row_offsets, int *colum
 	}
 }
 
-__global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, DistT *weight, DistT *dist, Worklist2 inwl, Worklist2 outwl) {
+__global__ void sssp_kernel(int m, const uint64_t *row_offsets, 
+                            const VertexId *column_indices,
+                            DistT *weight, DistT *dist, 
+                            Worklist2 inwl, Worklist2 outwl) {
 	expandByCta(m, row_offsets, column_indices, weight, dist, inwl, outwl);
 	expandByWarp(m, row_offsets, column_indices, weight, dist, inwl, outwl);
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -146,23 +160,29 @@ __global__ void sssp_kernel(int m, int *row_offsets, int *column_indices, DistT 
 	}
 }
 
-__global__ void insert(int source, Worklist2 inwl) {
-	unsigned id = blockIdx.x * blockDim.x + threadIdx.x;
-	if(id == 0) inwl.push(source);
-	return;
+__global__ void insert(int source, Worklist2 queue) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if(id == 0) queue.push(source);
 }
 
-void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_indices, DistT *h_weight, DistT *h_dist, int delta) {
+void SSSPSolver(Graph &g, int source, DistT *h_weight, DistT *h_dist, int delta) {
+  auto m = g.V();
+  auto nnz = g.E();
+  auto h_row_offsets = g.out_rowptr();
+  auto h_column_indices = g.out_colidx();	
+  //print_device_info(0);
+  uint64_t *d_row_offsets;
+  VertexId *d_column_indices;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+
 	DistT zero = 0;
-	int *d_row_offsets, *d_column_indices;
 	DistT *d_weight;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_weight, nnz * sizeof(DistT)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(DistT), cudaMemcpyHostToDevice));
 	DistT * d_dist;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_weight, nnz * sizeof(DistT)));
+	CUDA_SAFE_CALL(cudaMemcpy(d_weight, h_weight, nnz * sizeof(DistT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_dist, m * sizeof(DistT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_dist, h_dist, m * sizeof(DistT), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(&d_dist[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
@@ -178,7 +198,7 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 
 	Timer t;
 	t.Start();
-	insert<<<1, BLOCK_SIZE>>>(source, *inwl);
+	insert<<<1, 1>>>(source, *inwl);
 	nitems = inwl->nitems();
 	while(nitems > 0) {
 		++ iter;
@@ -195,7 +215,7 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 	t.Stop();
 	
 	printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, t.Millisecs());
+	printf("\truntime [cuda_linear_lb] = %f ms.\n", t.Millisecs());
 	CUDA_SAFE_CALL(cudaMemcpy(h_dist, d_dist, m * sizeof(DistT), cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
 	CUDA_SAFE_CALL(cudaFree(d_column_indices));
@@ -203,3 +223,4 @@ void SSSPSolver(int m, int nnz, int source, int *h_row_offsets, int *h_column_in
 	CUDA_SAFE_CALL(cudaFree(d_dist));
 	return;
 }
+

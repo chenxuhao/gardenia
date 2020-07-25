@@ -7,7 +7,7 @@ SRC=main.cc
 OBJS= linear_lb.o main.o verifier.o omp_base.o
 
 #all: $(OBJS) $(EXE)_linear_base $(EXE)_linear_lb $(EXE)_topo_base $(EXE)_topo_lb $(EXE)_omp_base
-all: $(OBJS) $(EXE)_linear_lb $(EXE)_omp_base
+all: $(OBJS) $(EXE)_linear_base $(EXE)_linear_lb $(EXE)_omp_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<

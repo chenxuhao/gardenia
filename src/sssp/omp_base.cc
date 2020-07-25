@@ -1,5 +1,5 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020 MIT
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "sssp.h"
 #include <omp.h>
 #include <vector>
@@ -7,14 +7,9 @@
 #include "timer.h"
 #include "platform_atomics.h"
 
-#define SSSP_VARIANT "openmp"
-/*
-[1] Ulrich Meyer and Peter Sanders. "δ-stepping: a parallelizable shortest path
-	algorithm." Journal of Algorithms, 49(1):114–152, 2003.
-*/
-
-void SSSPSolver(int m, int nnz, int source, IndexT *row_offsets, IndexT *column_indices, DistT *weight, DistT *dist, int delta) {
-	//omp_set_num_threads(8);
+//[1] Ulrich Meyer and Peter Sanders. "δ-stepping: a parallelizable shortest path
+//    algorithm." Journal of Algorithms, 49(1):114–152, 2003.
+void SSSPSolver(Graph &g, int source, DistT *weight, DistT *dist, int delta) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -23,7 +18,7 @@ void SSSPSolver(int m, int nnz, int source, IndexT *row_offsets, IndexT *column_
 	printf("Launching OpenMP SSSP solver (%d threads) ...\n", num_threads);
 	Timer t;
 	dist[source] = 0;
-	IndexT *frontier = (IndexT *)malloc(nnz*sizeof(IndexT));
+	IndexT *frontier = (IndexT *)malloc(g.E()*sizeof(IndexT));
 	// two element arrays for double buffering curr=iter&1, next=(iter+1)&1
 	size_t shared_indexes[2] = {0, kDistInf};
 	size_t frontier_tails[2] = {1, 0}; 
@@ -43,12 +38,10 @@ void SSSPSolver(int m, int nnz, int source, IndexT *row_offsets, IndexT *column_
 			for (size_t i = 0; i < curr_frontier_tail; i ++) {
 				IndexT src = frontier[i];
 				if (dist[src] >= delta * static_cast<DistT>(curr_bin_index)) {
-					IndexT row_begin = row_offsets[src];
-					IndexT row_end = row_offsets[src + 1];
-					for (IndexT offset = row_begin; offset < row_end; offset ++) {
-						IndexT dst = column_indices[offset];
+          auto offset = g.edge_begin(src);
+          for (auto dst : g.N(src)) {
 						DistT old_dist = dist[dst];
-						DistT new_dist = dist[src] + weight[offset];
+						DistT new_dist = dist[src] + weight[offset++];
 						if (new_dist < old_dist) {
 							bool changed_dist = true;
 							while (!compare_and_swap(dist[dst], old_dist, new_dist)) {
@@ -95,6 +88,7 @@ void SSSPSolver(int m, int nnz, int source, IndexT *row_offsets, IndexT *column_
 	}
 	t.Stop();
 	//printf("\titerations = %d.\n", iter);
-	printf("\truntime [%s] = %f ms.\n", SSSP_VARIANT, t.Millisecs());
+	printf("\truntime [omp_base] = %f ms.\n", t.Millisecs());
 	return;
 }
+
