@@ -1,0 +1,71 @@
+Triangle Counting (TC)
+================================================================================
+
+DESCRIPTION 
+--------------------------------------------------------------------------------
+
+Author: Xuhao Chen
+This program counts the number of triangles in a given undirected graph.
+
+This implementation reduces the search space by counting each triangle only
+once. A naive implementation will count the same triangle six times because
+each of the three vertices (u, v, w) will count it in both ways. To count
+a triangle only once, this implementation only counts a triangle if u > v > w.
+To setup this total ordering among vertices, the input undirected graph is 
+converted into a directed acyclic graph (DAG). This technqiue is well known
+as orientation.
+
+INPUT
+--------------------------------------------------------------------------------
+
+Requires input graph:
+  - to be undirected
+  - no duplicate edges (or else will be counted as multiple triangles)
+  - neighborhoods are sorted by vertex identifiers
+
+BUILD
+--------------------------------------------------------------------------------
+
+1. Run make at this directory
+
+2. Or run make at the top-level directory
+
+-tc_omp_base : one thread per vertex using OpenMP
+-tc_base: one thread per vertex using CUDA
+-tc_warp: one warp per vertex using CUDA
+
+RUN
+--------------------------------------------------------------------------------
+
+The following is an example command line.
+
+-`$ ./tc_omp_base mtx ../../datasets/com-Orkut`
+-`$ ./tc_base mtx ../../datasets/soc-LiveJournal1`
+-`$ ./tc_warp mtx ../../datasets/soc-LiveJournal1`
+
+PERFORMANCE
+--------------------------------------------------------------------------------
+
+Please see details in the paper.
+
+CITATION
+--------------------------------------------------------------------------------
+
+Please cite the following paper if you use Pangolin:
+
+```
+@article{Pangolin,
+	title={Pangolin: An Efficient and Flexible Graph Mining System on CPU and GPU},
+	author={Xuhao Chen and Roshan Dathathri and Gurbinder Gill and Keshav Pingali},
+	year={2020},
+	journal = {Proc. VLDB Endow.},
+	issue_date = {August 2020},
+	volume = {13},
+	number = {8},
+	month = aug,
+	year = {2020},
+	numpages = {12},
+	publisher = {VLDB Endowment},
+}
+```
+
