@@ -4,7 +4,8 @@ Triangle Counting (TC)
 DESCRIPTION 
 --------------------------------------------------------------------------------
 
-Author: Xuhao Chen
+Author: Xuhao Chen <cxh@mit.edu>
+
 This program counts the number of triangles in a given undirected graph.
 
 This implementation reduces the search space by counting each triangle only
@@ -18,10 +19,12 @@ as orientation.
 INPUT
 --------------------------------------------------------------------------------
 
-Requires input graph:
+The input graph is preprocessed internally to meet these requirements:
   - to be undirected
+  - no self-loops
   - no duplicate edges (or else will be counted as multiple triangles)
   - neighborhoods are sorted by vertex identifiers
+
 
 BUILD
 --------------------------------------------------------------------------------
@@ -30,18 +33,20 @@ BUILD
 
 2. Or run make at the top-level directory
 
--tc_omp_base : one thread per vertex using OpenMP
--tc_base: one thread per vertex using CUDA
--tc_warp: one warp per vertex using CUDA
+  - tc_omp_base : one thread per vertex using OpenMP
+  - tc_base: one thread per vertex using CUDA
+  - tc_warp: one warp per vertex using CUDA
 
 RUN
 --------------------------------------------------------------------------------
 
 The following is an example command line.
 
--`$ ./tc_omp_base mtx ../../datasets/com-Orkut`
--`$ ./tc_base mtx ../../datasets/soc-LiveJournal1`
--`$ ./tc_warp mtx ../../datasets/soc-LiveJournal1`
+`$ ./tc_omp_base mtx ../../datasets/com-Orkut`
+
+`$ ./tc_base mtx ../../datasets/soc-LiveJournal1`
+
+`$ ./tc_warp mtx ../../datasets/soc-LiveJournal1`
 
 PERFORMANCE
 --------------------------------------------------------------------------------
@@ -51,7 +56,7 @@ Please see details in the paper.
 CITATION
 --------------------------------------------------------------------------------
 
-Please cite the following paper if you use Pangolin:
+Please cite the following paper if you use this code:
 
 ```
 @article{Pangolin,
