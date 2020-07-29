@@ -1,4 +1,4 @@
-Triangle Counting (TC)
+k-Clique Listing (k-CL)
 ================================================================================
 
 DESCRIPTION 
@@ -6,15 +6,12 @@ DESCRIPTION
 
 Author: Xuhao Chen <cxh@mit.edu>
 
-This program counts the number of triangles in a given undirected graph.
+This program counts the number of k-cliques in a given undirected graph.
 
-This implementation reduces the search space by counting each triangle only
-once. A naive implementation will count the same triangle six times because
-each of the three vertices (u, v, w) will count it in both ways. To count
-a triangle only once, this implementation only counts a triangle if u > v > w.
-To setup this total ordering among vertices, the input undirected graph is 
-converted into a directed acyclic graph (DAG). This technqiue is well known
-as orientation.
+This implementation reduces the search space by counting each k-clique only once.
+This is done by establish a total ordering among vertices in the input graph.
+To setup this total ordering, the input undirected graph is converted into
+a directed acyclic graph (DAG). This technqiue is well known as orientation.
 
 INPUT
 --------------------------------------------------------------------------------
@@ -32,20 +29,17 @@ BUILD
 
 2. Or run make at the top-level directory
 
-  - tc_omp_base : one thread per vertex using OpenMP
-  - tc_base: one thread per vertex using CUDA
-  - tc_warp: one warp per vertex using CUDA
+  - kcl_omp_base : one thread per vertex using OpenMP
+  - kcl_base: one thread per vertex using CUDA
 
 RUN
 --------------------------------------------------------------------------------
 
 The following is an example command line.
 
-`$ ../../bin/tc_omp_base mtx ../../datasets/com-Orkut`
+`$ ../../bin/kcl_omp_base mtx ../../datasets/com-Orkut.mtx 4`
 
-`$ ../../bin/tc_base mtx ../../datasets/soc-LiveJournal1`
-
-`$ ../../bin/tc_warp mtx ../../datasets/soc-LiveJournal1`
+`$ ../../bin/kcl_base mtx ../../datasets/soc-LiveJournal1.mtx 4`
 
 PERFORMANCE
 --------------------------------------------------------------------------------
