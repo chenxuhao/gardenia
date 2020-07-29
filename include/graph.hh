@@ -2,10 +2,12 @@
 #include <cassert>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include "VertexSet.h"
+#include "scan.h"
 
 constexpr bool map_edges = false; // use mmap() instead of read()
 constexpr bool map_vertices = false; // use mmap() instead of read()
@@ -45,19 +47,18 @@ public:
     VertexSet::release_buffers();
     std::ifstream f_meta((prefix + ".meta.txt").c_str());
     assert(f_meta);
-    max_degree = 0;
     int vid_size;
     f_meta >> n_vertices >> n_edges >> vid_size >> max_degree;
     assert(sizeof(vidType) == vid_size);
-    VertexSet::MAX_DEGREE = std::max(max_degree, VertexSet::MAX_DEGREE);
     f_meta.close();
     if(map_vertices) map_file(prefix + ".vertex.bin", vertices, n_vertices+1);
     else read_file(prefix + ".vertex.bin", vertices, n_vertices+1);
     if(map_edges) map_file(prefix + ".edge.bin", edges, n_edges);
     else read_file(prefix + ".edge.bin", edges, n_edges);
-    std::cout << "max_degree: " << max_degree << "\n";
     if (max_degree == 0 || max_degree>=n_vertices) exit(1);
     if (use_dag) orientation();
+    std::cout << "max_degree: " << max_degree << "\n";
+    VertexSet::MAX_DEGREE = std::max(max_degree, VertexSet::MAX_DEGREE);
   }
   ~Graph() {
     if(map_edges) {
@@ -100,10 +101,12 @@ public:
   void orientation() {
     std::cout << "Orientation enabled, using DAG\n";
     std::vector<vidType> degrees(n_vertices, 0);
+    #pragma omp parallel for
     for (vidType v = 0; v < n_vertices; v++) {
       degrees[v] = get_degree(v);
     }
     std::vector<vidType> new_degrees(n_vertices, 0);
+    #pragma omp parallel for
     for (vidType src = 0; src < n_vertices; src ++) {
       for (auto dst : N(src)) {
         if (degrees[dst] > degrees[src] ||
@@ -112,16 +115,15 @@ public:
         }
       }
     }
+    max_degree = *(std::max_element(new_degrees.begin(), new_degrees.end()));
     uint64_t *old_vertices = vertices;
     vidType *old_edges = edges;
     uint64_t *new_vertices = custom_alloc_global<uint64_t>(n_vertices+1);
-    new_vertices[0] = 0;
-    for (vidType v = 1; v < n_vertices+1; v++) {
-      new_vertices[v] = new_vertices[v-1] + new_degrees[v-1];
-    }
-    //ParallelPrefixSum(new_degrees, new_vertices);
+    //prefix_sum<vidType,uint64_t>(new_degrees, new_vertices);
+    parallel_prefix_sum<vidType,uint64_t>(new_degrees, new_vertices);
     auto num_edges = new_vertices[n_vertices];
     vidType *new_edges = custom_alloc_global<vidType>(num_edges);
+    #pragma omp parallel for
     for (vidType src = 0; src < n_vertices; src ++) {
       auto begin = new_vertices[src];
       unsigned offset = 0;

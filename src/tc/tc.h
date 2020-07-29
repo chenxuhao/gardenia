@@ -1,7 +1,7 @@
 // Copyright 2020 MIT
 // Contact: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
-#include "graph.h"
+#include "csr_graph.h"
 /*
 GARDENIA Benchmark Suite
 Kernel: Triangle Counting (TC)
@@ -27,4 +27,5 @@ tc_warp: one warp per vertex using CUDA
 */
 
 void TCSolver(Graph &g, uint64_t &total);
-void TCVerifier(Graph &g, uint64_t &test_total);
+void TCVerifier(Graph &g, uint64_t test_total);
+

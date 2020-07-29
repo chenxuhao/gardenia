@@ -13,14 +13,26 @@
 class VertexSet {
 private:
   VertexId *ptr;
-  size_t size_;
+  VertexId size_;
 public:
   VertexSet() : size_(0) {}
   VertexSet(VertexId *p, VertexId s) : 
     ptr(p), size_(s) {}
-  size_t size() { return size_; }
+  VertexId size() { return size_; }
   const VertexId* begin() const { return ptr; }
   const VertexId* end() const { return ptr + size_; }
+  VertexId get_intersect_num(const VertexSet &other) const {
+    VertexId num = 0;
+    VertexId idx_l = 0, idx_r = 0;
+    while(idx_l < size_ && idx_r < other.size_) {
+      auto left = ptr[idx_l];
+      auto right = other.ptr[idx_r];
+      if(left <= right) idx_l++;
+      if(right <= left) idx_r++;
+      if(left == right) num++;
+    }
+    return num;
+  }
 };
 
 constexpr bool map_edges = false; // use mmap() instead of read()
@@ -194,48 +206,6 @@ private:
     close(inf);
   }
   //std::vector<uint64_t> scale_accesses;
-  void orientation() {
-    std::cout << "Orientation enabled, using DAG\n";
-    std::vector<VertexId> degrees(n_vertices, 0);
-    for (VertexId v = 0; v < n_vertices; v++) {
-      degrees[v] = get_degree(v);
-    }
-    std::vector<VertexId> new_degrees(n_vertices, 0);
-    for (VertexId src = 0; src < n_vertices; src ++) {
-      for (auto dst : N(src)) {
-        if (degrees[dst] > degrees[src] ||
-            (degrees[dst] == degrees[src] && dst > src)) {
-          new_degrees[src]++;
-        }
-      }
-    }
-    uint64_t *old_vertices = vertices;
-    VertexId *old_edges = edges;
-    uint64_t *new_vertices = custom_alloc_global<uint64_t>(n_vertices+1);
-    new_vertices[0] = 0;
-    for (VertexId v = 1; v < n_vertices+1; v++) {
-      new_vertices[v] = new_vertices[v-1] + new_degrees[v-1];
-    }
-    //ParallelPrefixSum(new_degrees, new_vertices);
-    auto num_edges = new_vertices[n_vertices];
-    VertexId *new_edges = custom_alloc_global<VertexId>(num_edges);
-    for (VertexId src = 0; src < n_vertices; src ++) {
-      auto begin = new_vertices[src];
-      unsigned offset = 0;
-      for (auto dst : N(src)) {
-        if (degrees[dst] > degrees[src] ||
-            (degrees[dst] == degrees[src] && dst > src)) {
-          new_edges[begin+offset] = dst;
-          offset ++;
-        }
-      }
-    }
-    vertices = new_vertices;
-    edges = new_edges;
-    custom_free<uint64_t>(old_vertices, n_vertices);
-    custom_free<VertexId>(old_edges, n_edges);
-    n_edges = num_edges;
-  }
 
 public:
   Graph(std::string prefix, 
@@ -334,5 +304,53 @@ public:
   VertexId* out_colidx() { return edges; }
   uint64_t* in_rowptr() { return reverse_vertices; }
   VertexId* in_colidx() { return reverse_edges; }
+
+  void orientation() {
+    std::cout << "Orientation enabled, using DAG\n";
+    std::vector<VertexId> degrees(n_vertices, 0);
+    for (VertexId v = 0; v < n_vertices; v++) {
+      degrees[v] = get_degree(v);
+    }
+    std::vector<VertexId> new_degrees(n_vertices, 0);
+    for (VertexId src = 0; src < n_vertices; src ++) {
+      for (auto dst : N(src)) {
+        if (degrees[dst] > degrees[src] ||
+            (degrees[dst] == degrees[src] && dst > src)) {
+          new_degrees[src]++;
+        }
+      }
+    }
+    uint64_t *old_vertices = vertices;
+    VertexId *old_edges = edges;
+    uint64_t *new_vertices = custom_alloc_global<uint64_t>(n_vertices+1);
+    new_vertices[0] = 0;
+    for (VertexId v = 1; v < n_vertices+1; v++) {
+      new_vertices[v] = new_vertices[v-1] + new_degrees[v-1];
+    }
+    //ParallelPrefixSum(new_degrees, new_vertices);
+    auto num_edges = new_vertices[n_vertices];
+    VertexId *new_edges = custom_alloc_global<VertexId>(num_edges);
+    for (VertexId src = 0; src < n_vertices; src ++) {
+      auto begin = new_vertices[src];
+      unsigned offset = 0;
+      for (auto dst : N(src)) {
+        if (degrees[dst] > degrees[src] ||
+            (degrees[dst] == degrees[src] && dst > src)) {
+          new_edges[begin+offset] = dst;
+          offset ++;
+        }
+      }
+    }
+    vertices = new_vertices;
+    edges = new_edges;
+    custom_free<uint64_t>(old_vertices, n_vertices);
+    custom_free<VertexId>(old_edges, n_edges);
+    n_edges = num_edges;
+    std::cout << "|V| " << n_vertices << " |E| " << n_edges << "\n";
+  }
 };
+
+inline uint64_t intersection_num(const VertexSet& a, const VertexSet& b) {
+  return a.get_intersect_num(b);
+}
 

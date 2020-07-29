@@ -1,12 +1,10 @@
-// Copyright (c) 2016, Xuhao Chen
+// Copyright (c) 2020 MIT
 #include "tc.h"
 #include "timer.h"
-#include "cutil_subset.h"
-#include "cuda_launch_config.hpp"
+#include "gpu_graph.h"
 #include <cub/cub.cuh>
-#define TC_VARIANT "topo_warp"
 
-__global__ void ordered_count(int m, int *row_offsets, int *column_indices, int *total) {
+__global__ void triangle_count(int m, CSRGraph g, int *total) {
 	typedef cub::BlockReduce<int, BLOCK_SIZE> BlockReduce;
 	__shared__ typename BlockReduce::TempStorage temp_storage;
 
@@ -18,22 +16,20 @@ __global__ void ordered_count(int m, int *row_offsets, int *column_indices, int 
 	const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
 
 	int local_total = 0;
-	for(int src = warp_id; src < m; src += num_warps) {
+	for(int u = warp_id; u < m; u += num_warps) {
 		if(thread_lane < 2)
-			ptrs[warp_lane][thread_lane] = row_offsets[src + thread_lane];
-		const int row_begin = ptrs[warp_lane][0];
-		const int row_end   = ptrs[warp_lane][1];
-		for (int offset = row_begin + thread_lane; offset < row_end; offset += WARP_SIZE) {
-			int dst = column_indices[offset];
-			//if (dst > src) break;
-			int row_begin_dst = row_offsets[dst];
-			int row_end_dst = row_offsets[dst+1];
-			int it = row_begin;
-			for (int offset_dst = row_begin_dst; offset_dst < row_end_dst; ++ offset_dst) {
-				int dst_dst = column_indices[offset_dst];
-				//if (dst_dst > dst) break;
-				while (column_indices[it] < dst_dst && it != row_end) it ++;
-				if (it != row_end && column_indices[it] == dst_dst) local_total += 1;
+			ptrs[warp_lane][thread_lane] = g.edge_begin(u + thread_lane);
+		auto u_begin = ptrs[warp_lane][0];
+		auto u_end   = ptrs[warp_lane][1];
+		for (auto e = u_begin + thread_lane; e < u_end; e += WARP_SIZE) {
+			auto v = g.getEdgeDst(e);
+			auto v_begin = g.edge_begin(v);
+			auto v_end = g.edge_end(v);
+			auto it = u_begin;
+			for (auto e_dst = v_begin; e_dst < v_end; ++ e_dst) {
+				auto w = g.getEdgeDst(e_dst);
+				while (g.getEdgeDst(it) < w && it != u_end) it ++;
+				if (it != u_end && g.getEdgeDst(it) == w) local_total += 1;
 			}
 		}
 	}
@@ -42,45 +38,34 @@ __global__ void ordered_count(int m, int *row_offsets, int *column_indices, int 
 }
 
 void TCSolver(Graph &g, uint64_t &total) {
-	int64_t m = g.num_vertices();
-	int64_t nnz = g.num_edges();
-	IndexT *h_row_offsets = g.out_rowptr();
-	IndexT *h_column_indices = g.out_colidx();
-	
-	//print_device_info(0);
-	int zero = 0;
-	int *d_row_offsets, *d_column_indices;//, *d_degree;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(int), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
-	int h_total = 0, *d_total;
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_total, &zero, sizeof(int), cudaMemcpyHostToDevice));
+ 	//print_device_info(0);
+  CSRGraph gpu_graph(g);
+  auto m = g.V();
+  int zero = 0;
+  int h_total = 0, *d_total;
+  CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(int)));
+  CUDA_SAFE_CALL(cudaMemcpy(d_total, &zero, sizeof(int), cudaMemcpyHostToDevice));
 
-	const int nthreads = BLOCK_SIZE;
-	cudaDeviceProp deviceProp;
-	CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
-	const int nSM = deviceProp.multiProcessorCount;
-	const int max_blocks_per_SM = maximum_residency(ordered_count, nthreads, 0);
-	const int max_blocks = max_blocks_per_SM * nSM;
-	int nblocks = DIVIDE_INTO(m, WARPS_PER_BLOCK);
-	if(nblocks > max_blocks) nblocks = max_blocks;
-	printf("Launching CUDA TC solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
+  const int nthreads = BLOCK_SIZE;
+  cudaDeviceProp deviceProp;
+  CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
+  const int nSM = deviceProp.multiProcessorCount;
+  const int max_blocks_per_SM = maximum_residency(triangle_count, nthreads, 0);
+  const int max_blocks = max_blocks_per_SM * nSM;
+  int nblocks = DIVIDE_INTO(m, WARPS_PER_BLOCK);
+  if(nblocks > max_blocks) nblocks = max_blocks;
+  printf("Launching CUDA TC solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
 
-	Timer t;
-	t.Start();
-	ordered_count<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_total);
-	CudaTest("solving failed");
-	CUDA_SAFE_CALL(cudaDeviceSynchronize());
-	t.Stop();
+  Timer t;
+  t.Start();
+  triangle_count<<<nblocks, nthreads>>>(m, gpu_graph, d_total);
+  CudaTest("solving triangle_count kernel failed");
+  CUDA_SAFE_CALL(cudaDeviceSynchronize());
+  t.Stop();
 
-	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, t.Millisecs());
-	CUDA_SAFE_CALL(cudaMemcpy(&h_total, d_total, sizeof(int), cudaMemcpyDeviceToHost));
-	total = (uint64_t)h_total;
-	CUDA_SAFE_CALL(cudaFree(d_row_offsets));
-	CUDA_SAFE_CALL(cudaFree(d_column_indices));
-	CUDA_SAFE_CALL(cudaFree(d_total));
-	//CUDA_SAFE_CALL(cudaFree(d_degree));
+  printf("\truntime [cuda_topo_warp] = %f sec \n", t.Seconds());
+  CUDA_SAFE_CALL(cudaMemcpy(&h_total, d_total, sizeof(int), cudaMemcpyDeviceToHost));
+  total = (uint64_t)h_total;
+  CUDA_SAFE_CALL(cudaFree(d_total));
 }
 

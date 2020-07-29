@@ -5,6 +5,7 @@
   template<typename T>
   T* custom_alloc_local(size_t elements) {
     return (T*)numa_alloc_local(sizeof(T) * elements);
+    //return (T*)aligned_alloc(PAGE_SIZE, elements * sizeof(T));
   }
   template<typename T>
   T* custom_alloc_global(size_t elements) {
