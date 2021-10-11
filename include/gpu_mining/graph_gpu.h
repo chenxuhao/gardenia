@@ -1,76 +1,71 @@
 #pragma once
 #include <cuda.h>
 #include "common.h"
-#include "graph.h"
+#include "graph.hh"
 
 class GraphGPU {
 protected:
-	IndexT *d_row_offsets;
-	IndexT *d_column_indices;
-	BYTE *d_labels;
-	int *d_degrees;
-	int num_vertices;
-	int num_edges;
+  EdgeID *d_rowptr;
+  VertexID *d_colidx;
+  BYTE *d_labels;
+  VertexID num_vertices;
+  EdgeID num_edges;
 public:
-	GraphGPU() {}
-	//~GraphGPU() {}
-	void clean() {
-		CUDA_SAFE_CALL(cudaFree(d_row_offsets));
-		CUDA_SAFE_CALL(cudaFree(d_column_indices));
-		//CUDA_SAFE_CALL(cudaFree(d_degrees));
-	}
-	void init(Graph *hg) {
-		int m = hg->num_vertices();
-		int nnz = hg->num_edges();
-		num_vertices = m;
-		num_edges = nnz;
-		IndexT *h_row_offsets = hg->out_rowptr();
-		IndexT *h_column_indices = hg->out_colidx();
-		int *h_degrees = (int *)malloc(m * sizeof(int));
-		for (int i = 0; i < m; i++) h_degrees[i] = h_row_offsets[i + 1] - h_row_offsets[i];
-		CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(IndexT)));
-		CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(IndexT)));
-		CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(IndexT), cudaMemcpyHostToDevice));
-		CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(IndexT), cudaMemcpyHostToDevice));
-		#ifdef ENABLE_LABEL
-		BYTE *h_labels = (BYTE *)malloc(m * sizeof(BYTE));
-		for (int i = 0; i < m; i++) h_labels[i] = hg->getData(i);
-		CUDA_SAFE_CALL(cudaMalloc((void **)&d_labels, m * sizeof(BYTE)));
-		CUDA_SAFE_CALL(cudaMemcpy(d_labels, h_labels, m * sizeof(BYTE), cudaMemcpyHostToDevice));
-		#endif
-		//CUDA_SAFE_CALL(cudaMalloc((void **)&d_degrees, m * sizeof(int)));
-		//CUDA_SAFE_CALL(cudaMemcpy(d_degrees, h_degrees, m * sizeof(int), cudaMemcpyHostToDevice));
-	}
-	__device__ __host__ bool valid_node(IndexT node) { return (node < num_vertices); }
-	__device__ __host__ bool valid_edge(IndexT edge) { return (edge < num_edges); }
-	__device__ __host__ IndexT getOutDegree(unsigned src) {
-		assert(src < num_vertices);
-		return d_row_offsets[src+1] - d_row_offsets[src];
-	};
-	__device__ __host__ IndexT getDestination(unsigned src, unsigned edge) {
-		assert(src < num_vertices);
-		assert(edge < getOutDegree(src));
-		IndexT abs_edge = d_row_offsets[src] + edge;
-		assert(abs_edge < num_edges);
-		return d_column_indices[abs_edge];
-	};
-	__device__ __host__ IndexT getAbsDestination(unsigned abs_edge) {
-		assert(abs_edge < num_edges);
-		return d_column_indices[abs_edge];
-	};
-	inline __device__ __host__ IndexT getEdgeDst(unsigned edge) {
-		assert(edge < num_edges);
-		return d_column_indices[edge];
-	};
-	inline __device__ __host__ BYTE getData(unsigned vid) {
-		return d_labels[vid];
-	}
-	inline __device__ __host__ IndexT edge_begin(unsigned src) {
-		assert(src <= num_vertices);
-		return d_row_offsets[src];
-	};
-	inline __device__ __host__ IndexT edge_end(unsigned src) {
-		assert(src <= num_vertices);
-		return d_row_offsets[src+1];
-	};
+  GraphGPU() {}
+  //~GraphGPU() {}
+  void clean() {
+    CUDA_SAFE_CALL(cudaFree(d_rowptr));
+    CUDA_SAFE_CALL(cudaFree(d_colidx));
+  }
+  void init(Graph *hg) {
+    auto m = hg->num_vertices();
+    auto nnz = hg->num_edges();
+    num_vertices = m;
+    num_edges = nnz;
+    auto h_rowptr = hg->out_rowptr();
+    auto h_colidx = hg->out_colidx();
+    CUDA_SAFE_CALL(cudaMalloc((void **)&d_rowptr, (m + 1) * sizeof(EdgeID)));
+    CUDA_SAFE_CALL(cudaMalloc((void **)&d_colidx, nnz * sizeof(VertexID)));
+    CUDA_SAFE_CALL(cudaMemcpy(d_rowptr, h_rowptr, (m + 1) * sizeof(EdgeID), cudaMemcpyHostToDevice));
+    CUDA_SAFE_CALL(cudaMemcpy(d_colidx, h_colidx, nnz * sizeof(VertexID), cudaMemcpyHostToDevice));
+#ifdef ENABLE_LABEL
+    BYTE *h_labels = (BYTE *)malloc(m * sizeof(BYTE));
+    for (int i = 0; i < m; i++) h_labels[i] = hg->getData(i);
+    CUDA_SAFE_CALL(cudaMalloc((void **)&d_labels, m * sizeof(BYTE)));
+    CUDA_SAFE_CALL(cudaMemcpy(d_labels, h_labels, m * sizeof(BYTE), cudaMemcpyHostToDevice));
+#endif
+  }
+  __device__ __host__ bool valid_vertex(VertexID vertex) { return (vertex < num_vertices); }
+  __device__ __host__ bool valid_edge(EdgeID edge) { return (edge < num_edges); }
+  __device__ __host__ EdgeID getOutDegree(VertexID src) {
+    assert(src < num_vertices);
+    return d_rowptr[src+1] - d_rowptr[src];
+  };
+  __device__ __host__ VertexID getDestination(VertexID src, EdgeID edge) {
+    assert(src < num_vertices);
+    assert(edge < getOutDegree(src));
+    auto abs_edge = d_rowptr[src] + edge;
+    assert(abs_edge < num_edges);
+    return d_colidx[abs_edge];
+  };
+  __device__ __host__ VertexID getAbsDestination(EdgeID abs_edge) {
+    assert(abs_edge < num_edges);
+    return d_colidx[abs_edge];
+  };
+  inline __device__ __host__ VertexID getEdgeDst(EdgeID edge) {
+    assert(edge < num_edges);
+    return d_colidx[edge];
+  };
+  inline __device__ __host__ BYTE getData(VertexID vid) {
+    return d_labels[vid];
+  }
+  inline __device__ __host__ EdgeID edge_begin(VertexID src) {
+    assert(src <= num_vertices);
+    return d_rowptr[src];
+  };
+  inline __device__ __host__ EdgeID edge_end(VertexID src) {
+    assert(src <= num_vertices);
+    return d_rowptr[src+1];
+  };
 };
+

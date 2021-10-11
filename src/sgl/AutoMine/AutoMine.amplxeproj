@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+ <rdmgr>
+  <timestamp type="u64_t">1594220306</timestamp>
+  <hostname type="string">ghostwheel6.oden.utexas.edu</hostname>
+  <os type="string">linux</os>
+  <product type="string">Intel® VTune™ Amplifier 2019 Update 4</product>
+  <buildNumber type="s32_t">597835</buildNumber>
+  <logicalCPUCount type="s32_t">112</logicalCPUCount>
+  <physicalCoreCount type="s32_t">56</physicalCoreCount>
+  <processorPackageCount type="s32_t">4</processorPackageCount>
+  <CPUFrequency type="s64_t">2200000000</CPUFrequency>
+  <CPUFamily type="s32_t">6</CPUFamily>
+  <CPUModel type="s32_t">85</CPUModel>
+  <CPUStepping type="s32_t">4</CPUStepping>
+  <CPUBrandName type="string">Intel(R) Xeon(R) Gold 5120 CPU @ 2.20GHz</CPUBrandName>
+  <isa type="string">avx512</isa>
+ </rdmgr>
+</root>

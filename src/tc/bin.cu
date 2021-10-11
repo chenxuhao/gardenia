@@ -92,8 +92,8 @@ __global__ void warp(int m, IndexT *row_offsets, IndexT *column_indices, int *de
 }
 
 
-void TCSolver(Graph &g, unsigned long long *total) {
-	//print_device_info(0);
+void TCSolver(Graph &g, uint64_t &total) {
+	print_device_info(0);
 	int m = g.num_vertices();
 	int nnz = g.num_edges();
 	CUDA_Context_Mining cuda_ctx;
@@ -104,22 +104,20 @@ void TCSolver(Graph &g, unsigned long long *total) {
 	int nblocks = DIVIDE_INTO(m, WARPS_PER_BLOCK);
 	init_gpu_dag<<<nblocks, nthreads>>>(m, cuda_ctx.gg, cuda_ctx.emb_list);
 	unsigned long long h_total = 0, *d_total;
-	unsigned long long  zero = 0;
+	unsigned long long zero = 0;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_total, sizeof(unsigned long long)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_total, &zero, sizeof(unsigned long long), cudaMemcpyHostToDevice));
 	printf("Launching CUDA TC solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
 
 	Timer t;
 	t.Start();
-	//warp<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_degrees, d_total);
 	warp_edge<<<nblocks, nthreads>>>(nnz, cuda_ctx.gg, cuda_ctx.emb_list, d_total);
-	CudaTest("solving failed");
 	CUDA_SAFE_CALL(cudaDeviceSynchronize());
 	t.Stop();
 
-	printf("\truntime [%s] = %f ms.\n", TC_VARIANT, t.Millisecs());
+	printf("runtime [%s] = %f sec\n", TC_VARIANT, t.Seconds());
 	CUDA_SAFE_CALL(cudaMemcpy(&h_total, d_total, sizeof(unsigned long long), cudaMemcpyDeviceToHost));
-	*total = h_total;
+	total = h_total;
 	CUDA_SAFE_CALL(cudaFree(d_total));
 }
 

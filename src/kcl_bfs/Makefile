@@ -3,7 +3,7 @@ INCLUDES+=-I $(CUB_DIR)
 CXXFLAGS+=-std=c++11
 SRC=main.cc
 OBJS=omp_base.o base.o main.o
-all: $(OBJS) kcl_base kcl_omp_base
+all: $(OBJS) kcl_base kcl_omp_bfs
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
@@ -19,12 +19,12 @@ endif
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
-kcl_base: base.o main.o
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o -o $@ $(LIBS)
+kcl_base: base.o main.o VertexSet.o
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) main.o base.o VertexSet.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-kcl_omp_base: omp_base.o main.o
-	$(CXX) $(CXXFLAGS) $(INCLUDES) omp_base.o main.o -o $@ -lgomp
+kcl_omp_bfs: omp_base.o main.o VertexSet.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) omp_base.o main.o VertexSet.o -o $@ -lgomp
 	mv $@ $(BIN)
 
 clean:

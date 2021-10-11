@@ -3,14 +3,16 @@
 #include "tc.h"
 
 int main(int argc, char *argv[]) {
-  if (argc < 3) {
-    printf("Usage: %s <filetype> <graph-prefix> \n", argv[0]);
-    printf("Example: %s mtx web-Google\n", argv[0]);
+  if (argc < 2) {
+    printf("Usage: %s <graph>\n", argv[0]);
     exit(1);
   }
   std::cout << "Triangle Count (for undirected graphs only)\n";
-  Graph g(argv[2], argv[1], 1);
+  Graph g(argv[1]); // use DAG
   g.orientation();
+  auto m = g.size();
+  auto nnz = g.sizeEdges();
+  std::cout << "|V| " << m << " |E| " << nnz << "\n";
   uint64_t total = 0;
   TCSolver(g, total);
   std::cout << "total_num_triangles = " << total << "\n";

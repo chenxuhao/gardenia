@@ -8,7 +8,7 @@
 #define USE_BASE_TYPES
 #include "mining/vertex_miner.h"
 
-void KclSolver(Graph &g, unsigned k, AccType &total) {
+void KclSolver(Graph &g, unsigned k, uint64_t &total) {
 	int num_threads = 1;
 	#pragma omp parallel
 	{
@@ -18,7 +18,7 @@ void KclSolver(Graph &g, unsigned k, AccType &total) {
 	VertexMiner miner(&g, k, num_threads);
 	EmbeddingList emb_list;
 	emb_list.init(g, k, true);
-	Accumulator<AccType> num(num_threads);
+	Accumulator<uint64_t> num(num_threads);
 	Timer t;
 	t.Start();
 	unsigned level = 1;

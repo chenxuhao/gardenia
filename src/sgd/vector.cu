@@ -12,11 +12,19 @@ Author: Xuhao Chen
 #include "cuda_launch_config.hpp"
 #include "cutil_subset.h"
 #include <cub/cub.cuh>
-//#define SHFL
+#define USE_SHFL
+
+#if __CUDACC_VER_MAJOR__ >= 9
+#define SHFL_DOWN(a,b) __shfl_down_sync(0xFFFFFFFF,a,b)
+#define SHFL(a,b) __shfl_sync(0xFFFFFFFF,a,b)
+#else
+#define SHFL_DOWN(a,b) __shfl_down(a,b)
+#define SHFL(a,b) __shfl(a,b)
+#endif
 typedef cub::BlockReduce<ScoreT, BLOCK_SIZE> BlockReduce;
 
 __global__ void update(int m, int n, int *row_offsets, int *column_indices, ScoreT *rating, LatentT *user_lv, LatentT *item_lv, ScoreT lambda, ScoreT step, int *ordering, ScoreT *squared_errors) {
-#ifndef SHFL
+#ifndef USE_SHFL
 	__shared__ ScoreT sdata[BLOCK_SIZE + 16];                       // padded to avoid reduction ifs
 #endif
 	__shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
@@ -39,8 +47,8 @@ __global__ void update(int m, int n, int *row_offsets, int *column_indices, Scor
 			int item_id = column_indices[offset];
 			int base_p = user_id * K;
 			int base_q = item_id * K;
-			LatentT temp_p[K/WARP_SIZE];
-			LatentT temp_q[K/WARP_SIZE];
+			LatentT temp_p[K/WARP_SIZE + 1];
+			LatentT temp_q[K/WARP_SIZE + 1];
 			ScoreT estimate = 0;
 			for (int i = 0; i < K; i += WARP_SIZE) {
 				int j = i/WARP_SIZE;
@@ -48,13 +56,13 @@ __global__ void update(int m, int n, int *row_offsets, int *column_indices, Scor
 				temp_q[j] = item_lv[base_q+thread_lane+i];
 				estimate += temp_p[j] * temp_q[j];
 			}
-#ifdef SHFL
-			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 16);
-			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 8);
-			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 4);
-			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 2);
-			estimate += __shfl_down_sync(0xFFFFFFFF, estimate, 1);
-			estimate = __shfl_sync(0xFFFFFFFF, estimate, 0);
+#ifdef USE_SHFL
+			estimate += SHFL_DOWN(estimate, 16);
+			estimate += SHFL_DOWN(estimate, 8);
+			estimate += SHFL_DOWN(estimate, 4);
+			estimate += SHFL_DOWN(estimate, 2);
+			estimate += SHFL_DOWN(estimate, 1);
+			estimate = SHFL(estimate, 0);
 #else
 			sdata[threadIdx.x] = estimate; __syncthreads();
 			sdata[threadIdx.x] = estimate = estimate + sdata[threadIdx.x + 16]; __syncthreads();
@@ -88,16 +96,17 @@ __global__ void rmse(int m, ScoreT *squared_errors, ScoreT *total_error) {
 
 void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_rating, LatentT *h_user_lv, LatentT *h_item_lv, int *h_ordering) {
 	//print_device_info(0);
-	int *d_row_offsets, *d_column_indices, *d_ordering;
-	ScoreT *d_rating;
+	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (num_users + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_rating, nnz * sizeof(ScoreT)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_ordering, num_users * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (num_users + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	ScoreT *d_rating;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_rating, nnz * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_rating, h_rating, nnz * sizeof(ScoreT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_ordering, h_ordering, num_users * sizeof(int), cudaMemcpyHostToDevice));
+	int *d_ordering;
+	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_ordering, num_users * sizeof(int)));
+	//CUDA_SAFE_CALL(cudaMemcpy(d_ordering, h_ordering, num_users * sizeof(int), cudaMemcpyHostToDevice));
 
 	LatentT *d_user_lv, *d_item_lv;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_user_lv, num_users * K * sizeof(LatentT)));

@@ -6,11 +6,11 @@
 class EmbList {
 public:
   EmbList() {}
-  EmbList(unsigned k, unsigned l, int np) {
+  EmbList(unsigned k, VertexId l, int np) {
     init(k, l, np);
   }
   ~EmbList() {}
-  void init(unsigned k, unsigned l, int np=1) {
+  void init(unsigned k, VertexId l, int np=1) {
     vid_lists.resize(k-2);
     num_emb.resize(k-2);
     for (unsigned i = 0; i < k-2; i++) {
@@ -65,19 +65,19 @@ public:
   void push_history(VertexId vid) { history.push_back(vid); }
   void pop_history() { history.pop_back(); }
   void clean_history() { history.clear(); }
-  size_t size(unsigned level) const { return num_emb[level-1][0]; }
-  size_t size(unsigned level, int pid) const { return num_emb[level-1][pid]; }
-  void set_size(unsigned level, size_t size) { num_emb[level-1][0] = size; }
-  void set_size(unsigned level, size_t size, int pid) { num_emb[level-1][pid] = size; }
+  VertexId size(unsigned level) const { return num_emb[level-1][0]; }
+  VertexId size(unsigned level, int pid) const { return num_emb[level-1][pid]; }
+  void set_size(unsigned level, VertexId size) { num_emb[level-1][0] = size; }
+  void set_size(unsigned level, VertexId size, int pid) { num_emb[level-1][pid] = size; }
   void clear_size(unsigned level) {
     for (size_t i = 0; i < num_emb[level-1].size(); i++)
       num_emb[level-1][i] = 0;
   }
-  VertexId get_vertex(unsigned level, size_t i) const {
+  VertexId get_vertex(unsigned level, VertexId i) const {
     assert(level >= 1);
     return vid_lists[level-1][i];
   }
-  VertexId get_vertex(unsigned level, size_t i, int pid) const {
+  VertexId get_vertex(unsigned level, VertexId i, int pid) const {
     assert(level >= 1);
     return vid_lists[level-1][pid*max_length+i];
   }
@@ -93,9 +93,9 @@ public:
 
 private:
   unsigned max_level;
-  unsigned max_length;
+  VertexId max_length;
   VertexList history;
-  std::vector<std::vector<unsigned>> num_emb; // number of embeddings per level per pattern
+  std::vector<std::vector<VertexId>> num_emb; // number of embeddings per level per pattern
   std::vector<VertexList> vid_lists; // list of vertex IDs
   //std::vector<ByteList> pid_lists;   // pid[i] is the pattern id of each embedding
   std::vector<ByteList> src_indices; // list of source indices

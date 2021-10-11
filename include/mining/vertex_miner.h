@@ -77,7 +77,7 @@ public:
 		indices.clear();
 	}
 	// extension for vertex-induced clique
-	inline void extend_vertex(unsigned level, EmbeddingList& emb_list, Accumulator<AccType> &num) {
+	inline void extend_vertex(unsigned level, EmbeddingList& emb_list, Accumulator<uint64_t> &num) {
 		UintList num_new_emb(emb_list.size());
 		#pragma omp parallel for
 		for (size_t pos = 0; pos < emb_list.size(); pos ++) {

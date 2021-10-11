@@ -20,9 +20,13 @@ INPUT
 --------------------------------------------------------------------------------
 
 The input graph is preprocessed internally to meet these requirements:
+
   - to be undirected
+
   - no self-loops
+
   - no duplicate edges (or else will be counted as multiple triangles)
+
   - neighborhoods are sorted by vertex identifiers
 
 BUILD
@@ -33,19 +37,18 @@ BUILD
 2. Or run make at the top-level directory
 
   - tc_omp_base : one thread per vertex using OpenMP
-  - tc_base: one thread per vertex using CUDA
-  - tc_warp: one warp per vertex using CUDA
 
 RUN
 --------------------------------------------------------------------------------
 
-The following is an example command line.
+Decompress the file and put it in the 'datasets' sub-directory:
 
-`$ ../../bin/tc_omp_base mtx ../../datasets/com-Orkut`
+    $ cd ../../datasets
+    $ tar zxvf citeseer.tar.gz
 
-`$ ../../bin/tc_base mtx ../../datasets/soc-LiveJournal1`
+The following are example command lines:
 
-`$ ../../bin/tc_warp mtx ../../datasets/soc-LiveJournal1`
+`$ ../../bin/tc_omp_base ../../datasets/citeseer/graph`
 
 PERFORMANCE
 --------------------------------------------------------------------------------

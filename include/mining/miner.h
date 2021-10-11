@@ -39,9 +39,9 @@ protected:
 	}
 	inline unsigned intersect_merge(unsigned src, unsigned dst) {
 		unsigned count = 0;
-		for (auto e : graph->edges(dst)) {
+		for (auto e = graph->edge_begin(dst); e != graph->edge_end(dst); e++) {
 			auto dst_dst = graph->getEdgeDst(e);
-			for (auto e1 : graph->edges(src)) {
+		    for (auto e1 = graph->edge_begin(src); e1 != graph->edge_end(src); e1++) {
 				auto to = graph->getEdgeDst(e1);
 				if (dst_dst == to) {
 					count += 1;
@@ -82,8 +82,8 @@ protected:
 			search = a;
 		} 
 		int begin = graph->edge_begin(search);
-		int end = graph->edge_begin(search);
-		for (auto e : graph->edges(lookup)) {
+		int end = graph->edge_end(search);
+		for (auto e = graph->edge_begin(lookup); e != graph->edge_end(lookup); e++) {
 			int key = graph->getEdgeDst(e);
 			if(binary_search(key, begin, end)) count ++;
 		}

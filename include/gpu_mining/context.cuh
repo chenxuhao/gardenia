@@ -1,5 +1,4 @@
 #pragma once
-#include "graph.h"
 #include "graph_gpu.h"
 #include "embedding.cuh"
 

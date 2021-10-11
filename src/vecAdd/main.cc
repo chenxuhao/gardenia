@@ -1,5 +1,5 @@
-// Copyright 2016, National University of Defense Technology
-// Authors: Xuhao Chen <cxh@illinois.edu>
+// Copyright 2020
+// Authors: Xuhao Chen <cxh@mit.edu>
 #include "common.h"
 #include "immintrin.h"
 #include "timer.h"
@@ -34,13 +34,30 @@ void run_omp(int n, ValueT *a, ValueT *b, ValueT *c) {
 	{
 	num_threads = omp_get_num_threads();
 	}
-	printf("Launching OpenMP solver (%d threads) ...\n", num_threads);
+	//printf("Launching OpenMP solver (%d threads) ...\n", num_threads);
 	
 	Timer t;
 	t.Start();
 	#pragma omp parallel for
 	for(int i = 0; i < n; i ++) {
 		c[i] = a[i] + b[i];
+	}
+	t.Stop();
+	printf("\truntime [%s] = %f ms.\n", "omp", t.Millisecs());
+}
+
+void run_task(int n, ValueT *a, ValueT *b, ValueT *c) {
+	Timer t;
+	t.Start();
+	#pragma omp parallel
+	{
+		#pragma omp for
+		for(int i = 0; i < n; i ++) {
+			//#pragma omp task
+			{
+				c[i] = a[i] + b[i];
+			}
+		}
 	}
 	t.Stop();
 	printf("\truntime [%s] = %f ms.\n", "omp", t.Millisecs());
@@ -73,6 +90,9 @@ int main(int argc, char *argv[]) {
 	for(int i = 0; i < num; i ++) { h_a[i] = 1; h_b[i] = 1; h_c[i] = 0; }
 	printf("Lauching omp...\n");
 	run_omp(num, h_a, h_b, h_c);
+	for(int i = 0; i < num; i ++) { h_a[i] = 1; h_b[i] = 1; h_c[i] = 0; }
+	printf("Lauching omp_task...\n");
+	run_task(num, h_a, h_b, h_c);
 	for(int i = 0; i < num; i ++) { h_a[i] = 1; h_b[i] = 1; h_c[i] = 0; }
 	printf("Lauching omp_simd...\n");
 	run_omp_simd(num, h_a, h_b, h_c);

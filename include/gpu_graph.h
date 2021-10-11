@@ -1,7 +1,8 @@
 #pragma once
 //#include <fstream>
 #include "common.h"
-#include "csr_graph.h"
+//#include "csr_graph.h"
+#include "graph.hh"
 #include "cutil_subset.h"
 #include "cuda_launch_config.hpp"
 

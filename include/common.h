@@ -18,7 +18,7 @@ typedef uint8_t BYTE;
 typedef float ScoreT;
 typedef float ValueT;
 typedef float LatentT;
-typedef uint32_t DistT;
+typedef int DistT;
 typedef int CompT;
 typedef int IndexT;
 typedef int WeightT;
@@ -26,14 +26,15 @@ typedef int WeightT;
 typedef double ScoreT;
 typedef double ValueT;
 typedef double LatentT;
-typedef uint64_t DistT;
+typedef int64_t DistT;
 typedef int64_t CompT;
 typedef int64_t IndexT;
 typedef int64_t WeightT;
 #endif
-extern double hub_factor;
 
-typedef int VertexId;
+typedef int32_t VertexId;
+typedef int32_t VertexID;
+typedef int64_t EdgeID;
 typedef std::vector<VertexId> VertexList;
 typedef std::vector<BYTE> ByteList;
 

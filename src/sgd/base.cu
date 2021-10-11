@@ -21,21 +21,22 @@ __global__ void update(int m, int n, int *row_offsets, int *column_indices, Scor
 		int user_id = tid;
 		int row_begin = row_offsets[user_id];
 		int row_end = row_offsets[user_id+1]; 
+		int user_offset = K * user_id;
+		LatentT *ulv = &user_lv[user_offset];
 		for (int offset = row_begin; offset < row_end; ++ offset) {
 			int item_id = column_indices[offset];
+			int item_offset = K * item_id;
+			LatentT *ilv = &item_lv[item_offset];
 			ScoreT estimate = 0;
-			for (int i = 0; i < K; i++) {
-				estimate += user_lv[user_id*K+i] * item_lv[item_id*K+i];
-			}
+			for (int i = 0; i < K; i++)
+				estimate += ulv[i] * ilv[i];
 			ScoreT delta = rating[offset] - estimate;
 			squared_errors[user_id] += delta * delta;
 			for (int i = 0; i < K; i++) {
-				LatentT p_s = user_lv[user_id*K+i];
-				LatentT p_d = item_lv[item_id*K+i];
-				LatentT new_user_feature = p_s + step * (-lambda * p_s + p_d * delta);
-				LatentT new_item_feature = p_d + step * (-lambda * p_d + p_s * delta);
-				user_lv[user_id*K+i] = new_user_feature;
-				item_lv[item_id*K+i] = new_item_feature;
+				LatentT p_u = ulv[i];
+				LatentT p_i = ilv[i];
+				ulv[i] += step * (-lambda * p_u + p_i * delta);
+				ilv[i] += step * (-lambda * p_i + p_u * delta);
 			}
 		}
 	}
@@ -52,16 +53,17 @@ __global__ void rmse(int m, ScoreT *squared_errors, ScoreT *total_error) {
 
 void SGDSolver(int num_users, int num_items, int nnz, int *h_row_offsets, int *h_column_indices, ScoreT *h_rating, LatentT *h_user_lv, LatentT *h_item_lv, int *h_ordering) {
 	//print_device_info(0);
-	int *d_row_offsets, *d_column_indices, *d_ordering;
-	ScoreT *d_rating;
+	int *d_row_offsets, *d_column_indices;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (num_users + 1) * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(int)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_rating, nnz * sizeof(ScoreT)));
-	CUDA_SAFE_CALL(cudaMalloc((void **)&d_ordering, num_users * sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (num_users + 1) * sizeof(int), cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice));
+	ScoreT *d_rating;
+	CUDA_SAFE_CALL(cudaMalloc((void **)&d_rating, nnz * sizeof(ScoreT)));
 	CUDA_SAFE_CALL(cudaMemcpy(d_rating, h_rating, nnz * sizeof(ScoreT), cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(d_ordering, h_ordering, num_users * sizeof(int), cudaMemcpyHostToDevice));
+	int *d_ordering;
+	//CUDA_SAFE_CALL(cudaMalloc((void **)&d_ordering, num_users * sizeof(int)));
+	//CUDA_SAFE_CALL(cudaMemcpy(d_ordering, h_ordering, num_users * sizeof(int), cudaMemcpyHostToDevice));
 
 	LatentT *d_user_lv, *d_item_lv;
 	CUDA_SAFE_CALL(cudaMalloc((void **)&d_user_lv, num_users * K * sizeof(LatentT)));

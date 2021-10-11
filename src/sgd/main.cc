@@ -12,6 +12,7 @@ void Initialize(int len, LatentT *lv) {
 		}
 	}
 	/*
+	//srand(0);
 	for (int i = 0; i < m; i++) {
 		unsigned r = i;
 		for (int j = 0; j < K; j++)
@@ -48,17 +49,18 @@ int main(int argc, char *argv[]) {
 	LatentT *lv_i = (LatentT *)malloc(n * K * sizeof(LatentT));
 	ScoreT *h_rating = (ScoreT *) malloc(nnz * sizeof(ScoreT));
 
-	//srand(0);
 	Initialize(m, lv_u);
 	Initialize(n, lv_i);
 	for (int i = 0; i < m * K; i++) h_user_lv[i] = lv_u[i];
 	for (int i = 0; i < n * K; i++) h_item_lv[i] = lv_i[i];
 	for (int i = 0; i < nnz; i++) h_rating[i] = (ScoreT)h_weight[i];
+	int *ordering = NULL;
+/*
 	printf("Shuffling users...\n");
-	int *ordering = (int *)malloc(m * sizeof(int));
+	ordering = (int *)malloc(m * sizeof(int));
 	for (int i = 0; i < m; i ++) ordering[i] = i;
 	std::random_shuffle(ordering, ordering+m);
-
+//*/
 	SGDSolver(m, n, nnz, h_row_offsets, h_column_indices, h_rating, h_user_lv, h_item_lv, ordering);
 	SGDVerifier(m, n, nnz, h_row_offsets, h_column_indices, h_rating, lv_u, lv_i, ordering);
 

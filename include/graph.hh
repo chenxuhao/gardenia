@@ -15,7 +15,7 @@ constexpr bool map_vertices = false; // use mmap() instead of read()
 class Graph {
 private:
   vidType n_vertices, *edges;
-  uint64_t n_edges, *vertices;
+  eidType n_edges, *vertices;
   vidType max_degree;
   template<typename T>
   static void read_file(std::string fname, T *& pointer, size_t elements) {
@@ -41,7 +41,7 @@ private:
     assert(pointer != MAP_FAILED);
     close(inf);
   }
-  //std::vector<uint64_t> scale_accesses;
+  //std::vector<eidType> scale_accesses;
 public:
   Graph(std::string prefix, bool use_dag = false) {
     VertexSet::release_buffers();
@@ -67,7 +67,7 @@ public:
       custom_free(edges, n_edges);
     }
     if(map_vertices) {
-      munmap(vertices, (n_vertices+1)*sizeof(uint64_t));
+      munmap(vertices, (n_vertices+1)*sizeof(eidType));
     } else {
       custom_free(vertices, n_vertices+1);
     }
@@ -77,8 +77,7 @@ public:
   VertexSet N(vidType vid) {
     assert(vid >= 0);
     assert(vid < n_vertices);
-    uint64_t begin = vertices[vid], end = vertices[vid+1];
-    assert(begin >= 0);
+    eidType begin = vertices[vid], end = vertices[vid+1];
     if(begin > end) {
       fprintf(stderr, "vertex %u bounds error: [%lu, %lu)\n", vid, begin, end);
       exit(1);
@@ -87,17 +86,19 @@ public:
     return VertexSet(edges + begin, end - begin, vid);
   }
   vidType V() { return n_vertices; }
-  size_t E() { return n_edges; }
-  size_t size() { return size_t(n_vertices); }
-  size_t sizeEdges() { return n_edges; }
+  eidType E() { return n_edges; }
+  vidType size() { return n_vertices; }
+  eidType sizeEdges() { return n_edges; }
   vidType num_vertices() { return n_vertices; }
-  size_t num_edges() { return n_edges; }
+  eidType num_edges() { return n_edges; }
   uint32_t get_degree(vidType v) { return vertices[v+1] - vertices[v]; }
   uint32_t out_degree(vidType v) { return vertices[v+1] - vertices[v]; }
-	uint64_t edge_begin(vidType v) { return vertices[v]; }
-	uint64_t edge_end(vidType v) { return vertices[v+1]; }
-	uint32_t getEdgeDst(uint64_t e) { return edges[e]; }
-	uint32_t get_max_degree() { return max_degree; }
+  vidType get_max_degree() { return max_degree; }
+  eidType edge_begin(vidType v) { return vertices[v]; }
+  eidType edge_end(vidType v) { return vertices[v+1]; }
+  vidType getEdgeDst(eidType e) { return edges[e]; }
+  eidType* out_rowptr() { return vertices; }
+  vidType* out_colidx() { return edges; }
   void orientation() {
     std::cout << "Orientation enabled, using DAG\n";
     std::vector<vidType> degrees(n_vertices, 0);
@@ -116,17 +117,17 @@ public:
       }
     }
     max_degree = *(std::max_element(new_degrees.begin(), new_degrees.end()));
-    uint64_t *old_vertices = vertices;
+    eidType *old_vertices = vertices;
     vidType *old_edges = edges;
-    uint64_t *new_vertices = custom_alloc_global<uint64_t>(n_vertices+1);
-    //prefix_sum<vidType,uint64_t>(new_degrees, new_vertices);
-    parallel_prefix_sum<vidType,uint64_t>(new_degrees, new_vertices);
+    eidType *new_vertices = custom_alloc_global<eidType>(n_vertices+1);
+    //prefix_sum<vidType,eidType>(new_degrees, new_vertices);
+    parallel_prefix_sum<vidType,eidType>(new_degrees, new_vertices);
     auto num_edges = new_vertices[n_vertices];
     vidType *new_edges = custom_alloc_global<vidType>(num_edges);
     #pragma omp parallel for
     for (vidType src = 0; src < n_vertices; src ++) {
       auto begin = new_vertices[src];
-      unsigned offset = 0;
+      eidType offset = 0;
       for (auto dst : N(src)) {
         if (degrees[dst] > degrees[src] ||
             (degrees[dst] == degrees[src] && dst > src)) {
@@ -137,7 +138,7 @@ public:
     }
     vertices = new_vertices;
     edges = new_edges;
-    custom_free<uint64_t>(old_vertices, n_vertices);
+    custom_free<eidType>(old_vertices, n_vertices);
     custom_free<vidType>(old_edges, n_edges);
     n_edges = num_edges;
   }

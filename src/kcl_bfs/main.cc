@@ -1,29 +1,22 @@
-// Copyright 2019, University of Texas at Austin
-// Authors: Xuhao Chen <cxh@utexas.edu>
+// Copyright 2020 Massachusetts Institute of Technology
+// Contact: Xuhao Chen <cxh@mit.edu>
+
 #include "kcl.h"
-#include "builder.h"
-#include "mgraph_reader.h"
-#include "command_line.h"
 
 int main(int argc, char *argv[]) {
-	if (argc < 3) {
-		printf("Usage: %s <filetype> <filename> [max_size(3)]\n", argv[0]);
-		exit(1);
-	} 
-	std::string filetype = argv[1];
-	std::string filename = argv[2];
-	unsigned k = 3;
-	if (argc == 4) k = atoi(argv[3]);
-	printf("k = %d\n", k);
-	
-	Graph g;
-	read_graph(g, filetype, filename);
-	AccType total = 0;
-	int m = g.num_vertices();
-	int nnz = g.num_edges();
-	printf("After cleaning: num_vertices %d num_edges %d\n", m, nnz);
-	//g.print_graph();
-	KclSolver(g, k, total);
-	return 0;
+  if (argc < 3) {
+    printf("Usage: %s <graph> <k>\n", argv[0]);
+    exit(1);
+  }
+  std::cout << "k-clique listing (BFS exploration)\n";
+  Graph g(argv[1], 1); // use DAG
+  unsigned k = atoi(argv[2]);
+  auto m = g.size();
+  auto nnz = g.sizeEdges();
+  std::cout << "|V| " << m << " |E| " << nnz << "\n";
+  uint64_t total = 0;
+  KclSolver(g, k, total);
+  //KCLVerifier(g, k, total);
+  return 0;
 }
 

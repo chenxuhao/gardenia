@@ -1,7 +1,7 @@
 GARDENIA Benchmark Suite [![Build Status](https://travis-ci.org/chenxuhao/gardenia.svg)](https://travis-ci.org/chenxuhao/gardenia)
 ===================
 
-Copyright 2018 Xuhao Chen, National University of Defense Technology
+Copyright 2020 Xuhao Chen, Massachusetts Institute of Technology
 
 GARDENIA: Graph Analytics Repository for Designing Efficient Next-generation Accelerators
 
@@ -16,7 +16,7 @@ Graphs are stored as the CSR format in memory.
 CSR is represented by two auxiliary data structures: 'row_offsets' and 'column_indices'.
 You will need to download [CUB](https://nvlabs.github.io/cub/).
 
-Kernels Included
+Graph Analytics Kernels Included
 ----------------
 
 + Betweenness Centrality (BC) - Brandes
@@ -29,9 +29,16 @@ Kernels Included
 + Sparse Matrix-Vector Multiplication (SpMV)
 + Single-Source Shortest Paths (SSSP) - delta stepping
 + Symmetric Gauss-seidel Smoother (SymGS) -
-+ Triangle Counting (TC) - Order invariant with possible relabelling
 + Vertex Coloring (VC) - Gebremedhin and Manne
 
+Graph Mining Kernels Included
+----------------
+
++ Triangle Counting (TC) - orientation and merge-based intersection
++ k-Clique Listing (k-CL) - orientation and connectivity map
++ Subgraph Listing (SL) - matching order and partial orders
++ k-Motif Counting (k-MC) - matching order and partial orders
++ Frequent Subgraph Mining (FSM) - early pruning with anti-monotonicity
 
 Quick Start
 -----------
@@ -43,8 +50,8 @@ Setup CUB library:
 Setup environment variables:
 
     $ cd src
-	$ cp common.mk.example common.mk
-	$ vim common.mk // modify this file to setup the compilation
+    $ cp common.mk.example common.mk
+    $ vim common.mk // modify this file to setup the compilation
 
 Build the project (you will need to install gcc and nvcc first):
 
@@ -67,7 +74,6 @@ Find out commandline format by running executable without argument:
 
     $ cd bin
     $ ./bfs_linear_base
-    Breadth-first Search by Xuhao Chen
     Usage: ./bfs_linear_base <filetype> <graph-prefix> [symmetrize(0/1)] [reverse(0/1)] [source_id(0)]
 
 Run BFS on a directed graph starting from vertex 0:
@@ -84,8 +90,11 @@ Graph Loading
 -------------
 
 The graph loading infrastructure understands the following formats:
+
 + `.mtx` [Matrix Market](https://math.nist.gov/MatrixMarket/formats.html) format
+
 + `.gr` [9th DIMACS Implementation Challenge](https//www.dis.uniroma1.it/challenge9/download.shtml) format
+
 + `.graph` Metis format (used in [10th DIMACS Implementation Challenge](https://www.cc.gatech.edu/dimacs10/index.shtml))
 
 
@@ -93,13 +102,17 @@ How to Cite
 -----------
 
 Author: 
-[Xuhao Chen](https://chenxuhao.github.io)
+[Xuhao Chen](https://chenxuhao.github.io) <cxh@mit.edu>
 
 Please cite this code by the benchmark specification:
 
 Zhen Xu, Xuhao Chen, Jie Shen, Yang Zhang, Cheng Chen, Canqun Yang,
 [GARDENIA: A Domain-specific Benchmark Suite for Next-generation Accelerators](https://arxiv.org/pdf/1708.04567.pdf), 
 ACM Journal on Emerging Technologies in Computing Systems, 2018.
+
+Xuhao Chen, Roshan Dathathri, Gurbinder Gill, Keshav Pingali,
+[Pangolin: An Efficient and Flexible Graph Mining System on CPU and GPU](https://arxiv.org/pdf/1911.06969.pdf),
+PVLDB 13(8): 1190-1205, 2020
 
 Other citations:
 

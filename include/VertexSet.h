@@ -2,6 +2,8 @@
 #include <vector>
 #include <iostream>
 #include <iterator>
+#include "defines.h"
+
 #if 0
 #include "pangolin/types.h"
 class VertexSet {
@@ -25,8 +27,13 @@ public:
 
 #else
 
+#include <limits>
 #include "custom_alloc.h"
-typedef int vidType;
+typedef int32_t vidType;
+typedef int64_t eidType;
+
+constexpr int32_t MIN_VID = 0;
+constexpr int32_t MAX_VID = std::numeric_limits<int32_t>::max();
 
 inline vidType bs(vidType* ptr, vidType set_size, vidType o){
   vidType idx_l = -1;
