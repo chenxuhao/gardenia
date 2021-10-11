@@ -86,7 +86,7 @@ To run on CPU or Intel Xeon Phi coprocessor, set the following environment varia
     $ export OMP_NUM_THREADS=[ number of cores in system ]
 
 
-Graph Loading
+Graph Formats and Sources
 -------------
 
 The graph loading infrastructure understands the following formats:
@@ -97,6 +97,15 @@ The graph loading infrastructure understands the following formats:
 
 + `.graph` Metis format (used in [10th DIMACS Implementation Challenge](https://www.cc.gatech.edu/dimacs10/index.shtml))
 
+You can find graph datasets from links below:
+
+* Market (.mtx), [The University of Florida Sparse Matrix Collection](http://www.cise.ufl.edu/research/sparse/matrices/)
+* Metis (.graph), [10th DIMACS Implementation Challenge](http://www.cc.gatech.edu/dimacs10/)
+* SNAP (.txt), [Stanford Network Analysis Project](http://snap.stanford.edu/)
+* Dimacs9th (.gr), [9th DIMACS Implementation Challenge](http://www.dis.uniroma1.it/challenge9/)
+* The Koblenz Network Collection (out.< name >), [The Koblenz Network Collection](http://konect.uni-koblenz.de/)
+* Network Data Repository (.edges), [Network Data Repository](http://networkrepository.com/index.php)
+* Real-World Input Graphs (Misc), [Real-World Input Graphs](http://gap.cs.berkeley.edu/datasets.html)
 
 How to Cite
 -----------
@@ -133,3 +142,135 @@ Pingfan Li, Xuhao Chen, Zhe Quan, Jianbin Fang, Huayou Su, Tao Tang, Canqun Yang
 In the Proceedings of the 30th IEEE International Parallel & Distributed Processing Symposium Workshop (IPDPSW), Chicago, IL, May 2016
 
 More documentation coming soon. For questions, please email <cxh.nudt@gmail.com>
+
+## Notes ##
+
+Here are related graph processing frameworks and applications:
+
+Pangolin [1]: https://github.com/chenxuhao/GraphMiner/
+
+SgMatch [2,3]: https://github.com/guowentian/SubgraphMatchGPU
+
+Peregrine [4]: https://github.com/pdclab/peregrine
+
+Sandslash [5]: https://github.com/chenxuhao/GraphMiner/
+
+FlexMiner [6]: https://github.com/chenxuhao/GraphMiner/
+
+DistTC [7]: https://github.com/chenxuhao/GraphMiner/
+
+DeepGalois [8]: https://github.mit.edu/csg/DeepGraphBench
+
+GraphPi [9]: https://github.com/thu-pacman/GraphPi
+
+[1] Xuhao Chen, Roshan Dathathri, Gurbinder Gill, Keshav Pingali.
+Pangolin: An Efficient and Flexible Graph Pattern Mining System on CPU and GPU. VLDB 2020
+
+[2] Wentian Guo, Yuchen Li, Mo Sha, Bingsheng He, Xiaokui Xiao, Kian-Lee Tan.
+GPU-Accelerated Subgraph Enumeration on Partitioned Graphs. SIGMOD 2020.
+
+[3] Wentian Guo, Yuchen Li, Kian-Lee Tan. 
+Exploiting Reuse for GPU Subgraph Enumeration. TKDE 2020.
+
+[4] Kasra Jamshidi, Rakesh Mahadasa, Keval Vora.
+Peregrine: A Pattern-Aware Graph Mining System. EuroSys 2020
+
+[5] Xuhao Chen, Roshan Dathathri, Gurbinder Gill, Loc Hoang, Keshav Pingali.
+Sandslash: A Two-Level Framework for Efficient Graph Pattern Mining, ICS 2021
+
+[6] Xuhao Chen, Tianhao Huang, Shuotao Xu, Thomas Bourgeat, Chanwoo Chung, Arvind.
+FlexMiner: A Pattern-Aware Accelerator for Graph Pattern Mining, ISCA 2021
+
+[7] Loc Hoang, Vishwesh Jatala, Xuhao Chen, Udit Agarwal, Roshan Dathathri, Grubinder Gill, Keshav Pingali.
+DistTC: High Performance Distributed Triangle Counting, HPEC 2019
+
+[8] Loc Hoang, Xuhao Chen, Hochan Lee, Roshan Dathathri, Gurbinder Gill, Keshav Pingali.
+Efficient Distribution for Deep Learning on Large Graphs, GNNSys 2021
+
+[9] Tianhui Shi, Mingshu Zhai, Yi Xu, Jidong Zhai. 
+GraphPi: high performance graph pattern matching through effective redundancy elimination. SC 2020
+
+## Publications ##
+
+Please cite the following paper if you use this code:
+
+```
+@article{Pangolin,
+	title={Pangolin: An Efficient and Flexible Graph Mining System on CPU and GPU},
+	author={Xuhao Chen and Roshan Dathathri and Gurbinder Gill and Keshav Pingali},
+	year={2020},
+	journal = {Proc. VLDB Endow.},
+	issue_date = {August 2020},
+	volume = {13},
+	number = {8},
+	month = aug,
+	year = {2020},
+	numpages = {12},
+	publisher = {VLDB Endowment},
+}
+```
+
+```
+@INPROCEEDINGS{FlexMiner,
+  author={Chen, Xuhao and Huang, Tianhao and Xu, Shuotao and Bourgeat, Thomas and Chung, Chanwoo and Arvind},
+  booktitle={2021 ACM/IEEE 48th Annual International Symposium on Computer Architecture (ISCA)}, 
+  title={FlexMiner: A Pattern-Aware Accelerator for Graph Pattern Mining}, 
+  year={2021},
+  volume={},
+  number={},
+  pages={581-594},
+  doi={10.1109/ISCA52012.2021.00052}
+}
+```
+
+```
+@inproceedings{DistTC,
+  title={DistTC: High performance distributed triangle counting},
+  author={Hoang, Loc and Jatala, Vishwesh and Chen, Xuhao and Agarwal, Udit and Dathathri, Roshan and Gill, Gurbinder and Pingali, Keshav},
+  booktitle={2019 IEEE High Performance Extreme Computing Conference (HPEC)},
+  pages={1--7},
+  year={2019},
+  organization={IEEE}
+}
+```
+
+```
+@inproceedings{Sandslash,
+  title={Sandslash: a two-level framework for efficient graph pattern mining},
+  author={Chen, Xuhao and Dathathri, Roshan and Gill, Gurbinder and Hoang, Loc and Pingali, Keshav},
+  booktitle={Proceedings of the ACM International Conference on Supercomputing},
+  pages={378--391},
+  year={2021}
+}
+```
+
+```
+@inproceedings{hoang2019disttc,
+  title={DistTC: High performance distributed triangle counting},
+  author={Hoang, Loc and Jatala, Vishwesh and Chen, Xuhao and Agarwal, Udit and Dathathri, Roshan and Gill, Gurbinder and Pingali, Keshav},
+  booktitle={2019 IEEE High Performance Extreme Computing Conference (HPEC)},
+  pages={1--7},
+  year={2019},
+  organization={IEEE}
+}
+```
+
+```
+@inproceedings{DeepGalois,
+  title={Efficient Distribution for Deep Learning on Large Graphs},
+  author={Hoang, Loc and Chen, Xuhao and Lee, Hochan and Dathathri, Roshan and Gill, Gurbinder and Pingali, Keshav},
+  booktitle={Workshop on Graph Neural Networks and Systems},
+  volume={1050},
+  pages={1-9},
+  year={2021}
+}
+```
+
+## Developers ##
+
+* `Xuhao Chen`, Postdoc, MIT, cxh@mit.edu
+
+## License ##
+
+> Copyright (c) 2021, MIT
+> All rights reserved.
