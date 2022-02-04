@@ -39,7 +39,7 @@ __forceinline__ __device__ T warp_reduce(T val) {
 }
 
 #define FULL_MASK 0xffffffff
-__forceinline__ __device__ void warp_reduce_iterative(vidType &val) {
+__forceinline__ __device__ void warp_reduce_iterative(int &val) {
   for (int offset = 16; offset > 0; offset /= 2)
     val += __shfl_down_sync(FULL_MASK, val, offset);
   val  = SHFL(val, 0);

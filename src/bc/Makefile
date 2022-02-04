@@ -1,5 +1,5 @@
 include ../common.mk
-INCLUDES+=-I $(CUB_DIR)
+#INCLUDES+=-I $(CUB_DIR)
 ICPCFLAGS+=-std=c++98
 CXXFLAGS+=-std=c++11
 SIMFLAGS+=-std=c++11
