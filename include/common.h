@@ -3,17 +3,39 @@
 #include <omp.h>
 #include <math.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/mman.h>
+
+#include <set>
+#include <map>
 #include <vector>
 #include <limits>
 #include <cassert>
+#include <cstring>
 #include <climits>
 #include <cstdint>
-//#include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <iterator>
+#include <algorithm>
+#include <unordered_map>
 
 using namespace std;
-//#define LONG_TYPES
+
 typedef uint8_t BYTE;
+typedef uint8_t mask_t;
+typedef uint8_t label_t;
+typedef uint8_t vlabel_t;
+typedef uint8_t elabel_t;
+typedef uint8_t cmap_vt; // cmap value type
+typedef int32_t vidType;
+typedef int64_t eidType;
+
+//#define LONG_TYPES
 #ifndef LONG_TYPES
 typedef float ScoreT;
 typedef float ValueT;

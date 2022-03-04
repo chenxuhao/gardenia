@@ -69,3 +69,5 @@ INCLUDES+=-I$(GEM5_HOME)/include
 LIBS += -pthread -lrt -ldl
 endif
 
+VPATH += ../common
+OBJS=main.o VertexSet.o graph.o

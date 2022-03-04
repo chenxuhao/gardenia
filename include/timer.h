@@ -1,6 +1,7 @@
 // Copyright (c) 2020 MIT
 #pragma once
 #include <sys/time.h>
+#include <iostream>
 
 class Timer {
 public:

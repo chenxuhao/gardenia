@@ -1,28 +1,37 @@
 #pragma once
-#include <cassert>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include "VertexSet.h"
-#include "scan.h"
+
+using namespace std;
 
 constexpr bool map_edges = false; // use mmap() instead of read()
 constexpr bool map_vertices = false; // use mmap() instead of read()
+constexpr bool map_vlabels = false; // use mmap() instead of read()
+typedef std::unordered_map<vlabel_t, int> nlf_map;
 
 class Graph {
 private:
   vidType n_vertices, *edges;
   eidType n_edges, *vertices;
+  vlabel_t *vlabels;
+  elabel_t *elabels;
   vidType max_degree;
+  int num_vertex_classes;
+  eidType nnz; // for COO format
+  vidType *src_list, *dst_list; // for COO format
+  VertexList reverse_index_;
+  std::vector<eidType> reverse_index_offsets_;
+  std::vector<vidType> labels_frequency_;
+  vidType max_label_frequency_;
+  int max_label;
+  std::vector<nlf_map> nlf_;
+  std::vector<vidType> sizes;
+
   template<typename T>
   static void read_file(std::string fname, T *& pointer, size_t elements) {
     pointer = custom_alloc_global<T>(elements);
     assert(pointer);
     std::ifstream inf(fname.c_str(), std::ios::binary);
-    if(!inf.good()) {
+    if (!inf.good()) {
       std::cerr << "Failed to open file: " << fname << "\n";
       exit(1);
     }
@@ -32,115 +41,75 @@ private:
   template<typename T>
   static void map_file(std::string fname, T *& pointer, size_t elements) {
     int inf = open(fname.c_str(), O_RDONLY, 0);
-    if(-1 == inf) {
+    if (-1 == inf) {
       std::cerr << "Failed to open file: " << fname << "\n";
       exit(1);
     }
-    pointer = (T*)mmap(nullptr, sizeof(T) * elements,
-                       PROT_READ, MAP_SHARED, inf, 0);
+    pointer = (T*)mmap(nullptr, sizeof(T) * elements, PROT_READ, MAP_SHARED, inf, 0);
     assert(pointer != MAP_FAILED);
     close(inf);
   }
-  //std::vector<eidType> scale_accesses;
 public:
-  Graph(std::string prefix, bool use_dag = false) {
-    VertexSet::release_buffers();
-    std::ifstream f_meta((prefix + ".meta.txt").c_str());
-    assert(f_meta);
-    int vid_size;
-    f_meta >> n_vertices >> n_edges >> vid_size >> max_degree;
-    assert(sizeof(vidType) == vid_size);
-    f_meta.close();
-    if(map_vertices) map_file(prefix + ".vertex.bin", vertices, n_vertices+1);
-    else read_file(prefix + ".vertex.bin", vertices, n_vertices+1);
-    if(map_edges) map_file(prefix + ".edge.bin", edges, n_edges);
-    else read_file(prefix + ".edge.bin", edges, n_edges);
-    if (max_degree == 0 || max_degree>=n_vertices) exit(1);
-    if (use_dag) orientation();
-    std::cout << "max_degree: " << max_degree << "\n";
-    VertexSet::MAX_DEGREE = std::max(max_degree, VertexSet::MAX_DEGREE);
-  }
-  ~Graph() {
-    if(map_edges) {
-      munmap(edges, n_edges*sizeof(vidType));
-    } else {
-      custom_free(edges, n_edges);
-    }
-    if(map_vertices) {
-      munmap(vertices, (n_vertices+1)*sizeof(eidType));
-    } else {
-      custom_free(vertices, n_vertices+1);
-    }
-  }
+  Graph(std::string prefix, bool use_dag = false, bool has_vlabel = false);
+  ~Graph();
   Graph(const Graph &)=delete;
   Graph& operator=(const Graph &)=delete;
-  VertexSet N(vidType vid) {
-    assert(vid >= 0);
-    assert(vid < n_vertices);
-    eidType begin = vertices[vid], end = vertices[vid+1];
-    if(begin > end) {
-      fprintf(stderr, "vertex %u bounds error: [%lu, %lu)\n", vid, begin, end);
-      exit(1);
-    }
-    assert(end <= n_edges);
-    return VertexSet(edges + begin, end - begin, vid);
-  }
-  vidType V() { return n_vertices; }
-  eidType E() { return n_edges; }
-  vidType size() { return n_vertices; }
-  eidType sizeEdges() { return n_edges; }
-  vidType num_vertices() { return n_vertices; }
-  eidType num_edges() { return n_edges; }
-  uint32_t get_degree(vidType v) { return vertices[v+1] - vertices[v]; }
-  uint32_t out_degree(vidType v) { return vertices[v+1] - vertices[v]; }
-  vidType get_max_degree() { return max_degree; }
-  eidType edge_begin(vidType v) { return vertices[v]; }
-  eidType edge_end(vidType v) { return vertices[v+1]; }
-  vidType getEdgeDst(eidType e) { return edges[e]; }
+  VertexSet N(vidType vid) const;
+  vidType V() const { return n_vertices; }
+  eidType E() const { return n_edges; }
+  eidType get_num_tasks() const { return nnz; }
+  vidType size() const { return n_vertices; }
+  eidType sizeEdges() const { return n_edges; }
+  vidType num_vertices() const { return n_vertices; }
+  eidType num_edges() const { return n_edges; }
+  vidType get_degree(vidType v) const { return vertices[v+1] - vertices[v]; }
+  vidType out_degree(vidType v) const { return vertices[v+1] - vertices[v]; }
+  vidType get_max_degree() const { return max_degree; }
+  eidType edge_begin(vidType v) const { return vertices[v]; }
+  eidType edge_end(vidType v) const { return vertices[v+1]; }
+  vidType* adj_ptr(vidType v) const { return &edges[vertices[v]]; }
+  vidType getEdgeDst(eidType e) const { return edges[e]; }
   eidType* out_rowptr() { return vertices; }
   vidType* out_colidx() { return edges; }
-  void orientation() {
-    std::cout << "Orientation enabled, using DAG\n";
-    std::vector<vidType> degrees(n_vertices, 0);
-    #pragma omp parallel for
-    for (vidType v = 0; v < n_vertices; v++) {
-      degrees[v] = get_degree(v);
-    }
-    std::vector<vidType> new_degrees(n_vertices, 0);
-    #pragma omp parallel for
-    for (vidType src = 0; src < n_vertices; src ++) {
-      for (auto dst : N(src)) {
-        if (degrees[dst] > degrees[src] ||
-            (degrees[dst] == degrees[src] && dst > src)) {
-          new_degrees[src]++;
-        }
-      }
-    }
-    max_degree = *(std::max_element(new_degrees.begin(), new_degrees.end()));
-    eidType *old_vertices = vertices;
-    vidType *old_edges = edges;
-    eidType *new_vertices = custom_alloc_global<eidType>(n_vertices+1);
-    //prefix_sum<vidType,eidType>(new_degrees, new_vertices);
-    parallel_prefix_sum<vidType,eidType>(new_degrees, new_vertices);
-    auto num_edges = new_vertices[n_vertices];
-    vidType *new_edges = custom_alloc_global<vidType>(num_edges);
-    #pragma omp parallel for
-    for (vidType src = 0; src < n_vertices; src ++) {
-      auto begin = new_vertices[src];
-      eidType offset = 0;
-      for (auto dst : N(src)) {
-        if (degrees[dst] > degrees[src] ||
-            (degrees[dst] == degrees[src] && dst > src)) {
-          new_edges[begin+offset] = dst;
-          offset ++;
-        }
-      }
-    }
-    vertices = new_vertices;
-    edges = new_edges;
-    custom_free<eidType>(old_vertices, n_vertices);
-    custom_free<vidType>(old_edges, n_edges);
-    n_edges = num_edges;
+  vlabel_t getData(vidType v) const { return vlabels[v]; }
+  vlabel_t getVertexData(vidType v) const { return vlabels[v]; }
+  vlabel_t get_vlabel(vidType v) const { return vlabels[v]; }
+  elabel_t getEdgeData(eidType e) const { return elabels[e]; }
+  elabel_t get_elabel(eidType e) const { return elabels[e]; }
+  int get_vertex_classes() { return num_vertex_classes; } // number of distinct vertex labels
+  int get_edge_classes() { return 1; } // number of distinct edge labels
+  vlabel_t* getVlabelPtr() { return vlabels; }
+  elabel_t* getElabelPtr() { return elabels; }
+  bool has_label() { return vlabels != NULL || elabels != NULL; }
+  bool has_vlabel() { return vlabels != NULL; }
+  bool has_elabel() { return elabels != NULL; }
+  bool is_freq_vertex(vidType v, int minsup);
+  vidType* get_src_ptr() { return &src_list[0]; }
+  vidType* get_dst_ptr() { return &dst_list[0]; }
+  vidType get_src(eidType eid) { return src_list[eid]; }
+  vidType get_dst(eidType eid) { return dst_list[eid]; }
+  const nlf_map* getVertexNLF(const vidType id) const { return &nlf_[id]; }
+  int get_frequent_labels(int threshold);
+  int get_max_label() { return max_label; }
+  int *get_label_freq_ptr() { return labels_frequency_.data(); }
+  vidType getLabelsFrequency(vlabel_t label) const { return labels_frequency_.at(label); }
+  const vidType* getVerticesByLabel(vlabel_t vl, vidType& count) const {
+    auto start = reverse_index_offsets_[vl];
+    count = reverse_index_offsets_[vl+1] - start;
+    return &reverse_index_[start];
   }
+  void print_graph() const;
+  void print_meta_data() const;
+  void orientation();
+  bool is_connected(vidType v, vidType u) const;
+  bool is_connected(std::vector<vidType> sg) const;
+  bool binary_search(vidType key, eidType begin, eidType end) const;
+  eidType init_edgelist(bool sym_break = false, bool ascend = false);
+  vidType intersect_num(vidType v, vidType u, vlabel_t label);
+  vidType get_max_label_frequency() const { return max_label_frequency_; }
+  std::vector<vidType> get_sizes() const { return sizes; }
+  void BuildNLF();
+  void BuildReverseIndex();
+  void computeLabelsFrequency();
 };
 
