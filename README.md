@@ -11,10 +11,13 @@ This is the reference implementation for the [GARDENIA](https://chenxuhao.github
 
 The GARDENIA Benchmark Suite is an extented version of the [GAP](https://gap.cs.berkeley.edu/) [Benchmark Suite](https://gap.cs.berkeley.edu/benchmark.html) which is intended to help graph processing research by standardizing evaluations. The benchmark provides a baseline implementation which incorporates state-of-the-art optimization techniques proposed for modern accelerators, such as GPUs and MICs. These baseline implementations are representative of state-of-the-art performance, and thus new contributions should outperform them to demonstrate an improvement. The code infrastructure is ported from GAPBS and Lonstargpu by the [ISS group](http://iss.ices.utexas.edu/?p=projects/galois/lonestargpu) at the University of Texas. 
 To run the benchmarks on the GPGPU-Sim simulator, please use the [revised GPGPU-Sim version](https://github.com/chenxuhao/gpgpu-sim-ndp) and we highly recommend you to use CUDA-5.5 for the compatibility issue.
+
 Note that in the code, 'm' is the number of vertices, and 'nnz' is the number of edges.
 Graphs are stored as the CSR format in memory.
 CSR is represented by two auxiliary data structures: 'row_offsets' and 'column_indices'.
 You will need to download [CUB](https://nvlabs.github.io/cub/).
+
+For graph mining, please go to [here](https://github.com/chenxuhao/GraphMiner).
 
 Graph Analytics Kernels Included
 ----------------
@@ -30,15 +33,6 @@ Graph Analytics Kernels Included
 + Single-Source Shortest Paths (SSSP) - delta stepping
 + Symmetric Gauss-seidel Smoother (SymGS) -
 + Vertex Coloring (VC) - Gebremedhin and Manne
-
-Graph Mining Kernels Included
-----------------
-
-+ Triangle Counting (TC) - orientation and merge-based intersection
-+ k-Clique Listing (k-CL) - orientation and connectivity map
-+ Subgraph Listing (SL) - matching order and partial orders
-+ k-Motif Counting (k-MC) - matching order and partial orders
-+ Frequent Subgraph Mining (FSM) - early pruning with anti-monotonicity
 
 Quick Start
 -----------
