@@ -1,8 +1,8 @@
 include ../common.mk
-all: tc_omp_base tc_gpu_base
+all: tc_omp_base tc_gpu_base tc_omp_target
 
 %.o: %.cpp
-	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
 
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
@@ -31,7 +31,7 @@ tc_ocl_base: ocl_base.o $(OBJS)
 	mv $@ $(BIN)
 
 tc_omp_target: omp_target.o $(OBJS)
-	$(ICPC) $(CXXFLAGS) $(INCLUDES) $(EXTRA) $(OBJS) omp_target.o -o $@ $(LIBS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(EXTRA) $(OBJS) omp_target.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 clean:

@@ -183,6 +183,23 @@ bool Graph::binary_search(vidType key, eidType begin, eidType end) const {
   return false;
 }
 
+vidType Graph::intersect_num(vidType v, vidType u) {
+  vidType num = 0;
+  vidType idx_l = 0, idx_r = 0;
+  vidType v_size = get_degree(v);
+  vidType u_size = get_degree(u);
+  vidType* v_ptr = &edges[vertices[v]];
+  vidType* u_ptr = &edges[vertices[u]];
+  while (idx_l < v_size && idx_r < u_size) {
+    vidType a = v_ptr[idx_l];
+    vidType b = u_ptr[idx_r];
+    if (a <= b) idx_l++;
+    if (b <= a) idx_r++;
+    if (a == b) num++;
+  }
+  return num;
+}
+
 vidType Graph::intersect_num(vidType v, vidType u, vlabel_t label) {
   vidType num = 0;
   vidType idx_l = 0, idx_r = 0;

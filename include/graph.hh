@@ -105,6 +105,7 @@ public:
   bool is_connected(std::vector<vidType> sg) const;
   bool binary_search(vidType key, eidType begin, eidType end) const;
   eidType init_edgelist(bool sym_break = false, bool ascend = false);
+  vidType intersect_num(vidType v, vidType u);
   vidType intersect_num(vidType v, vidType u, vlabel_t label);
   vidType get_max_label_frequency() const { return max_label_frequency_; }
   std::vector<vidType> get_sizes() const { return sizes; }
