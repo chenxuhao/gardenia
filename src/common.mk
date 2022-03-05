@@ -4,7 +4,7 @@ ICC_HOME=/opt/intel/compilers_and_libraries/linux/bin/intel64
 GEM5_HOME=/home/cxh/gem5
 MKLROOT=/opt/intel/mkl
 CUB_DIR=../../cub
-B40_DIR=../../back40computing-read-only
+OCL_DIR=/usr/local/cuda-11.5/targets/x86_64-linux/lib/
 BIN=../../bin
 HOST=X86
 ifeq ($(HOST),X86)

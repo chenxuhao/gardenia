@@ -1,6 +1,7 @@
 include ../common.mk
 INCLUDES+=-I $(CUB_DIR)
 ICPCFLAGS+=-std=c++98
+B40_DIR=../../back40computing-read-only
 B40C_INC=-I $(B40_DIR) -I $(B40_DIR)/test
 OBJS= main.o verifier.o 
 all: bfs_linear_base bfs_linear_lb bfs_omp_beamer bfs_omp_base

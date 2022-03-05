@@ -1,5 +1,5 @@
 include ../common.mk
-all: tc_omp_base tc_gpu_base tc_omp_target
+all: tc_omp_base tc_gpu_base tc_omp_target tc_ocl_base
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
@@ -14,20 +14,12 @@ tc_gpu_base: gpu_base.o $(OBJS)
 	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(OBJS) gpu_base.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-tc_warp: warp.o $(OBJS)
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(OBJS) warp.o -o $@ $(LIBS)
-	mv $@ $(BIN)
-
-tc_bin: bin.o $(OBJS)
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(OBJS) bin.o -o $@ $(LIBS)
-	mv $@ $(BIN)
-
 tc_omp_base: omp_base.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(EXTRA) $(OBJS) omp_base.o -o $@ -lgomp
 	mv $@ $(BIN)
 
 tc_ocl_base: ocl_base.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) ocl_base.o $@ -lOpenCL
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -L$(OCL_DIR) $(OBJS) ocl_base.o -o $@ -lOpenCL
 	mv $@ $(BIN)
 
 tc_omp_target: omp_target.o $(OBJS)
