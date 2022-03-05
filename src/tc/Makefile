@@ -1,7 +1,5 @@
 include ../common.mk
-INCLUDES+=-I $(CUB_DIR)
-OBJS=main.o verifier.o VertexSet.o
-all: tc_omp_base
+all: tc_omp_base tc_gpu_base
 
 %.o: %.cpp
 	$(ICPC) $(ICPCFLAGS) $(INCLUDES) -c $<
@@ -12,8 +10,8 @@ all: tc_omp_base
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
 
-tc_base: base.o $(OBJS) 
-	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(OBJS) base.o -o $@ $(LIBS)
+tc_gpu_base: gpu_base.o $(OBJS) 
+	$(NVCC) $(NVFLAGS) $(INCLUDES) $(EXTRA) $(OBJS) gpu_base.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 tc_warp: warp.o $(OBJS)

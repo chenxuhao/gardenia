@@ -7,9 +7,9 @@ int main(int argc, char *argv[]) {
     printf("Usage: %s <graph>\n", argv[0]);
     exit(1);
   }
-  std::cout << "Triangle Count (for undirected graphs only)\n";
-  Graph g(argv[1]); // use DAG
-  g.orientation();
+  std::cout << "Triangle Counting\n";
+  if (USE_DAG) std::cout << "Using DAG (static orientation)\n";
+  Graph g(argv[1], USE_DAG); // use DAG
   auto m = g.size();
   auto nnz = g.sizeEdges();
   std::cout << "|V| " << m << " |E| " << nnz << "\n";

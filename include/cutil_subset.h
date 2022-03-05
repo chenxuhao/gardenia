@@ -26,32 +26,6 @@
 #define SHFL(a,b) __shfl(a,b)
 #endif
 
-template <typename T>
-__forceinline__ __device__ T warp_reduce(T val) {
-  T sum = val;
-  sum += SHFL_DOWN(sum, 16);
-  sum += SHFL_DOWN(sum, 8);
-  sum += SHFL_DOWN(sum, 4);
-  sum += SHFL_DOWN(sum, 2);
-  sum += SHFL_DOWN(sum, 1);
-  sum  = SHFL(sum, 0);
-  return sum;
-}
-
-#define FULL_MASK 0xffffffff
-__forceinline__ __device__ void warp_reduce_iterative(int &val) {
-  for (int offset = 16; offset > 0; offset /= 2)
-    val += __shfl_down_sync(FULL_MASK, val, offset);
-  val  = SHFL(val, 0);
-}
-
-// from http://forums.nvidia.com/index.php?showtopic=186669
-static __device__ unsigned get_smid(void) {
-  unsigned ret;
-  asm("mov.u32 %0, %smid;" : "=r"(ret) );
-  return ret;
-}
-
 static unsigned CudaTest(const char *msg) {
 }
 
@@ -92,29 +66,42 @@ int getSPcores(cudaDeviceProp devProp) {
   return cores;
 }
 
-static size_t print_device_info(int device) {
+static size_t print_device_info(bool print_all, bool disable = false) {
   int deviceCount = 0;
   CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
-  CUDA_SAFE_CALL(cudaSetDevice(device));
-  cudaDeviceProp prop;
-  CUDA_SAFE_CALL(cudaGetDeviceProperties(&prop, device));
+  if (!disable) printf("Found %d devices\n", deviceCount);
   // Another way to get the # of cores: #include <helper_cuda.h> in this link:
   // https://github.com/NVIDIA/cuda-samples/blob/6be514679b201c8a0f0cda050bc7c01c8cda32ec/Common/helper_cuda.h
   //int CUDACores = _ConvertSMVer2Cores(props.major, props.minor) * props.multiProcessorCount;
-  printf("Found %d devices, using device Number: %d\n", deviceCount, device);
-  printf("  Device name: %s\n", prop.name);
-  printf("  Compute capability: %d.%d\n", prop.major, prop.minor);
-  printf("  Warp size: %d\n", prop.warpSize);
-  printf("  Total # SM: %d\n", prop.multiProcessorCount);
-  printf("  Total # CUDA cores: %d\n", getSPcores(prop));
-  printf("  Total amount of shared memory per block: %lu bytes\n", prop.sharedMemPerBlock);
-  printf("  Total # registers per block: %d\n", prop.regsPerBlock);
-  printf("  Total amount of constant memory: %lu bytes\n", prop.totalConstMem);
-  printf("  Total global memory: %.1f GB\n", float(prop.totalGlobalMem)/float(1024*1024*1024));
-  printf("  Memory Clock Rate: %.2f GHz\n", float(prop.memoryClockRate)/float(1024*1024));
-  printf("  Memory Bus Width: %d bits\n", prop.memoryBusWidth);
-  //printf("  Maximum memory pitch: %u\n", prop.memPitch);
-  printf("  Peak Memory Bandwidth: %.2f GB/s\n\n", 2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
+  size_t mem_size = 0;
+  for (int device = 0; device < deviceCount; device++) {
+    cudaDeviceProp prop;
+    CUDA_SAFE_CALL(cudaSetDevice(device));
+    CUDA_SAFE_CALL(cudaGetDeviceProperties(&prop, device));
+    if (device == 0) mem_size = prop.totalGlobalMem;
+    if (disable) break;
+    printf("  Device[%d]: %s\n", device, prop.name);
+    if (device == 0 || print_all) {
+      printf("  Compute capability: %d.%d\n", prop.major, prop.minor);
+      printf("  Warp size: %d\n", prop.warpSize);
+      printf("  Total # SM: %d\n", prop.multiProcessorCount);
+      printf("  Total # CUDA cores: %d\n", getSPcores(prop));
+      printf("  Total amount of shared memory per block: %lu bytes\n", prop.sharedMemPerBlock);
+      printf("  Total # registers per block: %d\n", prop.regsPerBlock);
+      printf("  Total amount of constant memory: %lu bytes\n", prop.totalConstMem);
+      printf("  Total global memory: %.1f GB\n", float(prop.totalGlobalMem)/float(1024*1024*1024));
+      printf("  Memory Clock Rate: %.2f GHz\n", float(prop.memoryClockRate)/float(1024*1024));
+      printf("  Memory Bus Width: %d bits\n", prop.memoryBusWidth);
+      //printf("  Maximum memory pitch: %u\n", prop.memPitch);
+      printf("  Peak Memory Bandwidth: %.2f GB/s\n\n", 2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
+    }
+  }
+  return mem_size;
+}
+
+static size_t get_gpu_mem_size(int device = 0) {
+  cudaDeviceProp prop;
+  CUDA_SAFE_CALL(cudaGetDeviceProperties(&prop, device));
   return prop.totalGlobalMem;
 }
 
